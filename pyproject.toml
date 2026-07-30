@@ -83,7 +83,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "ANN201", "ANN001", "S311"]
+# SIM117/SIM300 fight idiomatic pytest: `with client:` around `pytest.raises(...)`
+# reads better nested, and ruff treats UPPER_CASE module constants as literals.
+"tests/**" = ["S101", "ANN201", "ANN001", "S311", "SIM117", "SIM300"]
 "scripts/**" = ["S603", "S607"]
 
 # ---------------------------------------------------------------- mypy
