@@ -76,6 +76,14 @@ num_predict=512, num_ctx=8192, think=false`。`gpt-oss:20b` 不進 pipeline。
 
 **LLM-as-judge 只用於 `evidence_sufficiency`，且不參與任何 gate。**
 
+## 小樣本誠實性（不可省略）
+
+單一類別只有 3–6 題 ⇒ **1 題 = 17–33pp**。所以：
+每個指標都要輸出 `n` ＋ 分子 ＋ 分母 ＋ **Wilson 95% CI**；只寫百分比視為 report
+不完整（G9 會擋）。Report limitations 必須寫明本輪樣本量只能判斷
+「可行／不可行」與增益方向，**不能**做精確效果量估計或宣稱統計顯著。
+結果好壞都要寫。
+
 ## Normalization（scoring 前必套，freeze 後不可改）
 
 全角→半角｜去千分位｜`億=1e8`/`萬=1e4`/`千元=1e3`｜括號負數 `(1,234)→-1234`｜
@@ -99,7 +107,7 @@ num_predict=512, num_ctx=8192, think=false`。`gpt-oss:20b` 不進 pipeline。
 
 ## Gate 摘要（G1–G9 hard、G10 soft）
 
-G1 資料可重現｜G2 至少一個 hard category 相對 F0 改善 ≥10pp｜
+G1 資料可重現｜**G2 合併 hard set（21 題）改善 ≥10pp ＋ 至少一單類 ≥10pp（兩者都要）**｜
 G3 overall 不退步 >5pp｜G4 citation validity ≥90%｜G5 numeric route ≥90%｜
 G6 route accuracy ≥85%｜G7 over-answer ≤25% 且 refusal precision ≥80%｜
 G8 no-evidence probe 5 題中 ≥4 拒答｜G9 結果可由 raw artifacts 重建｜

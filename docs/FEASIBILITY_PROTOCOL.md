@@ -326,7 +326,7 @@ Gate 由 `scripts/run_gate.py` 讀取 `results/feasibility/summary.json` 自動�
 | # | Gate | 判定條件 | 類型 |
 |---|---|---|---|
 | G1 | 資料可重現 | 所有文件與結構化資料可由 manifest ＋ 腳本重建，SHA-256 全部相符；無 CAPTCHA 破解、無私人 endpoint | **hard** |
-| G2 | Hard category 增益 | F7 在 `numeric_calculation / cross_period_comparison / chart_value_trend / cross_page / cross_document` 之中，**至少一個**類別的 primary answer metric 相對 F0 改善 **≥ 10 個百分點** | **hard** |
+| G2 | Hard category 增益 | **兩個條件都要成立**：(a) F7 在**合併 hard set**（`numeric_calculation` 5 ＋ `cross_period_comparison` 4 ＋ `chart_value_trend` 5 ＋ `cross_page` 4 ＋ `cross_document` 3 = **21 題**）的 primary answer metric 相對 F0 改善 **≥ 10 個百分點**（≥ 多對 3 題）；(b) 至少一個**單一** hard category 改善 ≥ 10 個百分點 | **hard** |
 | G3 | 無整體退步 | F7 overall answer accuracy 不得低於 F0 超過 **5 個百分點** | **hard** |
 | G4 | Citation validity | F7 citation validity **≥ 90%** | **hard** |
 | G5 | Numeric route 正確率 | F7 在可回答的 `numeric_calculation`＋`cross_period_comparison`＋`table_cell` 且經 numeric route 處理者，正確率 **≥ 90%** | **hard** |
@@ -339,6 +339,21 @@ Gate 由 `scripts/run_gate.py` 讀取 `results/feasibility/summary.json` 自動�
 `overall answer accuracy` 定義：answerable 題以 `numeric accuracy`（數值題）或
 `exact match ∨ token-F1 ≥ 0.8`（文字題）判對；unanswerable 題以「正確拒答」判對；
 所有題目等權平均。
+
+### 小樣本誠實性（freeze 前寫入，非事後補充）
+
+36 題分到 8 個類型，單一類別只有 3–6 題。因此：
+
+- 單一類別 1 題 = **17–33 個百分點**。任何「單一類別改善 ≥10pp」的說法，
+  可能只代表**多對 1 題**，不足以支持「有差異化」的結論。
+  這是 G2 加上「合併 21 題 hard set」條件的原因。
+- `summary.json` 與 report **必須**對每個指標同時輸出
+  `n`、分子、分母、以及 **Wilson score 95% 信賴區間**。
+  只寫百分比不寫 n 視為 report 不完整（G9 會擋）。
+- Report 的 limitations 段必須明確寫出：本輪樣本量只能支持
+  「可行 / 不可行」與「增益方向」的判斷，**不能**支持精確的效果量估計，
+  也不能宣稱類別間差異具統計顯著性。
+- 這一節不因結果好壞調整。若 candidate 大幅勝出，同樣要寫「信賴區間很寬」。
 
 ### 決策規則（程式化）
 
