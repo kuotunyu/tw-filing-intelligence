@@ -1,0 +1,68 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# ---- tooling caches ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---- secrets ----
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# ---- raw / derived data: NEVER committed ----
+# Original filings are not redistributed. Only manifests + hashes + scripts are.
+data/raw/
+data/interim/
+data/processed/
+data/cache/
+data/index/
+data/duckdb/
+*.pdf
+*.zip
+*.xbrl
+
+# ...but manifests, gold sets and provenance ARE committed.
+!data/manifests/**
+!data/evaluation/**
+
+# ---- models ----
+models/
+*.safetensors
+*.gguf
+*.bin
+*.onnx
+
+# ---- run artifacts ----
+results/runs/
+results/**/raw_predictions/*.tmp
+*.log
+logs/
+
+# committed feasibility artifacts (explicit allowlist)
+!results/feasibility/summary.json
+!results/feasibility/error_analysis.jsonl
+!results/feasibility/GO_NO_GO.json
+!results/feasibility/protocol_lock.json
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
