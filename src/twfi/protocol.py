@@ -25,6 +25,9 @@ __all__ = [
     "DEV_COMPANY_CODES",
     "LOCKED_COMPANY_CODES",
     "split_for_company",
+    "DeclaredDocument",
+    "DECLARED_DOCUMENTS",
+    "USABLE_DOCUMENTS",
     "LOCKED_TYPE_COUNTS",
     "LOCKED_TOTAL",
     "DEV_TOTAL",
@@ -100,6 +103,65 @@ def split_for_company(code: str) -> Literal["dev", "locked"]:
             amending the protocol, not calling this with a new code.
     """
     return _COMPANY_BY_CODE[code].split
+
+
+# ------------------------------------------------------------------- documents
+
+
+@dataclass(frozen=True, slots=True)
+class DeclaredDocument:
+    """One filing the study uses, and whether it can serve as evidence.
+
+    ``usable=False`` documents stay declared on purpose. That one of seven public
+    annual reports has an unreadable text layer is a feasibility finding in its own
+    right, and deleting the record would delete the finding.
+    """
+
+    company_code: str
+    fiscal_year: int
+    doc_type: DocType
+    split: Literal["dev", "locked"]
+    usable: bool = True
+    note: str = ""
+
+    @property
+    def token(self) -> str:
+        return "AR" if self.doc_type == "annual_report" else "FS"
+
+    @property
+    def doc_id(self) -> str:
+        return f"{self.company_code}-FY{self.fiscal_year}-{self.token}"
+
+
+#: Protocol 1.2, amended 2026-07-31 after acquisition (DECISIONS D-012).
+#:
+#: The FY2024 annual reports do not embed financial statements -- from that year the
+#: statements are a separate 財務報告書 filing -- so three of those were added. The
+#: study needs FY2024 numbers for its cross-period questions, and a real analyst
+#: reads both documents too.
+DECLARED_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = (
+    DeclaredDocument("2412", 2023, "annual_report", "dev"),
+    DeclaredDocument("1301", 2023, "annual_report", "dev"),
+    DeclaredDocument("2330", 2023, "annual_report", "locked"),
+    DeclaredDocument("2330", 2024, "annual_report", "locked", note="narrative only"),
+    DeclaredDocument("2330", 2024, "financial_report", "locked"),
+    DeclaredDocument("2317", 2023, "annual_report", "locked"),
+    DeclaredDocument(
+        "2317",
+        2024,
+        "annual_report",
+        "locked",
+        usable=False,
+        note="unusable text layer: fonts lack a ToUnicode mapping, extraction yields glyph codes",
+    ),
+    DeclaredDocument("2317", 2024, "financial_report", "locked"),
+    DeclaredDocument("2882", 2024, "annual_report", "locked", note="narrative only"),
+    DeclaredDocument("2882", 2024, "financial_report", "locked"),
+)
+
+USABLE_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = tuple(
+    document for document in DECLARED_DOCUMENTS if document.usable
+)
 
 
 # ------------------------------------------------------------------- question mix

@@ -64,10 +64,25 @@ _CJK_DIGITS = {
     "九": 9,
 }
 
-#: MOPS names downloads ``<fiscal year>_<code>_<filing date><dtype>_<download stamp>``.
-_MOPS_FILENAME = re.compile(
-    r"^(?P<year>\d{4})_(?P<code>\d{4})_(?P<filed>\d{8})(?P<dtype>[A-Z][A-Za-z0-9]{1,3})",
+#: MOPS uses two naming schemes, one per 資料類型. Observed 2026-07-31:
+#:   股東會年報   2024_2330_20250603F04.pdf     year _ code _ filingdate dtype
+#:   財務報告書   202404_2317_AI1_...pdf        year quarter _ code _ dtype
+_ANNUAL_FILENAME = re.compile(
+    r"^(?P<year>\d{4})_(?P<code>\d{4})_(?P<filed>\d{8})(?P<dtype>[A-Z]\d{2})",
 )
+_FINANCIAL_FILENAME = re.compile(
+    r"^(?P<year>\d{4})(?P<quarter>0[1-4])_(?P<code>\d{4})_(?P<dtype>[A-Z]{1,2}\d)",
+)
+
+#: 資料細節說明 codes this study accepts, and which declared document kind each is.
+#: An allowlist rather than a prefix rule: F01 開會通知 and F19 僅永續專章 also start
+#: with F, and mislabelling one of those as an annual report would be worse than
+#: refusing to name it.
+_ANNUAL_DTYPES = frozenset({"F04", "F18", "F11"})
+_FINANCIAL_DTYPES = frozenset({"AI1", "AI2", "AI3", "AI4", "AI5", "AI6", "A01", "A02"})
+
+#: The token that appears in a declared doc_id for each kind.
+_KIND_TOKEN: dict[str, str] = {"annual_report": "AR", "financial_report": "FS"}
 
 _CODE_PATTERNS = (
     re.compile(r"股票代[碼號]\s*[:：]?\s*(\d{4})"),
@@ -110,28 +125,55 @@ class MopsFilename:
 
     fiscal_year: int
     company_code: str
-    filed_on: str
     dtype: str
+    kind: str | None = None
+    filed_on: str = ""
+    quarter: int | None = None
 
 
 def parse_mops_filename(name: str) -> MopsFilename | None:
-    """Parse a MOPS download filename, or ``None`` if it is not one.
+    """Parse either MOPS naming scheme, or ``None`` if the name is neither.
 
-    A browser-renamed copy (``report (1).pdf``) simply returns ``None``, leaving
-    the cover as the only source.
+    A browser-renamed copy (``report (1).pdf``) returns ``None``, leaving the cover
+    as the only source. ``kind`` is ``None`` for a recognised name whose 資料細節說明
+    code is not one this study accepts -- an 開會通知 is refused rather than filed as
+    an annual report.
     """
-    match = _MOPS_FILENAME.match(name)
-    if match is None:
-        return None
-    year = int(match.group("year"))
-    if not _MIN_FISCAL_YEAR <= year <= _MAX_FISCAL_YEAR:
-        return None
-    return MopsFilename(
-        fiscal_year=year,
-        company_code=match.group("code"),
-        filed_on=match.group("filed"),
-        dtype=match.group("dtype"),
-    )
+    annual = _ANNUAL_FILENAME.match(name)
+    if annual is not None:
+        year = int(annual.group("year"))
+        if not _MIN_FISCAL_YEAR <= year <= _MAX_FISCAL_YEAR:
+            return None
+        return MopsFilename(
+            fiscal_year=year,
+            company_code=annual.group("code"),
+            dtype=annual.group("dtype"),
+            kind=_kind_for(annual.group("dtype")),
+            filed_on=annual.group("filed"),
+        )
+
+    financial = _FINANCIAL_FILENAME.match(name)
+    if financial is not None:
+        year = int(financial.group("year"))
+        if not _MIN_FISCAL_YEAR <= year <= _MAX_FISCAL_YEAR:
+            return None
+        return MopsFilename(
+            fiscal_year=year,
+            company_code=financial.group("code"),
+            dtype=financial.group("dtype"),
+            kind=_kind_for(financial.group("dtype")),
+            quarter=int(financial.group("quarter")),
+        )
+
+    return None
+
+
+def _kind_for(dtype: str) -> str | None:
+    if dtype in _ANNUAL_DTYPES:
+        return "annual_report"
+    if dtype in _FINANCIAL_DTYPES:
+        return "financial_report"
+    return None
 
 
 def find_company_code(text: str) -> str | None:
@@ -165,25 +207,44 @@ class DocumentIdentity:
     company_code: str | None = None
     fiscal_year: int | None = None
     roc_year: int | None = None
+    kind: str | None = None
     evidence: tuple[str, ...] = ()
     conflict: str = ""
 
     @property
     def is_complete(self) -> bool:
-        return self.company_code is not None and self.fiscal_year is not None and not self.conflict
+        return (
+            self.company_code is not None
+            and self.fiscal_year is not None
+            and self.kind in _KIND_TOKEN
+            and not self.conflict
+        )
+
+    def missing(self) -> list[str]:
+        """Which parts of the identity could not be established."""
+        gaps = []
+        if self.company_code is None:
+            gaps.append("company code")
+        if self.fiscal_year is None:
+            gaps.append("fiscal year")
+        if self.kind not in _KIND_TOKEN:
+            gaps.append("document kind")
+        return gaps
 
     def expected_filename(self, suffix: str = ".pdf") -> str | None:
         """The name this study requires, or ``None`` if identity is not established."""
         if not self.is_complete:
             return None
-        return f"{self.company_code}-FY{self.fiscal_year}-AR{suffix}"
+        token = _KIND_TOKEN[str(self.kind)]
+        return f"{self.company_code}-FY{self.fiscal_year}-{token}{suffix}"
 
     def describe(self) -> str:
         code = self.company_code or "?"
         roc = f"民國 {self.roc_year} 年度" if self.roc_year else "民國 ? 年度"
         year = f"FY{self.fiscal_year}" if self.fiscal_year else "FY?"
+        kind = _KIND_TOKEN.get(str(self.kind), "?")
         sources = "+".join(self.evidence) if self.evidence else "none"
-        return f"代號 {code} / {roc} / {year}  (from {sources})"
+        return f"代號 {code} / {roc} / {year} / {kind}  (from {sources})"
 
 
 def identify(filename: str, cover_text: str) -> DocumentIdentity:
@@ -217,6 +278,7 @@ def identify(filename: str, cover_text: str) -> DocumentIdentity:
         roc_year=cover_roc
         if cover_roc is not None
         else (from_name.fiscal_year - ROC_EPOCH if from_name else None),
+        kind=from_name.kind if from_name else None,
         evidence=tuple(evidence),
         conflict="; ".join(conflicts),
     )
@@ -285,21 +347,35 @@ def plan_renames(
     A file whose identity reads cleanly but that the protocol never declared is
     reported as undeclared rather than renamed: quietly accepting an extra document
     would change the study's document set without a protocol amendment.
+
+    A file that *already* carries a declared name needs no identification. Renaming
+    discards the MOPS filename, which is the strongest identity evidence, so a
+    second pass would otherwise report every previously-renamed file as unreadable.
+    The declaration is the identity at that point, and the digest in
+    ``acquisition.lock.yaml`` is what guards it.
     """
     plans: list[RenamePlan] = []
     for path in sorted(paths):
+        if path.name in declared_filenames:
+            plans.append(
+                RenamePlan(
+                    path=path,
+                    identity=DocumentIdentity(evidence=("declared name",)),
+                    target_name=path.name,
+                    declared=True,
+                )
+            )
+            continue
+
         found = identify(path.name, cover_reader(path))
         target = found.expected_filename(path.suffix.lower() or ".pdf")
 
         problem = found.conflict
         if not problem and target is None:
-            missing = []
-            if found.company_code is None:
-                missing.append("company code")
-            if found.fiscal_year is None:
-                missing.append("fiscal year")
             problem = (
-                "could not read " + " and ".join(missing) + " from the filename or the first pages"
+                "could not read "
+                + " and ".join(found.missing())
+                + " from the filename or the first pages"
             )
 
         plans.append(

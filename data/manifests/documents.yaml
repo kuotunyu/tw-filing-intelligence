@@ -135,3 +135,47 @@ documents:
       封面須為「民國113年度年報」. 金控年報的報表結構與一般業完全不同,
       是本研究刻意保留的 hard case.
       Save as data/raw/manual/2882-FY2024-AR.pdf
+
+  # --- amended 2026-07-31 (DECISIONS D-012) --------------------------------
+  # From FY2024 the 股東會年報 no longer embeds the financial statements; they are a
+  # separate 財務報告書 filing. MOPS lists exactly one 年報 file per year, so nothing
+  # was split -- these are additional documents, not missing parts.
+  #   資料類型「財務報告書」/ 細節「IFRSs合併財報」/ 季別「第四季」/ 資料年度 113
+  #   For 2882 MOPS first asks which reporting entity: choose the first row, 2882 國泰金.
+  - doc_id: 2330-FY2024-FS
+    company:
+      name: 台積電
+      code: "2330"
+    fiscal_year: 2024
+    doc_type: financial_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    notes: >-
+      代號 2330 / 資料年度 113 / 資料類型「財務報告書」/ 細節「IFRSs合併財報」/ 季別「第四季」.
+      Save as data/raw/manual/2330-FY2024-FS.pdf
+
+  - doc_id: 2317-FY2024-FS
+    company:
+      name: 鴻海
+      code: "2317"
+    fiscal_year: 2024
+    doc_type: financial_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    notes: >-
+      代號 2317 / 資料年度 113 / 資料類型「財務報告書」/ 細節「IFRSs合併財報」/ 季別「第四季」.
+      鴻海 FY2024 年報的文字層不可用, 本份財報是該年度數值的唯一可用來源.
+      Save as data/raw/manual/2317-FY2024-FS.pdf
+
+  - doc_id: 2882-FY2024-FS
+    company:
+      name: 國泰金控
+      code: "2882"
+    fiscal_year: 2024
+    doc_type: financial_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    notes: >-
+      代號 2882 / 資料年度 113 / 資料類型「財務報告書」/ 細節「IFRSs合併財報」/ 季別「第四季」.
+      金控會先跳出 17 個申報主體選擇頁, 選第一列「2882 國泰金」(母公司合併財報).
+      Save as data/raw/manual/2882-FY2024-FS.pdf

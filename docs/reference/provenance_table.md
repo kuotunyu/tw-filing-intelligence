@@ -13,6 +13,9 @@
 | `2317-FY2023-AR` | 鴻海 (2317) | FY2023 | annual_report | locked | 707 | `079dee6e5d6840a3…` | 2026-07-30 | manual |
 | `2317-FY2024-AR` | 鴻海 (2317) | FY2024 | annual_report | locked | 136 | `b27c123b1c18385e…` | 2026-07-30 | manual |
 | `2882-FY2024-AR` | 國泰金控 (2882) | FY2024 | annual_report | locked | 248 | `348f77d80c744f0f…` | 2026-07-30 | manual |
+| `2330-FY2024-FS` | 台積電 (2330) | FY2024 | financial_report | locked | 124 | `6ed0ee9be5beb71b…` | 2026-07-30 | manual |
+| `2317-FY2024-FS` | 鴻海 (2317) | FY2024 | financial_report | locked | 202 | `c93c08e05c6a458d…` | 2026-07-30 | manual |
+| `2882-FY2024-FS` | 國泰金控 (2882) | FY2024 | financial_report | locked | 402 | `82d8c24999a3f3d1…` | 2026-07-30 | manual |
 
 ## Structured datasets
 

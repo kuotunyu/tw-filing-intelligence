@@ -57,7 +57,10 @@ def main(
             continue
         if not plan.declared:
             typer.echo(f"UNDECLARED  : {plan.target_name} is not in documents.yaml")
-            typer.echo("              the protocol declares exactly 7 documents; amend it first")
+            typer.echo(
+                f"              the protocol declares {len(declared)} documents; "
+                "amend it before adding another"
+            )
             continue
 
         record = expected_by_name[plan.target_name or ""]

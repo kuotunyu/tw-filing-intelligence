@@ -42,6 +42,18 @@ records:
   rows: null
   pages: 136
   notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2317-FY2024-FS
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2317-FY2024-FS.pdf
+  sha256: c93c08e05c6a458d1a05c47e5514844086ccb1e45f2990e586641a253e95daba
+  bytes: 5910730
+  retrieved_at: '2026-07-30T18:54:37.282563+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 202
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
 - id: 2330-FY2023-AR
   kind: document
   acquisition: manual
@@ -66,6 +78,18 @@ records:
   rows: null
   pages: 91
   notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2330-FY2024-FS
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2330-FY2024-FS.pdf
+  sha256: 6ed0ee9be5beb71bf7be4aa63eb4dd48357e9729421d930ce119373a8d00f88a
+  bytes: 9814510
+  retrieved_at: '2026-07-30T18:54:37.358308+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 124
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
 - id: 2412-FY2023-AR
   kind: document
   acquisition: manual
@@ -89,6 +113,18 @@ records:
   http_status: null
   rows: null
   pages: 248
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2882-FY2024-FS
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2882-FY2024-FS.pdf
+  sha256: 82d8c24999a3f3d1db951032a623140a36852bbd050f8fef54601d0ef937b5cf
+  bytes: 5941322
+  retrieved_at: '2026-07-30T18:54:37.383718+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 402
   notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
 - id: twse-openapi-swagger
   kind: dataset

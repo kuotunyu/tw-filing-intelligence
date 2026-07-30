@@ -18,7 +18,12 @@ from twfi.io.manifest import (
     verify_acquisition,
 )
 from twfi.paths import RepoPaths
-from twfi.protocol import COMPANIES, DEV_COMPANY_CODES, LOCKED_COMPANY_CODES
+from twfi.protocol import (
+    COMPANIES,
+    DECLARED_DOCUMENTS,
+    DEV_COMPANY_CODES,
+    LOCKED_COMPANY_CODES,
+)
 
 
 @pytest.fixture()
@@ -34,10 +39,25 @@ def test_document_manifest_loads(paths: RepoPaths) -> None:
     assert manifest.documents, "the study needs declared documents"
 
 
-def test_document_count_matches_the_protocol(paths: RepoPaths) -> None:
+def test_the_manifest_declares_exactly_what_the_protocol_declares(paths: RepoPaths) -> None:
+    """The authoritative document list lives in twfi.protocol; the manifest mirrors it."""
     manifest = load_document_manifest(paths.manifests / "documents.yaml")
-    expected = sum(len(company.fiscal_years) for company in COMPANIES)
-    assert len(manifest.documents) == expected == 7
+    assert {record.doc_id for record in manifest.documents} == {
+        document.doc_id for document in DECLARED_DOCUMENTS
+    }
+
+
+def test_document_count_stays_within_the_declared_range(paths: RepoPaths) -> None:
+    manifest = load_document_manifest(paths.manifests / "documents.yaml")
+    assert 5 <= len(manifest.documents) <= 10, "the brief asks for 5-10 documents"
+
+
+def test_document_types_match_the_protocol(paths: RepoPaths) -> None:
+    manifest = load_document_manifest(paths.manifests / "documents.yaml")
+    by_id = {record.doc_id: record for record in manifest.documents}
+    for document in DECLARED_DOCUMENTS:
+        assert by_id[document.doc_id].doc_type == document.doc_type
+        assert by_id[document.doc_id].split == document.split
 
 
 def test_declared_documents_cover_every_company_year(paths: RepoPaths) -> None:

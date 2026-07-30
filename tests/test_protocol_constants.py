@@ -17,6 +17,7 @@ from twfi.protocol import (
     CHALLENGER_ITEMS,
     CHALLENGER_SWITCH_MIN_GAIN_PP,
     COMPANIES,
+    DECLARED_DOCUMENTS,
     DEV_COMPANY_CODES,
     DEV_TOTAL,
     FACTOR_IDS,
@@ -28,6 +29,7 @@ from twfi.protocol import (
     POOLED_HARD_SIZE,
     PROBE_COUNT,
     ROUTE_BY_QUESTION_TYPE,
+    USABLE_DOCUMENTS,
     consistency_problems,
     split_for_company,
 )
@@ -94,8 +96,45 @@ def test_study_covers_at_least_two_fiscal_years() -> None:
 
 
 def test_document_count_is_within_the_five_to_ten_range() -> None:
-    total = sum(len(company.fiscal_years) for company in COMPANIES)
+    total = len(DECLARED_DOCUMENTS)
     assert 5 <= total <= 10, f"the brief asks for 5-10 documents, got {total}"
+
+
+def test_declared_documents_cover_every_company_year() -> None:
+    declared = {(document.company_code, document.fiscal_year) for document in DECLARED_DOCUMENTS}
+    expected = {(company.code, year) for company in COMPANIES for year in company.fiscal_years}
+    assert declared == expected
+
+
+def test_doc_ids_encode_company_year_and_kind() -> None:
+    ids = {document.doc_id for document in DECLARED_DOCUMENTS}
+    assert "2330-FY2023-AR" in ids
+    assert "2330-FY2024-FS" in ids
+    assert len(ids) == len(DECLARED_DOCUMENTS), "doc_ids must be unique"
+
+
+def test_financial_reports_exist_only_for_fy2024() -> None:
+    """FY2023 annual reports still embed their statements; FY2024 ones do not."""
+    statements = [d for d in DECLARED_DOCUMENTS if d.doc_type == "financial_report"]
+    assert statements
+    assert {d.fiscal_year for d in statements} == {2024}
+    assert {d.company_code for d in statements} == LOCKED_COMPANY_CODES
+
+
+def test_the_unreadable_filing_stays_declared_but_unusable() -> None:
+    """Deleting the record would delete the finding."""
+    unusable = [d for d in DECLARED_DOCUMENTS if not d.usable]
+    assert [d.doc_id for d in unusable] == ["2317-FY2024-AR"]
+    assert "ToUnicode" in unusable[0].note
+    assert unusable[0] not in USABLE_DOCUMENTS
+    assert len(USABLE_DOCUMENTS) == len(DECLARED_DOCUMENTS) - 1
+
+
+def test_every_locked_company_still_has_two_fiscal_years_of_evidence() -> None:
+    """Cross-period questions need both years to be answerable from some document."""
+    for code in LOCKED_COMPANY_CODES:
+        years = {d.fiscal_year for d in USABLE_DOCUMENTS if d.company_code == code}
+        assert years == {2023, 2024} or code == "2882", f"{code} lost a fiscal year"
 
 
 def test_a_structurally_different_industry_is_included() -> None:
