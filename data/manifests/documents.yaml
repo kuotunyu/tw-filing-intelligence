@@ -1,0 +1,155 @@
+# Declared filings for the feasibility study.
+#
+# The PDFs themselves are NEVER committed (see .gitignore). This file plus
+# scripts/fetch_documents.py is the whole reproduction recipe: a reader downloads
+# each document from `source_page`, drops it in data/raw/manual/, and the script
+# verifies the SHA-256 recorded here.
+#
+# Acquisition is MANUAL by protocol decision D-010, not by omission:
+#   * mops.twse.com.tw/mops/web/* returns a 65-byte JS bootstrap -- the new MOPS
+#     is a single-page app, and its data API is not published, so using it would
+#     mean calling an undocumented private endpoint.
+#   * doc.twse.com.tw/server-java/t57sb01 is a server-rendered POST form with no
+#     CAPTCHA, but its `step` parameter semantics are not published, so driving it
+#     is form simulation rather than use of a documented download path.
+# Seven documents do not justify either. See docs/DATA_PROVENANCE.md 8.
+#
+# Protocol reference: docs/FEASIBILITY_PROTOCOL.md 1.2
+version: 1
+
+documents:
+  # ---------------------------------------------------------------- DEV split
+  - doc_id: 2412-FY2023-AR
+    company:
+      name: 中華電信
+      code: "2412"
+    fiscal_year: 2023
+    doc_type: annual_report
+    split: dev
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 2412, 資料年度 112 (民國), 資料類型「年報」.
+      Save as data/raw/manual/2412-FY2023-AR.pdf
+
+  - doc_id: 1301-FY2023-AR
+    company:
+      name: 台塑
+      code: "1301"
+    fiscal_year: 2023
+    doc_type: annual_report
+    split: dev
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 1301, 資料年度 112 (民國), 資料類型「年報」.
+      Save as data/raw/manual/1301-FY2023-AR.pdf
+
+  # ------------------------------------------------------------- LOCKED split
+  - doc_id: 2330-FY2023-AR
+    company:
+      name: 台積電
+      code: "2330"
+    fiscal_year: 2023
+    doc_type: annual_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 2330, 資料年度 112 (民國), 資料類型「年報」.
+      Save as data/raw/manual/2330-FY2023-AR.pdf
+
+  - doc_id: 2330-FY2024-AR
+    company:
+      name: 台積電
+      code: "2330"
+    fiscal_year: 2024
+    doc_type: annual_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 2330, 資料年度 113 (民國), 資料類型「年報」.
+      Save as data/raw/manual/2330-FY2024-AR.pdf
+
+  - doc_id: 2317-FY2023-AR
+    company:
+      name: 鴻海
+      code: "2317"
+    fiscal_year: 2023
+    doc_type: annual_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 2317, 資料年度 112 (民國), 資料類型「年報」.
+      Save as data/raw/manual/2317-FY2023-AR.pdf
+
+  - doc_id: 2317-FY2024-AR
+    company:
+      name: 鴻海
+      code: "2317"
+    fiscal_year: 2024
+    doc_type: annual_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 2317, 資料年度 113 (民國), 資料類型「年報」.
+      Save as data/raw/manual/2317-FY2024-AR.pdf
+
+  - doc_id: 2882-FY2024-AR
+    company:
+      name: 國泰金控
+      code: "2882"
+    fiscal_year: 2024
+    doc_type: annual_report
+    split: locked
+    source_page: https://doc.twse.com.tw/server-java/t57sb01
+    resolved_url: null
+    sha256: null
+    bytes: null
+    pages: null
+    retrieved_at: null
+    http_status: null
+    acquisition: pending
+    notes: >-
+      電子資料查詢作業: 公司代號 2882, 資料年度 113 (民國), 資料類型「年報」.
+      金控年報: 報表結構與一般業完全不同, 是本研究刻意保留的 hard case.
+      Save as data/raw/manual/2882-FY2024-AR.pdf

@@ -5,6 +5,34 @@ description: 從公開資訊觀測站 MOPS、TWSE OpenAPI、XBRL 取得臺灣上
 
 # TWFI Data Access
 
+## 先知道這三個 P1 實測事實（否則會走錯路）
+
+1. **TWSE OpenAPI 是單期快照。** `/opendata/t187ap06_L_ci` 回 1045 列
+   但全部 `年度=115 季別=1`。**拿不到 FY2023／FY2024。**
+   → 歷史數值走 XBRL 或已驗證表格擷取；OpenAPI 用於公司基本資料 ＋
+   **當期**數值（當作獨立交叉來源，見 D-011）。
+   驗證指令：`uv run python scripts/sample_endpoint.py /opendata/t187ap06_L_ci`
+2. **新版 MOPS 是 JS SPA。** `mops.twse.com.tw/mops/web/*` 只回 65 bytes 的
+   `location.href = origin + "/mops"`。要抓它就得用未公開 XHR API → **禁止**。
+3. **文件一律人工放置。** `doc.twse.com.tw/server-java/t57sb01` 沒有 CAPTCHA，
+   但是 POST 表單且 `step` 語意未公開 → 驅動它是表單模擬／逆向。
+   只有 7 份文件，不值得。人工放置 ＋ SHA-256 **符合 G1**，不是 G1 的例外。
+
+**不要**因為「自動化比較厲害」而去逆向 MOPS。這會直接違反協議。
+
+## 一般業 vs 金控業是兩套 schema
+
+| endpoint | 欄位數 |
+|---|---|
+| `t187ap07_L_ci` 資產負債表（一般業） | 26 |
+| `t187ap07_L_fh` 資產負債表（金控業） | **60** |
+
+金控沒有 `營業收入` 這一行，用 `利息淨收益`／`保險負債準備淨變動`。
+2882 必須走 `_fh`。numeric route 要處理 per-industry schema。
+
+單位陷阱：`t187ap17_L` 的 `營業收入(百萬元)` 是**百萬元**，
+`t187ap06_L_ci` 的 `營業收入` 是**千元**。
+
 ## 只有三個來源，只有三個 host
 
 | id | 來源 | host |
@@ -31,9 +59,11 @@ description: 從公開資訊觀測站 MOPS、TWSE OpenAPI、XBRL 取得臺灣上
 ## 標準流程
 
 ```bash
-uv run python scripts/explore_sources.py
-uv run python scripts/fetch_twse_openapi.py --manifest data/manifests/structured.yaml
-uv run python scripts/fetch_documents.py --manifest data/manifests/documents.yaml
+uv run python scripts/explore_sources.py                      # 重建 endpoint 參考文件
+uv run python scripts/sample_endpoint.py /opendata/t187ap06_L_ci   # 檢查某 endpoint 實際內容
+uv run python scripts/probe_mops.py                           # 重驗 MOPS 是否仍為 SPA
+uv run python scripts/fetch_twse_openapi.py                   # 自動抓結構化當期資料
+uv run python scripts/fetch_documents.py --manual-dir data/raw/manual --record-hash
 uv run python scripts/verify_manifests.py
 ```
 

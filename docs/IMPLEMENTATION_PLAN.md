@@ -23,9 +23,9 @@
 
 | Phase | 名稱 | 需要 GPU | 需要連外 | 狀態 |
 |---|---|---|---|---|
-| P0 | Repo scaffold ＋ 規劃文件 ＋ 專案 skills | ✗ | ✗ | 進行中 |
-| P1 | 資料來源探勘與 manifest 定義 | ✗ | ✅ | 未開始 |
-| P2 | 資料取得 ＋ provenance ＋ SHA-256 驗證 | ✗ | ✅ | 未開始 |
+| P0 | Repo scaffold ＋ 規劃文件 ＋ 專案 skills | ✗ | ✗ | 🟢 完成 |
+| P1 | 資料來源探勘與 manifest 定義 | ✗ | ✅ | 🟢 完成 |
+| P2 | 資料取得 ＋ provenance ＋ SHA-256 驗證 | ✗ | 部分 | 🟡 等使用者放檔 |
 | P3 | Parsing 層（baseline ＋ layout-aware） | ✗ | ✗ | 未開始 |
 | P4 | 結構化數值層（DuckDB ＋ deterministic SQL） | ✗ | ✗ | 未開始 |
 | P5 | Gold set 標註（DEV 15 ＋ LOCKED 36 ＋ 5 probes） | ✗ | ✗ | 未開始 |
@@ -73,9 +73,19 @@
 **DoD**：manifest schema 有 pydantic 驗證與離線測試；
 allowlist 之外的 host 會被 client 拒絕（有測試）；探勘結果寫入 docs。
 
-**風險**：MOPS 年報 PDF 的 URL 可能非決定性（含流水號）。
-→ 對策：manifest 以 `(company, year, doc_type)` 為 key，`resolved_url` 與 `sha256`
-在首次取得後寫入並鎖定；重建時直接用 `resolved_url`，失敗則走人工 fallback。
+### P1 實際結果（2026-07-31，🟢 完成）
+
+三個發現，完整證據在 `docs/DATA_PROVENANCE.md §8`：
+
+1. **OpenAPI 是單期快照** — `t187ap06_L_ci` 回 1045 列，全部 `年度=115 季別=1`。
+   → **P4 原本的假設錯誤**，已修正（見下方 P4）。
+2. **一般業 vs 金控業兩套 schema** — 資產負債表 26 欄 vs **60** 欄，
+   金控沒有 `營業收入` 這一行。2882 是真 hard case。
+3. **新版 MOPS 是 JS SPA**，`doc.twse.com.tw/server-java/t57sb01` 是無 CAPTCHA
+   的 POST 表單但 `step` 語意未公開 → **文件走人工放置**（D-010），
+   這符合 G1 而不是 G1 的例外。
+
+原本的 R1 風險（PDF URL 非決定性）因此**不再適用**：不自動化就沒有這個問題。
 
 ---
 
@@ -120,11 +130,20 @@ allowlist 之外的 host 會被 client 拒絕（有測試）；探勘結果寫�
 
 **Deliverable**
 
+> **P1 之後修訂**：OpenAPI 只有當期，所以歷史數值來源改為
+> XBRL（人工放置，優先）或**已驗證的表格擷取值**（fallback），
+> OpenAPI 當期資料改當**獨立交叉來源**（D-010／D-011）。
+> schema 必須容納 per-industry 差異（`_ci` 26 欄 vs `_fh` 60 欄）
+> 與單位差異（千元 vs 百萬元）。
+
 - `src/twfi/numeric/schema.sql` — `company`、`document`、`fin_statement`、
-  `fin_line_item(company, period, statement, basis, account, value, unit, currency,
-  source_url, source_ref)`、`monthly_revenue`。
+  `fin_line_item(company, period, statement, basis, industry_schema, account,
+  value, unit, currency, source_kind, source_url, source_ref)`、`monthly_revenue`。
+  `source_kind ∈ {xbrl, openapi_current, extracted_table}` —— 讓「這個數字多可信」
+  可被查詢，而不是隱藏在載入邏輯裡。
 - `src/twfi/numeric/duckdb_store.py` — 從 OpenAPI／XBRL／已驗證表格載入；
-  每一列都必須有 `source_url` 與 `source_ref`。
+  每一列都必須有 `source_kind`、`source_url` 與 `source_ref`。
+  一般業與金控業的 account 對應表分開維護，缺對應時**報錯**而非猜測。
 - `src/twfi/numeric/sql_tools.py` — **templated、參數化**的查詢集合
   （lookup / cross-period delta / ratio / growth）。**不允許 LLM 自由生成 SQL。**
 - `src/twfi/numeric/calculator.py` — 回傳 `{value, unit, formula, operands[]}`，

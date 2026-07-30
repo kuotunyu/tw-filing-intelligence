@@ -1,7 +1,11 @@
 # DATA PROVENANCE
 
-`status: SKELETON — 表格待 P1/P2 填實`
+`status: P1 完成（來源已實測）／P2 取得表格待填`
 `last_updated: 2026-07-31`
+
+> **先讀 §8。** P1 的實測結果改變了資料取得策略：
+> TWSE OpenAPI 是單期快照、新版 MOPS 是 JS SPA，
+> 因此**文件走人工放置 fallback**，結構化當期資料走 OpenAPI 自動化。
 
 本 repository **不重新散布**任何原始年報／財報 PDF 或 XBRL 檔案。
 只提交：manifest、來源 URL、SHA-256、來源頁面、公司、年度、文件類型、
@@ -117,9 +121,13 @@ uv run python scripts/fetch_documents.py --manual-dir data/raw/manual --record-h
 
 ## 5. 取得紀錄（P2 填實）
 
+權威紀錄在 `data/manifests/documents.yaml` 與 `data/manifests/structured.yaml`
+（含 `sha256`、`retrieved_at`、`source_page`、`acquisition`）。
+本表為人類可讀摘要，由 `scripts/verify_manifests.py` 產生。
+
 | doc_id | 公司 | 年度 | 類型 | split | SHA-256 | 取得日 | 方式 |
 |---|---|---|---|---|---|---|---|
-| _(待填)_ | | | | | | | |
+| _(P2 填實；目前 7 份文件皆為 `pending`)_ | | | | | | | |
 
 ---
 
@@ -135,3 +143,68 @@ row key 與極短引文，不含長篇原文重製）、`results/feasibility/` �
 
 > Gold record 中的引文長度上限 **40 字**，僅用於標註可追溯性，
 > 不構成原文重製。
+
+---
+
+## 8. P1 實測結果（2026-07-31）
+
+三個發現改變了資料取得策略。原始證據：
+`results/runs/mops_probe.json`、`docs/reference/twse_openapi_endpoints.md`。
+重現方式：`scripts/explore_sources.py`、`scripts/sample_endpoint.py`、`scripts/probe_mops.py`。
+
+### 8.1 TWSE OpenAPI 可用，但**只有單一期間**
+
+- `openapi.twse.com.tw/v1/swagger.json`：**143 個 endpoint**，
+  sha256 `2c2cecccb7a220ac9e263228a7659aa49b1ada5aea397650e601ad3dfcc48043`，306,043 bytes。
+- `scripts/sample_endpoint.py /opendata/t187ap06_L_ci` → **1045 列，全部 `年度=115 季別=1`**。
+  `年度`／`季別` 欄位存在，但只有**一個值**。
+- **結論**：`/opendata/` 的財報 endpoint 是**當期快照**，
+  **無法**提供 FY2023／FY2024。
+
+影響：
+- numeric route 的歷史數值**不能**靠 OpenAPI（原本 P4 的假設錯誤）。
+- OpenAPI 改用於 (a) 公司基本資料（`t187ap03_L`）、
+  (b) **當期**數值 —— 這反而是 cross_document 題與衝突偵測的好材料：
+  「PDF 的 FY2024 數字」對「OpenAPI 的當期數字」是兩個獨立來源。
+
+### 8.2 一般業與金控業是**兩套不同 schema**
+
+| endpoint | 內容 | 欄位數 |
+|---|---|---|
+| `t187ap07_L_ci` | 上市公司資產負債表（一般業） | 26 |
+| `t187ap07_L_fh` | 上市公司資產負債表（金控業） | **60** |
+| `t187ap06_L_ci` | 綜合損益表（一般業） | 33 |
+| `t187ap06_L_fh` | 綜合損益表（金控業） | 25（欄位名稱完全不同） |
+
+金控用 `利息淨收益`、`保險負債準備淨變動`、`呆帳費用、承諾及保證責任準備提存`，
+**沒有 `營業收入` 這一行**。這證實了 D-004 保留 2882 的理由：
+numeric route 必須處理 per-industry schema，這是真實難點而不是人為刁難。
+
+### 8.3 文件取得：**人工放置**，理由是規則而非能力
+
+| 探測目標 | 結果 |
+|---|---|
+| `mops.twse.com.tw/mops/web/index` | 200，**65 bytes**，內容為 `<script> location.href = location.origin + "/mops"; </script>` |
+| `mops.twse.com.tw/mops/web/t57sb01_q1` | 同上（同一個 JS bootstrap） |
+| `doc.twse.com.tw/server-java/t57sb01` | 200，11,285 bytes，server-rendered `<form name='fm' action='/server-java/t57sb01' method='post'>`，欄位 `co_id`／`id`／`key`／`step`，標題「電子資料查詢作業」，**未偵測到 CAPTCHA** |
+
+判斷：
+
+1. 新版 MOPS 是 **single-page app**，沒有 server-rendered 內容。
+   要取得資料就得呼叫它**未公開的 XHR API** → 違反「不使用未公開或逆向出的私人 endpoint」。
+2. `doc.twse.com.tw/server-java/t57sb01` 是公開頁、**沒有驗證碼**，
+   但它是 **POST 表單**，`step` 參數語意未公開 → 驅動它屬於**表單模擬／逆向**，
+   而 brief 要求「優先使用正式 OpenAPI、公開下載頁及穩定直接文件」。
+3. 本研究只需要 **7 份文件**。為 7 份文件去逆向表單，
+   風險與規則成本都不划算。
+
+**因此：文件（年報 PDF、XBRL）一律走 §4 的人工放置 fallback。**
+
+這**不影響 G1**。G1 要求「資料取得流程可重現，沒有依賴破解或不穩定私人 endpoint」：
+人工放置 ＋ `source_page` ＋ SHA-256 釘住，任何人都能重新下載並驗證位元相同，
+而且完全不觸碰破解或私人 endpoint。這是**符合 G1 的取得方式**，
+不是 G1 的例外。
+
+> 這是一個**負面結果**，而且是有價值的負面結果：
+> 「臺灣公開資訊在文件層級沒有穩定的官方批量下載介面」
+> 本身就是 feasibility 問題的一部分，必須寫進 `docs/FEASIBILITY_REPORT.md`。

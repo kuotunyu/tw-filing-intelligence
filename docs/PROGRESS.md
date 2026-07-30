@@ -7,24 +7,34 @@
 
 ## 目前狀態
 
+- **Phase**：P1（資料來源探勘 ＋ manifest schema）— 🟢 **完成**；下一步 P2
+- **P1 的三個關鍵發現**（改變了 P2/P4 設計，詳見 `docs/DATA_PROVENANCE.md §8`）：
+  1. **TWSE OpenAPI 是單期快照**（`t187ap06_L_ci` 1045 列全部 `年度=115 季別=1`）
+     → 歷史數值不能靠 OpenAPI
+  2. **一般業 vs 金控業是兩套 schema**（資產負債表 26 vs **60** 欄）
+     → 2882 是真 hard case，numeric route 要處理 per-industry schema
+  3. **新版 MOPS 是 JS SPA**（`/mops/web/*` 只回 65 bytes JS bootstrap）
+     → 文件走**人工放置 ＋ SHA-256**，這符合 G1 而非 G1 的例外
 - **Phase**：P0（Repo scaffold ＋ 規劃文件）— 🟢 **完成**
 - **Protocol 狀態**：`1.0.0-draft`，**尚未 freeze**（可以修改）
 - **Locked set 狀態**：尚未建立
 - **Toolchain 狀態**：`uv sync --extra dev` OK（Python 3.13.13）、
   `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy src` strict 乾淨、
-  `pytest` **150 passed / 1 skipped**、coverage **99.61%**（gate 85%）
+  `pytest` **308 passed / 1 skipped**、coverage **99.87%**（gate 85%）
 - **最後更新**：2026-07-31
 
 ## 下一步（照順序）
 
-1. **P1**：`src/twfi/io/http.py`（host allowlist ＋ rate limit ＋ 下載上限 ＋
-   SSRF 防護）＋ 對應離線測試（非 allowlist host／http／redirect 逃逸／私有 IP 皆被拒）。
-2. `scripts/explore_sources.py` 抓 `openapi.twse.com.tw/v1/swagger.json`，
-   輸出 `docs/reference/twse_openapi_endpoints.md`。
-3. 實測 MOPS 年報／財報 PDF 的穩定公開路徑（R1 風險），結果寫入
-   `docs/DATA_PROVENANCE.md`；若無穩定路徑就明確走人工放置 fallback。
-4. `data/manifests/documents.yaml` ／ `structured.yaml` 填入 7 份 PDF ＋
-   結構化資料的宣告（公司／年度／類型／split／source_page）。
+1. **需要使用者動手**：把 7 份年報 PDF 放到 `data/raw/manual/`
+   （檔名與來源見 `data/manifests/documents.yaml` 每筆的 `notes`）。
+   XBRL（7 份，選配但建議）同樣放這裡。
+2. **P2**：`scripts/fetch_twse_openapi.py`（自動抓 8 個 OpenAPI dataset）
+   ＋ `scripts/fetch_documents.py --manual-dir`（計算並寫入 SHA-256）
+   ＋ `scripts/verify_manifests.py`。
+3. **P3**：parsing 層（PyMuPDF baseline ＋ 自建 layout-aware parser）。
+   合成 PDF fixture 可先寫，不必等真實 PDF。
+4. **P4**：DuckDB schema ＋ deterministic SQL。
+   注意 per-industry schema（`_ci` vs `_fh`）與單位（千元 vs 百萬元）。
 
 ---
 
@@ -33,8 +43,8 @@
 | Phase | 名稱 | 狀態 | 完成日 | 備註 |
 |---|---|---|---|---|
 | P0 | Repo scaffold ＋ 規劃文件 | 🟢 完成 | 2026-07-31 | 文件 ＋ 骨架 ＋ toolchain 全綠 |
-| P1 | 資料來源探勘 ＋ manifest schema | ⚪ 未開始 | — | 需連外 |
-| P2 | 資料取得 ＋ provenance ＋ SHA-256 | ⚪ 未開始 | — | 需連外 |
+| P1 | 資料來源探勘 ＋ manifest schema | 🟢 完成 | 2026-07-31 | 3 個關鍵發現，見上方 |
+| P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟡 等使用者放 PDF | — | OpenAPI 部分可先自動化 |
 | P3 | Parsing（baseline ＋ layout-aware） | ⚪ 未開始 | — | CPU |
 | P4 | 結構化數值層（DuckDB ＋ SQL） | ⚪ 未開始 | — | CPU |
 | P5 | Gold set 標註 | ⚪ 未開始 | — | 需先有 P2/P3 |
@@ -90,7 +100,8 @@ ollama 版本 `0.32.0`。
 
 | # | 風險 | 目前判斷 |
 |---|---|---|
-| R1 | MOPS 年報 PDF URL 可能含流水號、非決定性 | P1 實測；manifest 記 `resolved_url`＋hash；備人工 fallback |
+| ~~R1~~ | ~~MOPS 年報 PDF URL 非決定性~~ | **已解決**：實測後決定不自動化，走人工放置 ＋ SHA-256（D-010）。理由是規則而非能力 |
+| R7 | 若使用者未提供 XBRL，歷史結構化數值來自我們自己的表格擷取 | RQ2 仍成立，但 report 必須把「官方結構化資料」降級為「已驗證結構化資料」（D-010） |
 | R2 | 年報 300+ 頁，VLM caption 成本高 | figure crop 數量上限 ＋ embedding cache ＋ cold/warm 分開量 |
 | R3 | `qwen3.6:27b` Q4_K_M 17GB ＋ KV cache ＋ 檢索模型 2.2GB ≈ 20–21GB，逼近 G10 的 22GB | `num_ctx=8192`、crop 最長邊 1024、每題 ≤3 crop；必要時檢索模型 offload CPU。**gate 不因模型放寬** |
 | R6 | Q4_K_M 量化可能影響敘述題品質 | 數值題走 SQL 不受影響；敘述題影響會如實反映在指標，不換模型補救 |
@@ -162,5 +173,45 @@ ollama 版本 `0.32.0`。
 - 3 個新測試把上述固定住（合併 21 題、`Wilson`、小樣本節存在）。
 
 **沒做什麼**：任何連外請求、任何 GPU 任務、任何 evaluation、任何 gold 標註。
+
+---
+
+### 2026-07-31 — Session 2（P1）
+
+**做了什麼**
+
+- `src/twfi/io/http.py`：**全專案唯一的對外 HTTP 出口**
+  - host allowlist 寫死（3 個 TWSE host）、https only、拒 IP literal／
+    localhost／私有網段／`169.254.169.254`、拒 URL 內含帳密、拒非 443 port
+  - **每個 redirect hop 重新驗證**（redirect 是可被攻擊者影響的輸入）
+  - 每 host 最小間隔 1.5s、per-host 請求上限 40、單檔 80MB／單次 600MB
+    （**串流時就中止**，且 `.partial` 一定刪除）、`Content-Length` 不符即失敗
+  - retry 只對 5xx 與 transport error，指數退避 2/4/8s；**4xx 不重試**
+  - `snapshot()` 產出可入 provenance 的網路行為紀錄
+  - 61 個測試全走 `httpx.MockTransport`，**不開任何 socket**
+- `src/twfi/protocol.py`：把事前註冊協議變成**程式常數**
+  （公司／split、題型分布、pooled hard set、route 對應、F0–F7、G1–G10 門檻），
+  ＋ `consistency_problems()` 可注入參數 → 檢查本身也被測試
+- `src/twfi/io/manifest.py`：pydantic manifest
+  - URL 必須通過**同一個** allowlist（manifest 無法夾帶外部 host）
+  - `split` 必須等於協議指派的 split（分離無法從 manifest 漂移）
+  - **拒絕半記錄狀態**（有 hash 沒 timestamp 之類）
+  - `verify_local_documents()` 重算 SHA-256 ＋ 檔案大小
+- `scripts/explore_sources.py` → `docs/reference/twse_openapi_endpoints.md`
+  （**143 endpoint**，44 個入 shortlist）
+- `scripts/sample_endpoint.py`、`scripts/probe_mops.py`（含 body 落地，避免重複請求）
+- `data/manifests/documents.yaml`（7 份年報，全 `pending`，含人工下載指示）
+  ＋ `structured.yaml`（8 個 OpenAPI dataset ＋ 7 個 XBRL 選配）
+- 三個 md 文件依實測結果修訂：`DATA_PROVENANCE.md §8`（新增）、
+  `DECISIONS.md` D-010／D-011、`twfi-data-access` skill 加上三個必知事實
+
+**連外請求總計**：11 次（OpenAPI 2、mops 6 含 redirect、doc 1，另 sample 1），
+全部經 rate limiter，遠低於 40/host 上限。
+
+**結果**：`ruff` 乾淨、`mypy src` strict 乾淨、
+`pytest` **308 passed / 1 skipped**、coverage **99.87%**
+
+**沒做什麼**：任何 GPU 任務、任何 evaluation、任何 gold 標註、
+任何 MOPS 表單模擬或逆向。
 
 **下一步**：見上方「下一步」。
