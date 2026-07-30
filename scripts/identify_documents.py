@@ -19,7 +19,7 @@ from typing import Annotated
 
 import typer
 
-from twfi.io.identify import plan_renames
+from twfi.io.identify import pdf_candidates, plan_renames
 from twfi.io.manifest import load_document_manifest
 from twfi.paths import repo_paths
 
@@ -38,7 +38,7 @@ def main(
     declared = {record.filename for record in manifest.documents}
     expected_by_name = {record.filename: record for record in manifest.documents}
 
-    candidates = sorted(paths.manual_raw.glob("*.pdf")) + sorted(paths.manual_raw.glob("*.PDF"))
+    candidates = pdf_candidates(paths.manual_raw)
     if not candidates:
         typer.echo(f"no PDFs found in {paths.manual_raw.relative_to(paths.root)}")
         typer.echo("download the filings first: uv run python scripts/fetch_documents.py")
@@ -50,11 +50,7 @@ def main(
     for plan in plans:
         typer.echo("")
         typer.echo(f"file        : {plan.path.name}")
-        code = plan.identity.company_code or "?"
-        roc = plan.identity.roc_year
-        typer.echo(f"cover says  : 代號 {code} / 民國 {roc if roc else '?'} 年度")
-        if plan.identity.fiscal_year:
-            typer.echo(f"fiscal year : FY{plan.identity.fiscal_year}")
+        typer.echo(f"identity    : {plan.identity.describe()}")
 
         if plan.problem:
             typer.echo(f"PROBLEM     : {plan.problem}")
