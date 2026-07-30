@@ -44,28 +44,40 @@
   這個限制。
 - **影響**：結論不能延伸為「learned layout parser 沒用」，只能說
   「rule-based structure-aware parsing 已足以產生 X 的增益」。
-- **狀態**：ACCEPTED (2026-07-31) — 需使用者確認
+  這個限制必須寫進 `docs/FEASIBILITY_REPORT.md`。
+- **狀態**：ACCEPTED (2026-07-31，使用者確認)
 
-## D-003 模型：各一個，全部本機已有權重
+## D-003 模型：`qwen3.6:27b` 同時擔任 generation 與 VLM
 
-| 角色 | 模型 | 來源 | 精度 |
+| 角色 | 模型 | backend | 精度 |
 |---|---|---|---|
-| Embedding | `BAAI/bge-m3` | HF cache（已存在） | fp16 |
-| Reranker | `BAAI/bge-reranker-v2-m3` | HF cache（已存在） | fp16 |
-| Local VLM | `Qwen/Qwen3-VL-8B-Instruct` | HF cache（已存在） | bf16 |
-| Generation | `Qwen/Qwen3-VL-8B-Instruct`（text-only path） | 同上 | bf16 |
+| Embedding | `BAAI/bge-m3` | HF transformers（cache 已存在） | fp16 |
+| Reranker | `BAAI/bge-reranker-v2-m3` | HF transformers（cache 已存在） | fp16 |
+| Generation ＋ VLM | `qwen3.6:27b` digest `a50eda8ed977` | ollama 0.32.0（已 pull） | Q4_K_M |
 
+- **決策**（使用者 2026-07-31 拍板）：⑤A 的正式主候選是 `qwen3.6:27b`，
+  **文字與圖表共用同一個模型**；數值答案由 SQL 完成；
+  `qwen3-vl:8b` 只在 freeze 前做小型 chart challenger（見 D-009）；
+  `gpt-oss:20b` 不進正式 pipeline。
+- **可行性已實測**：`ollama show qwen3.6:27b` 回報
+  `capabilities: completion / vision / tools / thinking`、`architecture qwen35`、
+  `27.8B`、`Q4_K_M`、`context length 262144`。
+  **確認具備 vision**，因此「同一模型處理文字與 chart crop」成立；
+  若它是純文字模型，chart route（必須從 original crop pixels 讀值）就不可能實作。
 - **理由**：
-  1. 四個角色**零新下載**，取得成本與可重現性最好。
-  2. 三個模型都對繁體中文有良好支援（bge-m3 多語、Qwen3-VL 中文與圖表理解強）。
-  3. Generation 與 VLM 共用同一組權重 → 只需一組 8B 常駐，VRAM 從
-     ~17GB(VLM)+~15GB(另一個 8B 文字模型) 降到 ~17GB，在 24GB 卡上可行。
-     Protocol 說「最多」一個 VLM＋一個 generation model，共用不違規。
-- **替代**：ollama `qwen3-vl:8b`（Q4_K_M，6.1GB）作為低 VRAM fallback；
-  `qwen3.6:27b` 品質可能更好但 17GB 與檢索模型衝突且量化程度不同，不採用。
-- **限制**：decoding 固定 `temperature=0.0, top_p=1.0, seed=20260731`。
-  revision 由 `scripts/pin_models.py` 寫入 `configs/models.lock.json` 並納入 lock hash。
-- **狀態**：ACCEPTED (2026-07-31) — 需使用者確認
+  1. 全部**零新下載**（HF cache ＋ ollama 皆已有）。
+  2. 27B 通才對繁體中文長篇年報敘述的理解優於 8B，而 chart crop 讀值由同一模型
+     承擔可避免第二套權重佔 VRAM。
+  3. 數值不靠模型（D-005），所以 Q4 量化對「數值正確率」這個主指標的風險有限。
+- **替代**：`Qwen/Qwen3-VL-8B-Instruct` bf16（HF，品質未必更好且需兩套權重）、
+  `Qwen3-4B-Instruct-2507`（太小，會拖低 candidate 使 gate 判斷失真）。
+- **固定設定**：`temperature=0.0`、`top_p=1.0`、`top_k=1`、`seed=20260731`、
+  `num_predict=512`、`num_ctx=8192`、**`think=false`**。
+  關閉 thinking 的理由：長度不可預測的推理段落會讓 generation p95 latency 與
+  token 計數不可比較，而數值推理本來就走 SQL。
+- **已知風險**：VRAM 約 20–21GB（17GB 權重 ＋ KV cache ＋ 2.2GB 檢索模型），
+  G10 的 22GB 上限餘裕不大。上限是依硬體設定，**不因換模型放寬**。
+- **狀態**：ACCEPTED (2026-07-31，使用者確認)
 
 ## D-004 資料選擇：5 家公司 / 4 產業 / 2 年度 / 7 份 PDF
 
@@ -80,7 +92,10 @@
 - **理由**：DEV/LOCKED **公司層級完全分離**（最嚴格的分離方式，避免同公司同段落洩漏）；
   4 個產業 ≥ 2；含金控（報表結構與一般業完全不同、版面最難）避免「只選簡單版面」；
   2 個年度支援 cross-period 題型。
-- **狀態**：ACCEPTED (2026-07-31) — 需使用者確認
+- **替代（已評估後不採用）**：移除 2882 金控可降低 numeric route 失敗風險，
+  但會失去結構最不同的產業，使結論說服力下降；加入 2454 聯發科可擴大覆蓋，
+  但 F0–F7 × 36 題的 GPU 時間會明顯增加。
+- **狀態**：ACCEPTED (2026-07-31，使用者確認)
 
 ## D-005 Numeric route 不允許 LLM 自由生成 SQL
 
@@ -111,11 +126,25 @@
 - **理由**：避免用同一家族模型自我評分造成的樂觀偏誤。
 - **狀態**：ACCEPTED (2026-07-31)
 
+## D-009 Chart challenger：freeze 前一次性模型決策，規則事前寫死
+
+- **決策**：`qwen3-vl:8b` digest `901cae732162` 只作為 chart route 的 challenger，
+  在 **DEV 文件上**跑一次 16 題 chart crop 讀值比較
+  （`data/evaluation/dev/chart_challenger.jsonl`），依**事前規則**決定 locked run 的
+  chart route 用哪個模型：
+  > 若 `qwen3-vl:8b` 正確率高出 `qwen3.6:27b` **≥ 10 個百分點**（16 題中至少多對 2 題），
+  > chart route 改用 `qwen3-vl:8b`，其餘 route 仍用 `qwen3.6:27b`；否則全部用 27B。
+- **理由**：使用者要求保留一個小型 chart challenger。但「跑完再看要用哪個」在
+  方法論上等於事後換模型，除非**規則、資料、時點都事先固定**。因此：
+  規則寫死在 protocol §2.3、只用 DEV 資料、只在 freeze 前執行一次、
+  結果無論輸贏都要公開在 report。
+- **限制**：challenger 不進入 locked evaluation、不列入 F0…F7 ladder、
+  locked run 只用一個 chart 模型。freeze 之後**不得再比較模型**。
+- **狀態**：ACCEPTED (2026-07-31)
+
 ---
 
-## 待確認（需使用者拍板，預設先照上面走）
+## 全部待確認事項已解決
 
-- **Q1** D-002 parser 選擇：自建 rule-based layout parser（預設）vs 引入 `docling`。
-- **Q2** D-003 generation model 與 VLM 共用 Qwen3-VL-8B（預設）vs 另用
-  `qwen3.6:27b` / `gpt-oss:20b` 走 ollama。
-- **Q3** D-004 公司／年度組合是否照上表（預設）。
+2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
+D-004 照原表。無未決問題。

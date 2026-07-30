@@ -17,13 +17,14 @@
 
 ## 下一步（照順序）
 
-1. 使用者確認 `docs/DECISIONS.md` 的 Q1/Q2/Q3（parser、generation model、公司組合）。
-2. 進 P1：`src/twfi/io/http.py`（host allowlist ＋ rate limit ＋ 下載上限 ＋
+1. **P1**：`src/twfi/io/http.py`（host allowlist ＋ rate limit ＋ 下載上限 ＋
    SSRF 防護）＋ 對應離線測試（非 allowlist host／http／redirect 逃逸／私有 IP 皆被拒）。
-3. `scripts/explore_sources.py` 抓 `openapi.twse.com.tw/v1/swagger.json`，
+2. `scripts/explore_sources.py` 抓 `openapi.twse.com.tw/v1/swagger.json`，
    輸出 `docs/reference/twse_openapi_endpoints.md`。
-4. 實測 MOPS 年報／財報 PDF 的穩定公開路徑（R1 風險），結果寫入
+3. 實測 MOPS 年報／財報 PDF 的穩定公開路徑（R1 風險），結果寫入
    `docs/DATA_PROVENANCE.md`；若無穩定路徑就明確走人工放置 fallback。
+4. `data/manifests/documents.yaml` ／ `structured.yaml` 填入 7 份 PDF ＋
+   結構化資料的宣告（公司／年度／類型／split／source_page）。
 
 ---
 
@@ -67,15 +68,21 @@
 
 ---
 
-## 決策待辦（阻塞下一步）
+## 決策待辦
 
-| # | 問題 | 預設 | 狀態 |
-|---|---|---|---|
-| Q1 | Parser candidate：自建 rule-based layout parser vs `docling` | 自建 | 待確認 |
-| Q2 | Generation model：與 VLM 共用 `Qwen3-VL-8B` vs 另用 ollama `qwen3.6:27b` | 共用 | 待確認 |
-| Q3 | 公司／年度組合（2412+1301 → DEV；2330+2317+2882 → LOCKED） | 照表 | 待確認 |
+**全部已拍板（2026-07-31）**，無阻塞項目。
 
-> 預設不阻塞：使用者未回覆時照預設繼續，並在此記錄。
+| # | 問題 | 決定 |
+|---|---|---|
+| Q1 | Parser candidate | **自建 rule-based layout parser**（D-002）。不引入 docling；report 必須註明「本輪未驗證 learned layout model」 |
+| Q2 | Generation ／ VLM | **`qwen3.6:27b` digest `a50eda8ed977`（ollama, Q4_K_M）文字與圖表共用同一模型**；數值走 SQL；`qwen3-vl:8b` 只做 freeze 前 chart challenger；`gpt-oss:20b` 不進 pipeline（D-003 / D-009） |
+| Q3 | 公司／年度組合 | **照原表**（D-004）：DEV 2412+1301 FY2023；LOCKED 2330+2317 FY2023/FY2024 ＋ 2882 FY2024 |
+
+實測確認（2026-07-31）：`ollama show qwen3.6:27b` →
+`capabilities: completion / vision / tools / thinking`、`architecture qwen35`、
+`27.8B`、`Q4_K_M`、`context length 262144`。
+**確認具備 vision**，所以「文字＋圖表共用同一模型」在 chart route 成立。
+ollama 版本 `0.32.0`。
 
 ---
 
@@ -85,7 +92,8 @@
 |---|---|---|
 | R1 | MOPS 年報 PDF URL 可能含流水號、非決定性 | P1 實測；manifest 記 `resolved_url`＋hash；備人工 fallback |
 | R2 | 年報 300+ 頁，VLM caption 成本高 | figure crop 數量上限 ＋ embedding cache ＋ cold/warm 分開量 |
-| R3 | Qwen3-VL-8B bf16 ＋ 檢索模型 VRAM 合計 ~20GB | 明確 model lifecycle；必要時檢索模型 offload CPU |
+| R3 | `qwen3.6:27b` Q4_K_M 17GB ＋ KV cache ＋ 檢索模型 2.2GB ≈ 20–21GB，逼近 G10 的 22GB | `num_ctx=8192`、crop 最長邊 1024、每題 ≤3 crop；必要時檢索模型 offload CPU。**gate 不因模型放寬** |
+| R6 | Q4_K_M 量化可能影響敘述題品質 | 數值題走 SQL 不受影響；敘述題影響會如實反映在指標，不換模型補救 |
 | R4 | 我自己標註 gold 的偏誤 | 答案必須指回頁碼/bbox/row；標註前不看 pipeline 輸出 |
 | R5 | 金控 2882 報表結構特殊，numeric route 可能失敗 | 視為 hard case 如實記錄，不換公司 |
 
@@ -125,6 +133,20 @@
     src 不讀 dotenv 等**寫成會失敗的測試**，避免文件漂移
 - 結果：`ruff check` 乾淨、`ruff format --check` 乾淨、`mypy src` strict 乾淨、
   `pytest` **150 passed / 1 skipped**、coverage **99.61%**
+
+**決策定案後的協議更新（同一 session）**
+
+- 實測 `ollama show`：`qwen3.6:27b` **有 vision**（`qwen35`, 27.8B, Q4_K_M, ctx 262144）、
+  `qwen3-vl:8b`（`qwen3vl`, 8.8B, Q4_K_M）、ollama `0.32.0`
+- 依使用者決定改寫 protocol §2.2（模型表改為 27B 文字＋圖表共用、
+  `think=false`、decoding 固定）、新增 §2.3 **Chart challenger 事前決策規則**、
+  §2.4/§2.5 重新編號、§5 執行順序改為 10 步（challenger → pin → leakage → freeze）
+- 新增 `configs/models.yaml`（模型宣告、challenger 規則、排除清單、VRAM 預算）
+- `docs/DECISIONS.md`：D-002/D-003/D-004 標記使用者確認、D-003 全面改寫、
+  新增 **D-009 Chart challenger**、移除待確認區塊
+- 新增 8 個 invariant 測試把「模型宣告 ↔ protocol 一致」「challenger 規則 ≥10pp
+  且 outcome 未被手改」「decoding 決定性」「VRAM 預算低於 gate」變成會失敗的測試
+- 結果：`ruff` 乾淨、`pytest` **157 passed / 1 skipped**、coverage 99.61%
 
 **沒做什麼**：任何連外請求、任何 GPU 任務、任何 evaluation、任何 gold 標註。
 

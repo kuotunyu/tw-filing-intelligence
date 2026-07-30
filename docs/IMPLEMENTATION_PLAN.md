@@ -140,6 +140,8 @@ allowlist 之外的 host 會被 client 拒絕（有測試）；探勘結果寫�
 **Deliverable**
 
 - `data/evaluation/dev/gold.jsonl`（15 題）
+- `data/evaluation/dev/chart_challenger.jsonl`（16 題 chart crop 讀值，
+  只用於 protocol §2.3 的 freeze 前模型決策）
 - `data/evaluation/locked/gold.jsonl`（36 題，分布依 protocol §1.4）
 - `data/evaluation/locked/probes.jsonl`（5 個 no-evidence probe）
 - `src/twfi/eval/gold_schema.py` ＋ `scripts/validate_gold.py`
@@ -173,13 +175,20 @@ index build 有 cold/warm 計時；`Recall@5` 在 DEV 上有合理數字。
 
 **Deliverable**
 
-- `src/twfi/chart/caption.py` — VLM 對 figure crop 產生 caption（**只進 index**）
+- `src/twfi/models/ollama_client.py` — 對 `qwen3.6:27b` 的最小 client
+  （固定 decoding、`think=false`、bounded `num_ctx`、image 傳遞、
+  逾時與重試、token/latency telemetry）。只連 `127.0.0.1:11434`。
+- `src/twfi/chart/caption.py` — 對 figure crop 產生 caption（**只進 index**）
 - `src/twfi/chart/crop_answer.py` — 最終答案由 original crop pixels 產生，
-  輸出 `{value, unit, crop_page, bbox, caption_model, source_document}`
+  輸出 `{value, unit, crop_page, bbox, model, source_document}`
+- `scripts/run_chart_challenger.py` — protocol §2.3 的一次性比較
+  （DEV 16 題，`qwen3.6:27b` vs `qwen3-vl:8b`），輸出寫入
+  `results/runs/chart_challenger/` 並由 `scripts/pin_models.py` 記入 lock
 - crop 產物存 `data/cache/crops/`（不 commit）
 
-**DoD**：測試以 fake VLM backend 覆蓋；contract 保證「caption 不得作為最終數值來源」
-（有測試檢查 answer provenance 不是 caption）。
+**DoD**：測試以 fake ollama backend 覆蓋（離線）；contract 保證
+「caption 不得作為最終數值來源」（有測試檢查 answer provenance 不是 caption）；
+challenger 的判定規則以測試固定（≥10pp 才切換），不可由結果反推。
 
 ---
 
@@ -221,14 +230,15 @@ citation 無法解析時視為 invalid（有測試）。
 
 **順序不可調換**（見 protocol §5）
 
-1. `scripts/pin_models.py` → `configs/models.lock.json`
-2. `scripts/check_leakage.py` 通過
-3. `scripts/freeze_protocol.py` → `results/feasibility/protocol_lock.json`
-   （protocol / gold / manifest / models.lock 的 SHA-256）
-4. `nvidia-smi` 確認 GPU 空閒 → 跑 F0…F7 於 LOCKED，cold ＋ warm
-5. `scripts/verify_results.py`
-6. `scripts/run_gate.py` → `results/feasibility/GO_NO_GO.json`
-7. `docs/FEASIBILITY_REPORT.md`
+1. `scripts/run_chart_challenger.py`（DEV only，protocol §2.3 的一次性模型決策）
+2. `scripts/pin_models.py` → `configs/models.lock.json`（含 challenger 結果）
+3. `scripts/check_leakage.py` 通過
+4. `scripts/freeze_protocol.py` → `results/feasibility/protocol_lock.json`
+   （protocol / gold / probes / manifest / models.lock 的 SHA-256）
+5. `nvidia-smi` 確認 GPU 空閒 → 跑 F0…F7 於 LOCKED，cold ＋ warm
+6. `scripts/verify_results.py`
+7. `scripts/run_gate.py` → `results/feasibility/GO_NO_GO.json`
+8. `docs/FEASIBILITY_REPORT.md`
 
 **DoD**：`GO_NO_GO.json` 由程式產生；負面結果保留；報告含 failure analysis 與
 「最小的下一個研究問題」；`git status` 乾淨。
@@ -268,7 +278,7 @@ tests/       單元測試 ＋ fixtures（合成 PDF、fake model backends、fixt
 |---|---|---|
 | MOPS PDF URL 非決定性／被限流 | P2 卡住 | manifest 記 `resolved_url`＋hash；人工放置 fallback；不高頻爬 |
 | 年報 300+ 頁 → ingestion 與 VLM 成本高 | P6/P7 慢 | figure crop 有數量上限；embedding cache；cold/warm 分開量 |
-| Qwen3-VL-8B bf16 ＋ 檢索模型同時佔 VRAM | OOM | 明確 model lifecycle（用完 unload）；檢索模型可 offload CPU；VRAM gate 22GB |
+| `qwen3.6:27b` Q4_K_M（17GB）＋ KV cache ＋ 檢索模型 2.2GB ≈ 20–21GB | 接近 22GB gate，可能 OOM | `num_ctx=8192`、crop 最長邊 1024、每題 ≤3 crop；必要時檢索模型 offload CPU；gate 不放寬 |
 | 金控（2882）報表結構特殊 | numeric route 失敗 | 視為 hard case，如實記錄；不因此換公司 |
 | 我自己標註 gold 可能帶偏誤 | 結論失真 | 答案必須指回頁碼/bbox/row；不得用 pipeline 輸出；標註前不看模型答案 |
 | 想在看到 locked 結果後調整 | 協議失效 | protocol lock hash ＋ pytest 驗證 |

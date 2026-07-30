@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 import twfi
 from twfi.paths import RepoPaths
@@ -157,6 +158,86 @@ def test_project_skills_have_frontmatter(repo_root: Path) -> None:
         assert text.startswith("---\n"), f"{skill.name} needs YAML frontmatter"
         header = text.split("---", 2)[1]
         assert "name:" in header and "description:" in header, skill.parent.name
+
+
+# ---------------------------------------------------------------------- models
+
+
+@pytest.fixture()
+def declared_models(paths: RepoPaths) -> dict[str, object]:
+    return yaml.safe_load((paths.configs / "models.yaml").read_text(encoding="utf-8"))
+
+
+def test_declared_model_roles_are_complete(declared_models: dict[str, object]) -> None:
+    roles = declared_models["roles"]
+    assert isinstance(roles, dict)
+    assert set(roles) == {"embedding", "reranker", "generation", "chart"}
+
+
+def test_generation_model_matches_the_protocol(
+    paths: RepoPaths, declared_models: dict[str, object]
+) -> None:
+    """The config and the pre-registered protocol must name the same model."""
+    roles = declared_models["roles"]
+    assert isinstance(roles, dict)
+    generation = roles["generation"]
+    assert isinstance(generation, dict)
+
+    protocol = paths.protocol_doc.read_text(encoding="utf-8")
+    assert generation["model"] in protocol
+    assert str(generation["digest"]) in protocol
+    # Numeric answers must not come from the model (DECISIONS D-005).
+    assert "不允許 LLM 自由生成 SQL" in protocol
+
+
+def test_chart_route_shares_the_generation_weights_until_the_challenger_runs(
+    declared_models: dict[str, object],
+) -> None:
+    roles = declared_models["roles"]
+    assert isinstance(roles, dict)
+    assert roles["chart"]["digest"] == roles["generation"]["digest"]  # type: ignore[index]
+
+
+def test_chart_challenger_rule_is_fixed_in_advance(
+    paths: RepoPaths, declared_models: dict[str, object]
+) -> None:
+    """A model swap is only legitimate if its rule predates the numbers."""
+    challenger = declared_models["chart_challenger"]
+    assert isinstance(challenger, dict)
+    assert challenger["outcome"] is None, (
+        "challenger outcome is recorded by pin_models.py; do not hand-edit it"
+    )
+    assert challenger["items"] == 16
+    assert "10 percentage points" in str(challenger["switch_rule"])
+
+    protocol = paths.protocol_doc.read_text(encoding="utf-8")
+    assert "Chart challenger" in protocol
+    assert str(challenger["digest"]) in protocol
+
+
+def test_excluded_models_are_recorded_as_decisions(declared_models: dict[str, object]) -> None:
+    excluded = declared_models["excluded"]
+    assert isinstance(excluded, list)
+    assert any("gpt-oss:20b" in str(entry.get("model")) for entry in excluded)
+    assert all(entry.get("reason") for entry in excluded)
+
+
+def test_decoding_is_deterministic_and_thinking_is_off(
+    declared_models: dict[str, object],
+) -> None:
+    decoding = declared_models["decoding"]
+    assert isinstance(decoding, dict)
+    assert decoding["temperature"] == 0.0
+    assert decoding["top_p"] == 1.0
+    assert decoding["seed"] == 20260731
+    assert decoding["think"] is False
+
+
+def test_vram_budget_stays_under_the_gate(declared_models: dict[str, object]) -> None:
+    budget = declared_models["vram_budget_gb"]
+    assert isinstance(budget, dict)
+    assert budget["gate_limit"] == 22.0
+    assert budget["expected_peak"] < budget["gate_limit"]
 
 
 def test_data_provenance_pins_the_host_allowlist(repo_root: Path) -> None:

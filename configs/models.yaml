@@ -1,0 +1,103 @@
+# Declared model set for the feasibility study.
+#
+# This file is the *declaration*. `scripts/pin_models.py` resolves it into
+# `configs/models.lock.json` (actual digests, HF commit revisions, ollama version),
+# and that lock file is covered by the frozen protocol hash.
+#
+# Protocol reference: docs/FEASIBILITY_PROTOCOL.md 2.2 / 2.3
+# Rationale:          docs/DECISIONS.md D-003 / D-009
+#
+# Every model below is already present on this machine. Zero new downloads.
+version: 1
+
+roles:
+  embedding:
+    backend: hf_transformers
+    model: BAAI/bge-m3
+    dtype: fp16
+    device: cuda
+    notes: >-
+      Dense retrieval only. The sparse/lexical head of bge-m3 is deliberately
+      unused; BM25 is computed separately so the hybrid factor (F2) is
+      attributable to a component we control.
+
+  reranker:
+    backend: hf_transformers
+    model: BAAI/bge-reranker-v2-m3
+    dtype: fp16
+    device: cuda
+    notes: Cross-encoder, applied to the top-20 retrieved chunks (F3 onwards).
+
+  generation:
+    backend: ollama
+    model: qwen3.6:27b
+    digest: a50eda8ed977
+    quantization: Q4_K_M
+    parameters: 27.8B
+    architecture: qwen35
+    capabilities: [completion, vision, tools, thinking]
+    notes: >-
+      Serves BOTH narrative generation and chart-crop reading: one multimodal
+      model for text and figures. Numeric answers never come from this model;
+      they come from deterministic SQL (DECISIONS D-005).
+
+  chart:
+    backend: ollama
+    model: qwen3.6:27b
+    digest: a50eda8ed977
+    notes: >-
+      Same weights as `generation` unless the pre-freeze chart challenger
+      (protocol 2.3) says otherwise. pin_models.py records the outcome here.
+
+# Runs once, on DEV documents only, before the protocol is frozen.
+# The switch rule is fixed in advance: see docs/FEASIBILITY_PROTOCOL.md 2.3.
+chart_challenger:
+  model: qwen3-vl:8b
+  backend: ollama
+  digest: 901cae732162
+  quantization: Q4_K_M
+  parameters: 8.8B
+  architecture: qwen3vl
+  dataset: data/evaluation/dev/chart_challenger.jsonl
+  items: 16
+  switch_rule: >-
+    Adopt qwen3-vl:8b for the chart route only if its crop-reading accuracy
+    exceeds qwen3.6:27b by at least 10 percentage points (at least 2 more
+    correct out of 16). Otherwise qwen3.6:27b serves every route.
+  outcome: null # filled in by scripts/pin_models.py after the challenger runs
+
+# Explicitly out of the pipeline. Recorded so the exclusion is a decision,
+# not an omission.
+excluded:
+  - model: gpt-oss:20b
+    reason: User decision (2026-07-31); this study does not run a model leaderboard.
+  - model: Qwen/Qwen3-VL-8B-Instruct (HF bf16)
+    reason: >-
+      Superseded by the ollama qwen3-vl:8b challenger; keeping both an HF and an
+      ollama copy of the same family would mix backends for one role.
+
+# Decoding is identical for F0..F7 so the ladder stays a fair comparison.
+decoding:
+  temperature: 0.0
+  top_p: 1.0
+  top_k: 1
+  seed: 20260731
+  num_predict: 512
+  num_ctx: 8192
+  think: false
+  think_rationale: >-
+    Variable-length reasoning makes generation p95 latency and token counts
+    incomparable across configs, and numeric reasoning is handled by SQL rather
+    than chain-of-thought.
+
+# Informational: the VRAM budget behind gate G10 (<= 22 GB on a 24 GB RTX 4090).
+vram_budget_gb:
+  generation_weights: 17.0
+  kv_cache_at_num_ctx_8192: 1.5
+  retrieval_models_resident: 2.2
+  expected_peak: 20.7
+  gate_limit: 22.0
+  note: >-
+    The gate limit is derived from the hardware (24 GB card minus ~1.4 GB of
+    desktop usage), not from the chosen model, and is not relaxed if a model
+    turns out to need more.

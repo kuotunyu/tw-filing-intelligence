@@ -36,6 +36,23 @@ Locked 只跑一次；重跑須記錄原因與次數。
 - `unanswerable` 的 `answer` 固定 `null` ＋ `refusal_reason_class`
 - 引文上限 40 字
 
+## 模型（freeze 後不可換）
+
+| 角色 | 模型 | backend |
+|---|---|---|
+| Embedding | `BAAI/bge-m3` fp16 | HF transformers |
+| Reranker | `BAAI/bge-reranker-v2-m3` fp16 | HF transformers |
+| Generation ＋ chart | `qwen3.6:27b` digest `a50eda8ed977` Q4_K_M | ollama 0.32.0 |
+
+**文字與圖表共用同一個多模態模型**（已實測有 vision）。數值答案一律走 SQL，不由模型生成。
+decoding 固定：`temperature=0.0, top_p=1.0, top_k=1, seed=20260731,
+num_predict=512, num_ctx=8192, think=false`。`gpt-oss:20b` 不進 pipeline。
+
+**Chart challenger（只有一次，只在 freeze 前，只用 DEV 資料）**：
+`qwen3-vl:8b` digest `901cae732162` 對 `data/evaluation/dev/chart_challenger.jsonl`
+（16 題）與 27B 比較。事前規則：**8b 高出 ≥10pp（≥多對 2 題）才改用它跑 chart route**，
+否則全部 route 用 27B。結果無論輸贏都要寫進 report。freeze 後不得再比較模型。
+
 ## Factor ladder（factor-at-a-time）
 
 `F0` baseline（PyMuPDF plain + 固定 chunk + BM25 + 固定 top-k）
@@ -68,15 +85,17 @@ Locked 只跑一次；重跑須記錄原因與次數。
 ## 執行順序（不可調換）
 
 1. 資料 ＋ manifest hash 驗證
-2. gold 標註（DEV 15 / LOCKED 36 / probes 5）
+2. gold 標註（DEV 15 / LOCKED 36 / probes 5 / DEV chart challenger 16）
 3. **只在 DEV 上**開發調參
-4. `scripts/check_leakage.py`
-5. `scripts/freeze_protocol.py` → `results/feasibility/protocol_lock.json`
-6. 跑 F0…F7 於 LOCKED（cold ＋ warm）
-7. `scripts/verify_results.py` → `scripts/run_gate.py` → `GO_NO_GO.json`
-8. `docs/FEASIBILITY_REPORT.md`
+4. Chart challenger（一次性，依事前規則決定 chart route 模型）
+5. `scripts/pin_models.py` → `configs/models.lock.json`
+6. `scripts/check_leakage.py`
+7. `scripts/freeze_protocol.py` → `results/feasibility/protocol_lock.json`
+8. 跑 F0…F7 於 LOCKED（cold ＋ warm）
+9. `scripts/verify_results.py` → `scripts/run_gate.py` → `GO_NO_GO.json`
+10. `docs/FEASIBILITY_REPORT.md`
 
-第 6 步後改 `src/` ⇒ **必須重跑全部 F0…F7**，不可只重跑有利的 config。
+第 8 步後改 `src/` ⇒ **必須重跑全部 F0…F7**，不可只重跑有利的 config。
 
 ## Gate 摘要（G1–G9 hard、G10 soft）
 

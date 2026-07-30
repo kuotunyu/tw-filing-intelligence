@@ -86,6 +86,9 @@ Dev set 的兩家公司（2412、1301）不出現在 locked set 的任何題目�
 | 可否修改 | 可以，隨時重跑 | freeze 後不可 |
 | 用途 | 除錯、prompt 設計、threshold 探索 | 唯一的正式比較依據 |
 
+DEV 另有一個輔助集合：`data/evaluation/dev/chart_challenger.jsonl`（16 題 chart crop
+讀值），只用於 §2.3 的 freeze 前模型決策，**不屬於** 15 題 DEV set，也不進 locked run。
+
 **所有 threshold、prompt、tolerance、chunk size、top-k 只允許在 DEV 上調整。**
 Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境錯誤」且無人看過分數的情況下，
 並須在 report 記錄重跑原因與次數）。
@@ -177,22 +180,51 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
 
 不引入第三、第四種 parser，不加入多套 OCR，不呼叫雲端 parsing API。
 
-### 2.2 模型（各一個，revision 固定，不得因結果不佳臨時更換）
+### 2.2 模型（每個角色一個，revision 固定，不得因結果不佳臨時更換）
 
-| 角色 | 模型 | 精度 | 備註 |
-|---|---|---|---|
-| Embedding | `BAAI/bge-m3` | fp16 | dense only（sparse 不用，BM25 另外算） |
-| Reranker | `BAAI/bge-reranker-v2-m3` | fp16 | cross-encoder |
-| Local VLM | `Qwen/Qwen3-VL-8B-Instruct` | bf16 | chart caption ＋ crop answering |
-| Generation | `Qwen/Qwen3-VL-8B-Instruct`（text-only path） | bf16 | 與 VLM 同權重，避免第二套 8B 佔 VRAM |
+| 角色 | 模型 | backend | 精度 | 備註 |
+|---|---|---|---|---|
+| Embedding | `BAAI/bge-m3` | HF transformers | fp16 | dense only（sparse 不用，BM25 另外算） |
+| Reranker | `BAAI/bge-reranker-v2-m3` | HF transformers | fp16 | cross-encoder |
+| Generation ＋ VLM | `qwen3.6:27b` digest `a50eda8ed977` | ollama 0.32.0 | Q4_K_M | **文字與圖表共用同一個多模態模型**（實測 capabilities: completion / vision / tools / thinking；architecture `qwen35`；27.8B） |
 
-- 實際使用的 commit revision 由 `scripts/pin_models.py` 寫入
+- 數值答案**不由模型生成**，由 §2.4 的 deterministic SQL 產生（見 D-005）。
+  模型只負責敘述性回答、chart crop 讀值、caption 與 routing。
+- **F0…F7 全部使用同一個 generation backend 與同一組 decoding 參數。**
+  不得在同一份比較中混用 ollama 與 HF transformers 作為同一角色的後端。
+- decoding（固定）：`temperature=0.0`、`top_p=1.0`、`top_k=1`、`seed=20260731`、
+  `num_predict=512`、`num_ctx=8192`、**`think=false`**。
+  > `think=false` 的理由：thinking 會產生長度不可預測的推理段落，讓
+  > generation p95 latency 與 token 計數不可比較；數值推理本來就走 SQL，
+  > 不依賴 chain-of-thought。此設定在 freeze 前決定，locked run 後不得更改。
+- 實際 digest／revision 與 ollama 版本由 `scripts/pin_models.py` 寫入
   `configs/models.lock.json`，並納入 protocol lock hash。
-- decoding：`temperature=0.0`、`top_p=1.0`、`seed=20260731`、`max_new_tokens=512`。
-- 低 VRAM fallback（僅在 4090 不可用時，且必須在 report 註明）：
-  ollama `qwen3-vl:8b` digest `901cae732162`。**不得**在同一份比較中混用兩種後端。
+- **`gpt-oss:20b` 明確不進入正式 pipeline**（不做模型排行榜）。
 
-### 2.3 Candidate route 規格
+### 2.3 Chart challenger（**freeze 前**的一次性模型決策，規則事前寫死）
+
+`qwen3-vl:8b` digest `901cae732162`（8.8B、Q4_K_M、architecture `qwen3vl`）
+只作為 chart route 的小型 challenger，用來確認「用 27B 通才同時處理文字與圖表」
+不是一個明顯錯誤的選擇。
+
+事前決策規則（**不得在看到結果後修改**）：
+
+1. Challenger 只在 **DEV 文件**（2412 FY2023、1301 FY2023）上跑，使用
+   `data/evaluation/dev/chart_challenger.jsonl`：**16 個** 人工標註的 chart crop
+   讀值題（與 15 題 DEV set 分開，也與 locked set 完全無關）。
+2. 兩個模型使用相同 crop、相同 prompt、相同 decoding 參數。
+3. 判定：若 `qwen3-vl:8b` 的 crop 讀值正確率**高出 `qwen3.6:27b` ≥ 10 個百分點**
+   （即 16 題中至少多對 2 題），則 locked run 的 **chart route** 改用
+   `qwen3-vl:8b`，其餘 route 仍用 `qwen3.6:27b`；否則全部 route 用 `qwen3.6:27b`。
+4. 結果（無論哪邊贏）寫入 `docs/DECISIONS.md` 與 `configs/models.lock.json`，
+   並在 report 中報告 challenger 的實際數字。
+5. **Locked run 只用一個 chart 模型。** challenger 本身不進入 locked evaluation，
+   也不列入 F0…F7 ladder。
+
+> 這條的存在意義：把「換模型」變成一個**事前有規則、只用 DEV 資料、
+> 結果公開**的決策，而不是看到 locked 分數後的補救。
+
+### 2.4 Candidate route 規格
 
 - **narrative route**：保留 heading / section / page / bbox；hybrid retrieval；rerank；
   page-level citation。
@@ -205,11 +237,17 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
   unanswerable`，並保留 `reason` 與 `confidence`。
   **最多一次 bounded correction**；無上限 agent loop 禁止。
 
-### 2.4 固定超參數（在 DEV 上決定，locked run 前寫死）
+### 2.5 固定超參數（在 DEV 上決定，locked run 前寫死）
 
 `top_k_retrieve=20`、`top_k_rerank=5`、baseline `top_k=5`、
 baseline chunk `size=800 chars / overlap=100`、RRF `k=60`、
-crop `dpi=200`、每題最多 3 個 crop。
+crop `dpi=200`、crop 最長邊 resize 至 `1024 px`、每題最多 3 個 crop、
+`num_ctx=8192`、`num_predict=512`。
+
+> VRAM 預算（G10 用）：`qwen3.6:27b` Q4_K_M 權重約 17 GB ＋ `num_ctx=8192` 的 KV cache
+> ＋ 常駐的 bge-m3／reranker 約 2.2 GB ≈ **20–21 GB**，加上桌面程式約 1.4 GB
+> 仍在 24 GB 內，但餘裕不大。G10 的 22 GB 上限是依**硬體**（RTX 4090 24GB
+> 扣除桌面佔用）設定的，不是依模型調出來的，因此不因換模型而放寬。
 
 ---
 
@@ -324,15 +362,20 @@ Gate 由 `scripts/run_gate.py` 讀取 `results/feasibility/summary.json` 自動�
 
 1. 資料取得 ＋ manifest SHA-256 驗證（G1 的證據）
 2. Gold set 人工標註：DEV 15 題、LOCKED 36 題 ＋ 5 個 probe
+   ＋ DEV chart challenger 16 題
 3. 在 **DEV** 上開發、調參、決定所有超參數與 prompt
-4. `scripts/check_leakage.py` 通過（DEV／LOCKED 公司與文件不重疊、`annotator=human`）
-5. **`scripts/freeze_protocol.py`** → 產生 `results/feasibility/protocol_lock.json`
-6. 跑 F0…F7 於 LOCKED（cold ＋ warm）
-7. `scripts/verify_results.py` → `scripts/run_gate.py` → `GO_NO_GO.json`
-8. 寫 `docs/FEASIBILITY_REPORT.md`（含失敗分析與負面結果）
+4. **Chart challenger（§2.3）**：在 DEV 上比較 `qwen3.6:27b` 與 `qwen3-vl:8b`，
+   依事前規則決定 chart route 用哪個模型，結果寫入 `configs/models.lock.json`
+5. `scripts/pin_models.py` → `configs/models.lock.json`（digest／revision／ollama 版本）
+6. `scripts/check_leakage.py` 通過（DEV／LOCKED 公司與文件不重疊、`annotator=human`）
+7. **`scripts/freeze_protocol.py`** → 產生 `results/feasibility/protocol_lock.json`
+8. 跑 F0…F7 於 LOCKED（cold ＋ warm）
+9. `scripts/verify_results.py` → `scripts/run_gate.py` → `GO_NO_GO.json`
+10. 寫 `docs/FEASIBILITY_REPORT.md`（含失敗分析與負面結果）
 
-> 第 5 步之後才允許碰 LOCKED。第 6 步開始，任何對 `src/` 的修改都必須重跑
+> 第 7 步之後才允許碰 LOCKED。第 8 步開始，任何對 `src/` 的修改都必須重跑
 > 全部 F0…F7 並在 report 記錄，不允許只重跑對自己有利的 config。
+> Chart challenger 只能在第 4 步做一次，**freeze 之後不得再比較模型**。
 
 ---
 
