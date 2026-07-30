@@ -7,6 +7,17 @@
 
 ## 目前狀態
 
+- **Phase**：P3（parsing 層）— 🟡 **進行中**
+  - ✅ `types.py` 文件模型（BBox／Span／Line／Block／ParsedDocument／Chunk，
+    全部 frozen，帶 page＋bbox 以承載 citation 契約）
+  - ✅ `baseline.py`（F0：PyMuPDF 純文字 ＋ 固定 800/100 chunk）
+  - ✅ `layout.py`（candidate：字級統計 heading／編號樣式／section tree／
+    running footer 偵測／reading order），**結構判斷是純函式**，不需 PDF 即可測
+  - ✅ `chunker.py`（不跨 section、不切表格、heading path 前綴、短塊回折）
+  - ✅ 合成 PDF fixture（3 頁、三層標題、跨頁表格、括號負數、單位列、圖表區）
+  - ⬜ `tables.py`（pdfplumber 表格 → typed Table ＋ 單位偵測 ＋ 跨頁接續）
+  - ⬜ `figures.py`（figure/chart region 偵測 → crop bbox）
+  - ⬜ `results/runs/parse_stats.json`（需要真實 PDF 才能產生）
 - **Phase**：P2（資料取得）— 🟡 **自動化半邊完成，等使用者放 7 份 PDF**
   - ✅ 9 個 OpenAPI dataset 已取得並記入 `acquisition.lock.yaml`
     （swagger 306KB／t187ap03_L 1092 列／t187ap05_L 1082 列／
@@ -56,7 +67,7 @@
 | P0 | Repo scaffold ＋ 規劃文件 | 🟢 完成 | 2026-07-31 | 文件 ＋ 骨架 ＋ toolchain 全綠 |
 | P1 | 資料來源探勘 ＋ manifest schema | 🟢 完成 | 2026-07-31 | 3 個關鍵發現，見上方 |
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟡 等使用者放 PDF | — | OpenAPI 部分可先自動化 |
-| P3 | Parsing（baseline ＋ layout-aware） | ⚪ 未開始 | — | CPU |
+| P3 | Parsing（baseline ＋ layout-aware） | 🟡 進行中 | — | tables/figures 未完成 |
 | P4 | 結構化數值層（DuckDB ＋ SQL） | ⚪ 未開始 | — | CPU |
 | P5 | Gold set 標註 | ⚪ 未開始 | — | 需先有 P2/P3 |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
@@ -184,6 +195,49 @@ ollama 版本 `0.32.0`。
 - 3 個新測試把上述固定住（合併 21 題、`Wilson`、小樣本節存在）。
 
 **沒做什麼**：任何連外請求、任何 GPU 任務、任何 evaluation、任何 gold 標註。
+
+---
+
+### 2026-07-31 — Session 4（P3 parsing 層，前半）
+
+**做了什麼**
+
+- `src/twfi/parsing/types.py`：全 pipeline 共用的文件模型。
+  每個 Block／Chunk 都帶 `page` 與 `bbox`，因為 citation 契約要求
+  「答案的證據必須能解析到真實的頁／表格／crop／SQL row」——
+  一個無法表達「這來自哪裡」的模型會讓那個契約無法執行。
+  `BBox.iou()` 就是 G4 的 `IoU ≥ 0.3` 判定基礎。
+- `baseline.py`（F0）：刻意天真，但**仍然保留頁級歸屬** ——
+  一個連頁碼都引不出來的 baseline 會因為與 parsing 品質無關的理由輸掉
+  citation 指標，那會美化 candidate。
+- `layout.py`（candidate）：字級加權統計抓 body size、
+  編號樣式（`一、`→L2、`（一）`→L3、`1.2.3`→L3）、
+  **重複性**而非位置判定 running header/footer、reading order 分帶排序。
+  結構判斷（`classify_pages`）是**純函式**，所以邏輯直接被測，不必透過 PDF。
+- `chunker.py`：三條規則各對應一個 fixed-chunk 的具體失敗
+  （跨 section／切斷表格／失去 heading 脈絡），外加短塊回折。
+- 合成 PDF fixture：3 頁、三層標題、跨頁表格、括號負數、單位列、向量圖表區。
+  實測 PyMuPDF 內建 `china-t` 可正確寫入並抽回繁體中文。
+
+**測試抓到的兩個真實問題（不是測試寫錯）**
+
+1. **編號樣式繞過了句末標點檢查** → 「第二節內容，與第一節無關的敘述。」
+   這種開頭帶編號的**段落**被誤判為標題，並且劫持了它之後所有內容的 section path。
+   修法：把「長度上限 ＋ 不以句末標點結尾」抽成 `_could_be_heading()`，
+   讓編號訊號也必須通過。已加 regression test。
+2. **兩個 chunker 測試「通過但理由是錯的」** —— 1180+5 沒有超過 max_chars 1200，
+   所以合併路徑從未執行（coverage 停在 85% 是證據）。
+   改用 max_chars=100／99 字段落，並加一行斷言先確認「沒合併時真的是 2 塊」。
+
+**刻意記錄的限制**
+
+- 數字正規化會把「差一個數字」的行視為同一個 key（這才能認出 `- 1 -`…`- 9 -`），
+  代價是**位於邊界區、且出現在多數頁面的編號標題**也會被當成 furniture。
+  有一個測試專門把這個取捨寫下來，而不是讓它隱形。
+- reading order 假設單欄；真正的雙欄版面會退化成左到右。
+
+**結果**：`ruff` 乾淨、`mypy src` strict 乾淨、
+`pytest` **474 passed / 1 skipped**、coverage **98.81%**
 
 ---
 
