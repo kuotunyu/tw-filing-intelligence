@@ -121,13 +121,19 @@ uv run python scripts/fetch_documents.py --manual-dir data/raw/manual --record-h
 
 ## 5. 取得紀錄（P2 填實）
 
-權威紀錄在 `data/manifests/documents.yaml` 與 `data/manifests/structured.yaml`
-（含 `sha256`、`retrieved_at`、`source_page`、`acquisition`）。
-本表為人類可讀摘要，由 `scripts/verify_manifests.py` 產生。
+**宣告與紀錄分離**（避免腳本覆寫掉人寫的理由）：
 
-| doc_id | 公司 | 年度 | 類型 | split | SHA-256 | 取得日 | 方式 |
-|---|---|---|---|---|---|---|---|
-| _(P2 填實；目前 7 份文件皆為 `pending`)_ | | | | | | | |
+| 檔案 | 誰寫 | 內容 |
+|---|---|---|
+| `data/manifests/documents.yaml` | 人 | 宣告：用哪些文件、人怎麼取得（含註解說明理由） |
+| `data/manifests/structured.yaml` | 人 | 宣告：用哪些結構化 dataset |
+| `data/manifests/acquisition.lock.yaml` | **程式** | 紀錄：實際取得了什麼（SHA-256／bytes／時間／頁數／rows） |
+
+人類可讀的對照表由 `scripts/verify_manifests.py` 產生於
+[`docs/reference/provenance_table.md`](reference/provenance_table.md)。
+
+`AcquisitionRecord` 的 schema 讓「半記錄狀態」**無法被表達** ——
+驗證所需的欄位全部是必填，所以一筆無法驗證的紀錄根本寫不出來。
 
 ---
 
@@ -179,6 +185,12 @@ row key 與極短引文，不含長篇原文重製）、`results/feasibility/` �
 金控用 `利息淨收益`、`保險負債準備淨變動`、`呆帳費用、承諾及保證責任準備提存`，
 **沒有 `營業收入` 這一行**。這證實了 D-004 保留 2882 的理由：
 numeric route 必須處理 per-industry schema，這是真實難點而不是人為刁難。
+
+**P2 實測驗證**（`data/raw/structured/twse-openapi-t187ap06_L_fh.json`）：
+`t187ap06_L_fh` 只有 **13 列**（全國 13 家金控：2880–2892、5880），
+`2882 國泰金` 有 **25 個欄位**，`'營業收入' in row` → **False**。
+所以「查營收」這個對一般業理所當然的操作，對金控會直接查不到欄位。
+numeric route 必須在這種情況**報錯或拒答，而不是拿別的欄位硬湊**。
 
 ### 8.3 文件取得：**人工放置**，理由是規則而非能力
 

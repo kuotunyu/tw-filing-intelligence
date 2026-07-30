@@ -71,6 +71,18 @@ class RepoPaths:
         return self.root / "data" / "manifests"
 
     @property
+    def documents_manifest(self) -> Path:
+        return self.manifests / "documents.yaml"
+
+    @property
+    def structured_manifest(self) -> Path:
+        return self.manifests / "structured.yaml"
+
+    @property
+    def acquisition_lock(self) -> Path:
+        return self.manifests / "acquisition.lock.yaml"
+
+    @property
     def evaluation(self) -> Path:
         return self.root / "data" / "evaluation"
 

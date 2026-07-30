@@ -1,9 +1,10 @@
-# Declared filings for the feasibility study.
+# DECLARATION of the filings this study uses. Hand-authored; no script rewrites it.
+# What was actually obtained is recorded in data/manifests/acquisition.lock.yaml.
 #
 # The PDFs themselves are NEVER committed (see .gitignore). This file plus
-# scripts/fetch_documents.py is the whole reproduction recipe: a reader downloads
-# each document from `source_page`, drops it in data/raw/manual/, and the script
-# verifies the SHA-256 recorded here.
+# scripts/fetch_documents.py is the whole reproduction recipe: download each
+# document from `source_page`, save it under data/raw/manual/ with the filename in
+# `notes`, and the script records and re-verifies its SHA-256.
 #
 # Acquisition is MANUAL by protocol decision D-010, not by omission:
 #   * mops.twse.com.tw/mops/web/* returns a 65-byte JS bootstrap -- the new MOPS
@@ -27,13 +28,6 @@ documents:
     doc_type: annual_report
     split: dev
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 2412, 資料年度 112 (民國), 資料類型「年報」.
       Save as data/raw/manual/2412-FY2023-AR.pdf
@@ -46,13 +40,6 @@ documents:
     doc_type: annual_report
     split: dev
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 1301, 資料年度 112 (民國), 資料類型「年報」.
       Save as data/raw/manual/1301-FY2023-AR.pdf
@@ -66,13 +53,6 @@ documents:
     doc_type: annual_report
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 2330, 資料年度 112 (民國), 資料類型「年報」.
       Save as data/raw/manual/2330-FY2023-AR.pdf
@@ -85,13 +65,6 @@ documents:
     doc_type: annual_report
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 2330, 資料年度 113 (民國), 資料類型「年報」.
       Save as data/raw/manual/2330-FY2024-AR.pdf
@@ -104,13 +77,6 @@ documents:
     doc_type: annual_report
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 2317, 資料年度 112 (民國), 資料類型「年報」.
       Save as data/raw/manual/2317-FY2023-AR.pdf
@@ -123,13 +89,6 @@ documents:
     doc_type: annual_report
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 2317, 資料年度 113 (民國), 資料類型「年報」.
       Save as data/raw/manual/2317-FY2024-AR.pdf
@@ -142,13 +101,6 @@ documents:
     doc_type: annual_report
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
-    resolved_url: null
-    sha256: null
-    bytes: null
-    pages: null
-    retrieved_at: null
-    http_status: null
-    acquisition: pending
     notes: >-
       電子資料查詢作業: 公司代號 2882, 資料年度 113 (民國), 資料類型「年報」.
       金控年報: 報表結構與一般業完全不同, 是本研究刻意保留的 hard case.

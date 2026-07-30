@@ -40,6 +40,10 @@ LOCKED_ARTIFACTS: tuple[tuple[str, DigestMode, bool], ...] = (
     ("data/evaluation/locked/probes.jsonl", "text", False),
     ("data/manifests/documents.yaml", "text", False),
     ("data/manifests/structured.yaml", "text", False),
+    # The record of what was actually acquired, including every SHA-256. Freezing
+    # it is what makes G1 ("results reconstructible from raw artifacts") checkable
+    # rather than asserted.
+    ("data/manifests/acquisition.lock.yaml", "text", False),
     ("configs/models.lock.json", "text", False),
 )
 

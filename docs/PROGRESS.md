@@ -7,7 +7,14 @@
 
 ## 目前狀態
 
-- **Phase**：P1（資料來源探勘 ＋ manifest schema）— 🟢 **完成**；下一步 P2
+- **Phase**：P2（資料取得）— 🟡 **自動化半邊完成，等使用者放 7 份 PDF**
+  - ✅ 9 個 OpenAPI dataset 已取得並記入 `acquisition.lock.yaml`
+    （swagger 306KB／t187ap03_L 1092 列／t187ap05_L 1082 列／
+    t187ap06_L_ci 1045 列／**t187ap06_L_fh 13 列**／t187ap07_L_ci 1045 列／
+    t187ap07_L_fh 13 列／t187ap14_L 1081 列／t187ap17_L 1051 列，共 5.3MB）
+  - ✅ `verify_manifests.py`：integrity 全過，7 份文件如實標為「尚未取得」
+  - ⬜ 7 份年報 PDF 需人工放置（`uv run python scripts/fetch_documents.py` 會印出精確指示）
+- **Phase**：P1（資料來源探勘 ＋ manifest schema）— 🟢 **完成**
 - **P1 的三個關鍵發現**（改變了 P2/P4 設計，詳見 `docs/DATA_PROVENANCE.md §8`）：
   1. **TWSE OpenAPI 是單期快照**（`t187ap06_L_ci` 1045 列全部 `年度=115 季別=1`）
      → 歷史數值不能靠 OpenAPI
@@ -15,6 +22,10 @@
      → 2882 是真 hard case，numeric route 要處理 per-industry schema
   3. **新版 MOPS 是 JS SPA**（`/mops/web/*` 只回 65 bytes JS bootstrap）
      → 文件走**人工放置 ＋ SHA-256**，這符合 G1 而非 G1 的例外
+- **P2 追加實證**：`t187ap06_L_fh` 只有 13 列（全國 13 家金控），
+  `2882 國泰金` 25 欄且 **`'營業收入' in row` → False**。
+  「查營收」對一般業理所當然，對金控直接查不到欄位 →
+  numeric route 必須**報錯或拒答，不能拿別的欄位硬湊**。
 - **Phase**：P0（Repo scaffold ＋ 規劃文件）— 🟢 **完成**
 - **Protocol 狀態**：`1.0.0-draft`，**尚未 freeze**（可以修改）
 - **Locked set 狀態**：尚未建立
@@ -173,6 +184,38 @@ ollama 版本 `0.32.0`。
 - 3 個新測試把上述固定住（合併 21 題、`Wilson`、小樣本節存在）。
 
 **沒做什麼**：任何連外請求、任何 GPU 任務、任何 evaluation、任何 gold 標註。
+
+---
+
+### 2026-07-31 — Session 3（P2 自動化半邊）
+
+**做了什麼**
+
+- **重構 manifest：宣告與紀錄分離**。原設計會讓 fetch 腳本把 provenance 寫回
+  `documents.yaml`，**沖掉 P1 發現與人工下載指示的註解**。改成：
+  `documents.yaml`／`structured.yaml` 手寫（沒有腳本會改它們）、
+  `acquisition.lock.yaml` 由程式寫。
+  副作用是設計變好：`AcquisitionRecord` 的驗證欄位全部必填，
+  **「半記錄狀態」變成無法表達**，不需要 validator 去擋。
+- `src/twfi/io/acquire.py`：兩種取得模式一種紀錄格式
+  （`fetched` 走 PoliteClient／`manual` 走人工放置），
+  HTTP client、時鐘、PDF 頁數計算全部可注入 → 離線可測
+- 三個腳本：`fetch_twse_openapi.py`、`fetch_documents.py`（印精確人工指示）、
+  `verify_manifests.py`（integrity ＋ coverage ＋ 產生 provenance 表）
+- **實跑**：9 個 OpenAPI dataset 全部成功，5.3MB，9 次請求 0 retry
+- `docs/reference/provenance_table.md`（產生檔）
+- `acquisition.lock.yaml` 加入 protocol lock 的凍結清單 ——
+  凍結每一個 SHA-256 才讓 G1「結果可從 raw artifacts 重建」變成可檢查的
+
+**設計上刻意的取捨**
+
+- 一個 endpoint 失敗**不會**丟掉其他已成功的紀錄（有測試）
+- 檔案被換掉會被標為 `CHANGED` 而不是默默接受（有測試）
+- 檔案沒變**不會**重新蓋時間戳（有測試）
+- XBRL 標為 `required=False`：協議不依賴它，硬性阻擋整條 pipeline 是不誠實的
+
+**結果**：`ruff` 乾淨、`mypy src` strict 乾淨、
+`pytest` **333 passed / 3 skipped**、coverage **99.89%**
 
 ---
 

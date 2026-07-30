@@ -1,0 +1,116 @@
+# GENERATED FILE -- do not edit by hand.
+# 
+# Written by scripts/fetch_twse_openapi.py and scripts/fetch_documents.py.
+# Declarations live in documents.yaml and structured.yaml; this file records what
+# was actually obtained. Frozen by scripts/freeze_protocol.py, so an edit here
+# after the freeze fails the test suite.
+version: 1
+records:
+- id: twse-openapi-swagger
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-swagger.json
+  sha256: 2c2cecccb7a220ac9e263228a7659aa49b1ada5aea397650e601ad3dfcc48043
+  bytes: 306043
+  retrieved_at: '2026-07-30T17:38:28.895041+00:00'
+  source_url: https://openapi.twse.com.tw/v1/swagger.json
+  http_status: 200
+  rows: null
+  pages: null
+  notes: Official API description; the provenance root for every endpoint below.
+- id: twse-openapi-t187ap03_L
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap03_L.json
+  sha256: 3111c446e93fb47f8d2daeb09946943738b1564ef4c2769d7accf020841a4ba2
+  bytes: 1323580
+  retrieved_at: '2026-07-30T17:38:30.119715+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap03_L
+  http_status: 200
+  rows: 1092
+  pages: null
+  notes: 上市公司基本資料 (company profile; 33 columns). Metadata questions.
+- id: twse-openapi-t187ap05_L
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap05_L.json
+  sha256: 42b8ef34003a1323862dce1ce295e54e1dbf9cff40ee649c40c8e3fe3466c6eb
+  bytes: 603059
+  retrieved_at: '2026-07-30T17:38:31.494063+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap05_L
+  http_status: 200
+  rows: 1082
+  pages: null
+  notes: 上市公司每月營業收入彙總表 (monthly revenue, current month only).
+- id: twse-openapi-t187ap06_L_ci
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap06_L_ci.json
+  sha256: 8a5a5ca616d8455e3723f770be9f442ce70074f0251f15e97fc281eef1b0feea
+  bytes: 1406981
+  retrieved_at: '2026-07-30T17:38:32.997241+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap06_L_ci
+  http_status: 200
+  rows: 1045
+  pages: null
+  notes: 上市公司綜合損益表(一般業) — 2330 / 2317 / 1301 / 2412.
+- id: twse-openapi-t187ap06_L_fh
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap06_L_fh.json
+  sha256: ac3a43d43f622f1e56ab1d2a895acd5d1ec1a71e5d7c8d25af4552257c6baa0a
+  bytes: 13464
+  retrieved_at: '2026-07-30T17:38:34.475394+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap06_L_fh
+  http_status: 200
+  rows: 13
+  pages: null
+  notes: 上市公司綜合損益表(金控業) — 2882. Different schema from 一般業.
+- id: twse-openapi-t187ap07_L_ci
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap07_L_ci.json
+  sha256: 202e1d5065fdfbf0a9cadefd4a97940e64ed865fc3779a2544b593eb8cc1040f
+  bytes: 852502
+  retrieved_at: '2026-07-30T17:38:35.993298+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci
+  http_status: 200
+  rows: 1045
+  pages: null
+  notes: 上市公司資產負債表(一般業), 26 columns.
+- id: twse-openapi-t187ap07_L_fh
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap07_L_fh.json
+  sha256: 479e3377a5afabf5a01945bd55e2ddf3a5589d7dec0d7d227d9692842de58ab9
+  bytes: 30900
+  retrieved_at: '2026-07-30T17:38:37.478790+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap07_L_fh
+  http_status: 200
+  rows: 13
+  pages: null
+  notes: 上市公司資產負債表(金控業), 60 columns.
+- id: twse-openapi-t187ap14_L
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap14_L.json
+  sha256: d69eb0cb83ee4da6273f9c778d33edffde1f49d9c3ef483e6752efc309c4d8c5
+  bytes: 401806
+  retrieved_at: '2026-07-30T17:38:38.982879+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap14_L
+  http_status: 200
+  rows: 1081
+  pages: null
+  notes: 上市公司各產業EPS統計資訊 (EPS, 營業利益, 普通股每股面額).
+- id: twse-openapi-t187ap17_L
+  kind: dataset
+  acquisition: fetched
+  relative_path: data/raw/structured/twse-openapi-t187ap17_L.json
+  sha256: 6a62d42d6896170c711aaa4b937495f196d2512dd5edadca05a70203863af098
+  bytes: 382809
+  retrieved_at: '2026-07-30T17:38:40.484190+00:00'
+  source_url: https://openapi.twse.com.tw/v1/opendata/t187ap17_L
+  http_status: 200
+  rows: 1051
+  pages: null
+  notes: 上市公司營益分析查詢彙總表 (毛利率, 營業利益率, 營業收入(百萬元)).

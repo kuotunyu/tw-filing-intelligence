@@ -11,7 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from twfi.io.manifest import load_document_manifest, load_structured_manifest
+from twfi.io.manifest import (
+    load_acquisition_lock,
+    load_document_manifest,
+    load_structured_manifest,
+    verify_acquisition,
+)
 from twfi.paths import RepoPaths
 from twfi.protocol import COMPANIES, DEV_COMPANY_CODES, LOCKED_COMPANY_CODES
 
@@ -68,12 +73,32 @@ def test_every_document_tells_a_human_where_to_put_it(paths: RepoPaths) -> None:
         )
 
 
-def test_no_document_claims_to_be_acquired_yet(paths: RepoPaths) -> None:
-    """Until P2 runs, every record must be honestly 'pending'."""
-    manifest = load_document_manifest(paths.manifests / "documents.yaml")
-    for record in manifest.documents:
-        if record.acquisition != "pending":
-            assert record.sha256 is not None, f"{record.doc_id} claims acquisition without a hash"
+# ----------------------------------------------------------- acquisition record
+
+
+def test_recorded_acquisitions_still_verify(repo_root: Path, paths: RepoPaths) -> None:
+    """Whatever the lock claims to have, the bytes on disk must still match.
+
+    Skips when nothing has been acquired yet -- an empty lock is the honest state
+    before P2, not a failure.
+    """
+    lock = load_acquisition_lock(paths.acquisition_lock)
+    if not lock.records:
+        pytest.skip("nothing acquired yet (run scripts/fetch_twse_openapi.py)")
+    assert verify_acquisition(lock, repo_root) == []
+
+
+def test_every_acquired_id_is_actually_declared(paths: RepoPaths) -> None:
+    """The lock may not invent artifacts the study never declared."""
+    lock = load_acquisition_lock(paths.acquisition_lock)
+    if not lock.records:
+        pytest.skip("nothing acquired yet")
+    documents = load_document_manifest(paths.documents_manifest)
+    structured = load_structured_manifest(paths.structured_manifest)
+    declared = {record.doc_id for record in documents.documents} | {
+        dataset.dataset_id for dataset in structured.datasets
+    }
+    assert lock.ids <= declared, f"undeclared artifacts in the lock: {sorted(lock.ids - declared)}"
 
 
 # ------------------------------------------------------------------ structured

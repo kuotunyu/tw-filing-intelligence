@@ -1,4 +1,5 @@
-# Declared structured datasets for the numeric route.
+# DECLARATION of the structured datasets this study uses. Hand-authored.
+# What was actually obtained is recorded in data/manifests/acquisition.lock.yaml.
 #
 # Endpoint choices come from docs/reference/twse_openapi_endpoints.md, which is
 # generated from the official API description (143 endpoints discovered).
@@ -26,7 +27,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/swagger.json
     description: Official API description; the provenance root for every endpoint below.
     split: both
-    acquisition: pending
     notes: Regenerate docs/reference/twse_openapi_endpoints.md with scripts/explore_sources.py
 
   - dataset_id: twse-openapi-t187ap03_L
@@ -34,7 +34,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap03_L
     description: 上市公司基本資料 (company profile; 33 columns). Metadata questions.
     split: both
-    acquisition: pending
     notes: ""
 
   - dataset_id: twse-openapi-t187ap05_L
@@ -42,7 +41,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap05_L
     description: 上市公司每月營業收入彙總表 (monthly revenue, current month only).
     split: both
-    acquisition: pending
     notes: Single-period snapshot; useful as an independent cross-source check.
 
   - dataset_id: twse-openapi-t187ap06_L_ci
@@ -50,7 +48,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap06_L_ci
     description: 上市公司綜合損益表(一般業) — 2330 / 2317 / 1301 / 2412.
     split: both
-    acquisition: pending
     notes: Verified single-period (年度=115 季別=1, 1045 rows) on 2026-07-30.
 
   - dataset_id: twse-openapi-t187ap06_L_fh
@@ -58,7 +55,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap06_L_fh
     description: 上市公司綜合損益表(金控業) — 2882. Different schema from 一般業.
     split: locked
-    acquisition: pending
     notes: 金控 uses 利息淨收益 / 保險負債準備淨變動 etc.; no 營業收入 line at all.
 
   - dataset_id: twse-openapi-t187ap07_L_ci
@@ -66,7 +62,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci
     description: 上市公司資產負債表(一般業), 26 columns.
     split: both
-    acquisition: pending
     notes: ""
 
   - dataset_id: twse-openapi-t187ap07_L_fh
@@ -74,7 +69,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap07_L_fh
     description: 上市公司資產負債表(金控業), 60 columns.
     split: locked
-    acquisition: pending
     notes: The 26-vs-60 column divergence is the structural hard case for 2882.
 
   - dataset_id: twse-openapi-t187ap14_L
@@ -82,7 +76,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap14_L
     description: 上市公司各產業EPS統計資訊 (EPS, 營業利益, 普通股每股面額).
     split: both
-    acquisition: pending
     notes: ""
 
   - dataset_id: twse-openapi-t187ap17_L
@@ -90,7 +83,6 @@ datasets:
     endpoint: https://openapi.twse.com.tw/v1/opendata/t187ap17_L
     description: 上市公司營益分析查詢彙總表 (毛利率, 營業利益率, 營業收入(百萬元)).
     split: both
-    acquisition: pending
     notes: >-
       Official ratios. Useful to cross-check ratios the numeric route computes
       itself, and as a unit trap: 營業收入 is in 百萬元 here but 千元 elsewhere.
@@ -104,7 +96,6 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 中華電信 FY2023 XBRL financial statements (optional).
     split: dev
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-2412-FY2023.zip
 
   - dataset_id: mops-xbrl-1301-FY2023
@@ -112,7 +103,6 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 台塑 FY2023 XBRL financial statements (optional).
     split: dev
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-1301-FY2023.zip
 
   - dataset_id: mops-xbrl-2330-FY2023
@@ -120,7 +110,6 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 台積電 FY2023 XBRL financial statements (optional).
     split: locked
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-2330-FY2023.zip
 
   - dataset_id: mops-xbrl-2330-FY2024
@@ -128,7 +117,6 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 台積電 FY2024 XBRL financial statements (optional).
     split: locked
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-2330-FY2024.zip
 
   - dataset_id: mops-xbrl-2317-FY2023
@@ -136,7 +124,6 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 鴻海 FY2023 XBRL financial statements (optional).
     split: locked
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-2317-FY2023.zip
 
   - dataset_id: mops-xbrl-2317-FY2024
@@ -144,7 +131,6 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 鴻海 FY2024 XBRL financial statements (optional).
     split: locked
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-2317-FY2024.zip
 
   - dataset_id: mops-xbrl-2882-FY2024
@@ -152,5 +138,4 @@ datasets:
     endpoint: https://mops.twse.com.tw/mops/web/t57sb01_q1
     description: 國泰金控 FY2024 XBRL financial statements (optional).
     split: locked
-    acquisition: pending
     notes: Manual placement -> data/raw/manual/mops-xbrl-2882-FY2024.zip
