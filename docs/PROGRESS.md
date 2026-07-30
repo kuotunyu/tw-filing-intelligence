@@ -35,9 +35,12 @@
     running footer 偵測／reading order），**結構判斷是純函式**，不需 PDF 即可測
   - ✅ `chunker.py`（不跨 section、不切表格、heading path 前綴、短塊回折）
   - ✅ 合成 PDF fixture（3 頁、三層標題、跨頁表格、括號負數、單位列、圖表區）
-  - ⬜ `tables.py`（pdfplumber 表格 → typed Table ＋ 單位偵測 ＋ 跨頁接續）
-  - ⬜ `figures.py`（figure/chart region 偵測 → crop bbox）
-  - ⬜ `results/runs/parse_stats.json`（需要真實 PDF 才能產生）
+  - ✅ `tables.py`（pdfplumber `text` strategy ＋ `UnitSpec` ＋ 跨頁接續）
+  - ✅ `figures.py`（向量繪圖密度分群 ＋ raster image ＋ caption ＋ crop 渲染）
+  - ✅ `results/runs/parse_stats.json`、`results/runs/document_quality.json`
+  - ⬜ `document.py`（把 layout / tables / figures 合併成一份 ParsedDocument，
+    並解決重疊：落在表格 bbox 內的 paragraph 要讓位給 table block）
+  - ⬜ figure 數量偏高（2412-FY2023 有 457 個），需要更嚴的 chart route 篩選
 - **Phase**：P2（資料取得）— 🟡 **自動化半邊完成，等使用者放 7 份 PDF**
   - ✅ 9 個 OpenAPI dataset 已取得並記入 `acquisition.lock.yaml`
     （swagger 306KB／t187ap03_L 1092 列／t187ap05_L 1082 列／

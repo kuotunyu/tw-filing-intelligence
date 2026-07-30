@@ -102,13 +102,22 @@ def build_filing(path: Path, doc_id: str = "TEST-FY2024-AR") -> SyntheticFiling:
     _write(page, 60, 90, "營業利益     1,155,494       856,000", BODY_SIZE)
     _write(page, 60, 110, "稅前淨利     1,300,000       950,000", BODY_SIZE)
     _write(page, 60, 170, "（三）營收趨勢圖", H3_SIZE)
+    # A bar chart drawn the way a real one is: frame, gridlines, bars, tick marks.
+    # Path count matters -- figure detection requires enough drawing density to tell a
+    # chart from a table rule, so a three-rectangle sketch would not be representative.
     frame = pymupdf.Rect(70, 200, 400, 380)
     page.draw_rect(frame, color=(0, 0, 0), width=1.0)
-    for index in range(5):
-        left = 90 + index * 60
-        height = 40 + index * 25
+    for row in range(4):
+        y = 240 + row * 35
+        page.draw_line(pymupdf.Point(70, y), pymupdf.Point(400, y), color=(0.8, 0.8, 0.8))
+    for index in range(6):
+        left = 88 + index * 52
+        height = 30 + index * 22
         page.draw_rect(
-            pymupdf.Rect(left, 370 - height, left + 30, 370), color=(0, 0, 0), fill=(0.4, 0.4, 0.4)
+            pymupdf.Rect(left, 370 - height, left + 32, 370), color=(0, 0, 0), fill=(0.4, 0.4, 0.4)
+        )
+        page.draw_line(
+            pymupdf.Point(left + 16, 370), pymupdf.Point(left + 16, 375), color=(0, 0, 0)
         )
     _write(page, 70, 400, "圖一：近三年營業收入趨勢", SMALL_SIZE)
     _write(page, 280, 800, "- 3 -", SMALL_SIZE)
