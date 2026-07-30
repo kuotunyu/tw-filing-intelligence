@@ -6,13 +6,13 @@
 
 | doc_id | 公司 | 年度 | 類型 | split | pages | SHA-256 | 取得日 | 方式 |
 |---|---|---|---|---|---|---|---|---|
-| `2412-FY2023-AR` | 中華電信 (2412) | FY2023 | annual_report | dev | — | — | — | **not acquired** |
-| `1301-FY2023-AR` | 台塑 (1301) | FY2023 | annual_report | dev | — | — | — | **not acquired** |
-| `2330-FY2023-AR` | 台積電 (2330) | FY2023 | annual_report | locked | — | — | — | **not acquired** |
-| `2330-FY2024-AR` | 台積電 (2330) | FY2024 | annual_report | locked | — | — | — | **not acquired** |
-| `2317-FY2023-AR` | 鴻海 (2317) | FY2023 | annual_report | locked | — | — | — | **not acquired** |
-| `2317-FY2024-AR` | 鴻海 (2317) | FY2024 | annual_report | locked | — | — | — | **not acquired** |
-| `2882-FY2024-AR` | 國泰金控 (2882) | FY2024 | annual_report | locked | — | — | — | **not acquired** |
+| `2412-FY2023-AR` | 中華電信 (2412) | FY2023 | annual_report | dev | 278 | `3c31328445884d03…` | 2026-07-30 | manual |
+| `1301-FY2023-AR` | 台塑 (1301) | FY2023 | annual_report | dev | 362 | `38ecd6ac0224fd82…` | 2026-07-30 | manual |
+| `2330-FY2023-AR` | 台積電 (2330) | FY2023 | annual_report | locked | 345 | `3fe0b17e3d3c26e5…` | 2026-07-30 | manual |
+| `2330-FY2024-AR` | 台積電 (2330) | FY2024 | annual_report | locked | 91 | `983ada7a8c55a00f…` | 2026-07-30 | manual |
+| `2317-FY2023-AR` | 鴻海 (2317) | FY2023 | annual_report | locked | 707 | `079dee6e5d6840a3…` | 2026-07-30 | manual |
+| `2317-FY2024-AR` | 鴻海 (2317) | FY2024 | annual_report | locked | 136 | `b27c123b1c18385e…` | 2026-07-30 | manual |
+| `2882-FY2024-AR` | 國泰金控 (2882) | FY2024 | annual_report | locked | 248 | `348f77d80c744f0f…` | 2026-07-30 | manual |
 
 ## Structured datasets
 

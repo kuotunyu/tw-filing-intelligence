@@ -6,6 +6,90 @@
 # after the freeze fails the test suite.
 version: 1
 records:
+- id: 1301-FY2023-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/1301-FY2023-AR.pdf
+  sha256: 38ecd6ac0224fd82ab0f398475bb5cd10dbfd9eb9787ea378447b9cd020497e2
+  bytes: 3888490
+  retrieved_at: '2026-07-30T18:29:34.280143+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 362
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2317-FY2023-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2317-FY2023-AR.pdf
+  sha256: 079dee6e5d6840a3165b80df3fe8cd9ebcf8d963173de38ae5a41f4bc3400907
+  bytes: 7339881
+  retrieved_at: '2026-07-30T18:29:34.328621+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 707
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2317-FY2024-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2317-FY2024-AR.pdf
+  sha256: b27c123b1c18385e7f504163395429b0b56348876f01c0b7160835ba6abee4ee
+  bytes: 7930308
+  retrieved_at: '2026-07-30T18:29:34.335177+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 136
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2330-FY2023-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2330-FY2023-AR.pdf
+  sha256: 3fe0b17e3d3c26e51374ff523acf7c846e3fa2e60bc11372969d13304efab285
+  bytes: 10637570
+  retrieved_at: '2026-07-30T18:29:34.343712+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 345
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2330-FY2024-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2330-FY2024-AR.pdf
+  sha256: 983ada7a8c55a00fa38b1c0f1b0ba358e47232ce772a43a61c09c6a8587e0f9a
+  bytes: 10476995
+  retrieved_at: '2026-07-30T18:29:34.363235+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 91
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2412-FY2023-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2412-FY2023-AR.pdf
+  sha256: 3c31328445884d03694f937adcf3138329ce917adb88007f8ae2f94da47d3fbe
+  bytes: 10304031
+  retrieved_at: '2026-07-30T18:29:34.372725+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 278
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
+- id: 2882-FY2024-AR
+  kind: document
+  acquisition: manual
+  relative_path: data/raw/manual/2882-FY2024-AR.pdf
+  sha256: 348f77d80c744f0fc78ea6cbc696755da5f7c01a3be873921b1959b67ed2dbbe
+  bytes: 3092101
+  retrieved_at: '2026-07-30T18:29:34.375857+00:00'
+  source_url: null
+  http_status: null
+  rows: null
+  pages: 248
+  notes: placed by hand from https://doc.twse.com.tw/server-java/t57sb01
 - id: twse-openapi-swagger
   kind: dataset
   acquisition: fetched
