@@ -7,6 +7,26 @@
 
 ## 目前狀態
 
+- **Phase**：P2 🟢 **完成**（10 份文件全部取得並 hash）／P3 🟡 進行中
+- **資料現況**（`results/runs/document_quality.json`）：
+
+  | 文件 | 頁 | 可讀頁% | 財報標記 | 可用性 |
+  |---|---|---|---|---|
+  | 2412-FY2023-AR | 278 | 95% | 3 | ✅ |
+  | 1301-FY2023-AR | 362 | 96% | 2 | ✅ |
+  | 2330-FY2023-AR | 345 | 99% | 3 | ✅ |
+  | 2330-FY2024-AR | 91 | 100% | 0 | ✅ 僅敘述 |
+  | 2330-FY2024-FS | 124 | 100% | 3 | ✅ |
+  | **2317-FY2023-AR** | 707 | **21%** | 1 | ❌ 文字層壞 |
+  | **2317-FY2024-AR** | 136 | **0%** | 0 | ❌ 文字層壞 |
+  | 2317-FY2024-FS | 202 | 95% | 3 | ✅ |
+  | 2882-FY2024-AR | 248 | 100% | 0 | ✅ 僅敘述 |
+  | 2882-FY2024-FS | 402 | 100% | 3 | ✅ |
+
+  **8/10 可用。** 兩份不可用都是鴻海年報（issuer-specific，不是系統性問題）；
+  所有 財務報告書 都乾淨（95–100%）。
+- **P3 parser 現況**：2895 頁，F0 `0.003s/頁`、F1 `0.008s/頁`，
+  candidate chunk **100%** 帶 section path（fixed window 0%）
 - **Phase**：P3（parsing 層）— 🟡 **進行中**
   - ✅ `types.py` 文件模型（BBox／Span／Line／Block／ParsedDocument／Chunk，
     全部 frozen，帶 page＋bbox 以承載 citation 契約）
@@ -47,16 +67,19 @@
 
 ## 下一步（照順序）
 
-1. **需要使用者動手**：把 7 份年報 PDF 放到 `data/raw/manual/`
-   （檔名與來源見 `data/manifests/documents.yaml` 每筆的 `notes`）。
-   XBRL（7 份，選配但建議）同樣放這裡。
-2. **P2**：`scripts/fetch_twse_openapi.py`（自動抓 8 個 OpenAPI dataset）
-   ＋ `scripts/fetch_documents.py --manual-dir`（計算並寫入 SHA-256）
-   ＋ `scripts/verify_manifests.py`。
-3. **P3**：parsing 層（PyMuPDF baseline ＋ 自建 layout-aware parser）。
-   合成 PDF fixture 可先寫，不必等真實 PDF。
-4. **P4**：DuckDB schema ＋ deterministic SQL。
-   注意 per-industry schema（`_ci` vs `_fh`）與單位（千元 vs 百萬元）。
+1. **P3 收尾**：`tables.py`（pdfplumber 表格 → typed Table ＋ 單位偵測
+   ＋ 跨頁接續）、`figures.py`（向量繪圖密度偵測 figure region → crop bbox）。
+   兩者都不需要使用者再動手。
+2. **P4**：DuckDB schema ＋ deterministic SQL。
+   注意 per-industry schema（`_ci` vs `_fh`，金控沒有 `營業收入`）
+   與單位陷阱（`t187ap17_L` 是百萬元、`t187ap06_L_ci` 是千元）。
+   歷史數值來源：`extracted_table`（未提供 XBRL 時），
+   當期用 `openapi_current` 作獨立交叉來源。
+3. **P5**：gold 標註。出題只能用 `USABLE_DOCUMENTS`（8 份）。
+   注意鴻海沒有可用的敘述文件 → narrative 題只能來自 2412／1301／2330／2882。
+
+**不阻塞但可選**：XBRL 7 份仍未提供（`optional`）。有的話歷史結構化數值
+來源升級為官方 XBRL；沒有的話報告要把說法降級為「已驗證結構化數值」。
 
 ---
 
@@ -195,6 +218,44 @@ ollama 版本 `0.32.0`。
 - 3 個新測試把上述固定住（合併 21 題、`Wilson`、小樣本節存在）。
 
 **沒做什麼**：任何連外請求、任何 GPU 任務、任何 evaluation、任何 gold 標註。
+
+---
+
+### 2026-07-31 — Session 5（P2 完成 ＋ 真實資料揭露的四個缺陷）
+
+**使用者完成的事**：10 份文件全部人工下載放置（71.3 MB）。
+
+**真實資料立刻揭露四個缺陷 —— 合成 fixture 全都抓不到**
+
+1. **MOPS `資料年度` 是股東會年度**（= 財報年度 + 1）。若照查詢欄位命名，
+   7 份全部會錯一年。→ 寫 `identify_documents.py` 從**文件自己**判定身分
+   （MOPS 檔名 ＋ 封面交叉比對，衝突就報錯不擅自選邊）。
+2. **FY2024 年報不再內含合併財報** —— 是另一份申報（財務報告書 / IFRSs合併財報）。
+   MOPS 該年度只列一個檔案，所以不是分檔。→ 協議修訂 D-012，文件 7 → 10 份。
+3. **heading 誤判 23,677 個**（707 頁）。第一個假設（編號樣式）**是錯的**，
+   修完只降到 23,035。真因：該文件有**多個 body size**（10pt 209k 字元、
+   12pt 106k 字元），單一 mode 讓 10 萬字正常本文全部變標題；
+   level 還跑到 14。→ `body_font_sizes()` 取所有佔 ≥3% 字元的字級，
+   以**最大者**為門檻；level 上限 6。降到 4,214（每頁 ~6，合理）。
+4. **文字層部分壞掉**：2317-FY2023 的標題抽出來是 `Ψҗᇙ୍ܺ`，
+   但文件層級 anchor 檢查說它 usable。→ 改成**逐頁**量測可讀比例。
+
+**我自己的測量也錯過一次，而且值得記錄**
+
+第一版 anchor 清單只有敘述詞彙（`公司`／`股東`／`董事`），
+導致「純財報頁」被判為不可讀 —— 1301 因此顯示 53%，**差點被寫進協議當成缺陷文件**。
+把財報／附註詞彙（`合併`／`資產`／`負債`／`附註`／`單位`）加進去後，1301 是 **96%**。
+→ 教訓：**判定資料品質的工具本身也要被質疑**。
+
+**協議修訂（DRAFT 未 freeze，合法）**
+
+- **D-012**：新增 3 份 FY2024 財務報告書，7 → 10 份（仍在 5–10 內）
+- **D-013**：`DECLARED_DOCUMENTS` 增加 `usable` 欄位。
+  兩份鴻海年報標 `usable=False` 但**保留宣告** —— 刪掉紀錄等於刪掉發現，
+  且 SHA-256 需要有地方掛。出題只用 `USABLE_DOCUMENTS`。
+
+**結果**：`ruff` 乾淨、`mypy --strict` 乾淨、`pytest` **602 passed / 1 skipped**、
+coverage 98.71%、0 個 PDF 進 git。
 
 ---
 

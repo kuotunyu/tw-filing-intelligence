@@ -81,11 +81,26 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    typer.echo("")
-    typer.echo(f"usable   : {len(assessments) - len(problems)}/{len(assessments)}")
-    typer.echo(f"wrote    : {target_path.relative_to(paths.root)}")
+    # The verdicts are facts about documents, not judgements about the study.
+    # `missing_financial_statements` is expected for a FY2024 annual report -- those
+    # are paired with a 財務報告書 on purpose (DECISIONS D-012). Only a broken text
+    # layer makes a document unusable as evidence (D-013).
+    unreadable = [
+        item
+        for item in assessments
+        if item.verdict in {"unusable_text_layer", "partially_unusable_text_layer"}
+    ]
+    narrative_only = [
+        item for item in assessments if item.verdict == "missing_financial_statements"
+    ]
 
-    if problems:
+    typer.echo("")
+    typer.echo(f"readable text layer : {len(assessments) - len(unreadable)}/{len(assessments)}")
+    typer.echo(f"narrative only      : {len(narrative_only)} (expected; paired with a 財務報告書)")
+    typer.echo(f"unusable as evidence: {len(unreadable)}")
+    typer.echo(f"wrote               : {target_path.relative_to(paths.root)}")
+
+    if unreadable:
         raise typer.Exit(code=1)
 
 
