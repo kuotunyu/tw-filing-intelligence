@@ -50,16 +50,16 @@ def main() -> None:
         typer.echo("nothing acquired yet")
         raise typer.Exit(code=1)
 
-    header = f"{'doc_id':<18}{'pages':>6}{'chars/pg':>10}{'anchors':>9}{'stmts':>7}  verdict"
+    header = f"{'doc_id':<18}{'pages':>6}{'chars/pg':>10}{'readable':>10}{'stmts':>7}  verdict"
     typer.echo("")
     typer.echo(header)
-    typer.echo("-" * (len(header) + 20))
+    typer.echo("-" * (len(header) + 22))
     for item in assessments:
         found = sum(1 for page in item.statement_pages.values() if page is not None)
         mark = "ok " if item.is_usable else "!! "
         typer.echo(
             f"{item.doc_id:<18}{item.pages:>6}{item.chars_per_page:>10.0f}"
-            f"{sum(item.anchor_hits.values()):>9}{found:>7}  {mark}{item.verdict}"
+            f"{item.readable_ratio:>9.0%}{found:>7}  {mark}{item.verdict}"
         )
 
     problems = [item for item in assessments if not item.is_usable]

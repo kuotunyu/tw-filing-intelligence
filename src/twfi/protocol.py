@@ -133,30 +133,45 @@ class DeclaredDocument:
         return f"{self.company_code}-FY{self.fiscal_year}-{self.token}"
 
 
-#: Protocol 1.2, amended 2026-07-31 after acquisition (DECISIONS D-012).
+#: Protocol 1.2, amended 2026-07-31 after acquisition (DECISIONS D-012, D-013).
 #:
-#: The FY2024 annual reports do not embed financial statements -- from that year the
-#: statements are a separate 財務報告書 filing -- so three of those were added. The
-#: study needs FY2024 numbers for its cross-period questions, and a real analyst
-#: reads both documents too.
+#: Two amendments, both driven by measurement rather than preference:
+#:   D-012  From FY2024 the 股東會年報 does not embed financial statements, so three
+#:          FY2024 財務報告書 filings were added.
+#:   D-013  Native text extraction fails on both 鴻海 annual reports. ``usable``
+#:          records the measured verdict; question sourcing draws only on
+#:          USABLE_DOCUMENTS, but the unusable ones stay declared so the finding keeps
+#:          its SHA-256 and its place in the report.
+#:
+#: Readable-page ratios measured by ``scripts/check_document_quality.py``. The first
+#: measurement was wrong: an anchor list of narrative vocabulary only also condemned
+#: 1301 and understated 2330, because a page that is nothing but 合併資產負債表 and
+#: figures contains no narrative words. Widening the anchors put 1301 at 96%.
 DECLARED_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = (
-    DeclaredDocument("2412", 2023, "annual_report", "dev"),
-    DeclaredDocument("1301", 2023, "annual_report", "dev"),
-    DeclaredDocument("2330", 2023, "annual_report", "locked"),
-    DeclaredDocument("2330", 2024, "annual_report", "locked", note="narrative only"),
-    DeclaredDocument("2330", 2024, "financial_report", "locked"),
-    DeclaredDocument("2317", 2023, "annual_report", "locked"),
+    DeclaredDocument("2412", 2023, "annual_report", "dev", note="95% of pages readable"),
+    DeclaredDocument("1301", 2023, "annual_report", "dev", note="96% of pages readable"),
+    DeclaredDocument("2330", 2023, "annual_report", "locked", note="99% of pages readable"),
+    DeclaredDocument("2330", 2024, "annual_report", "locked", note="narrative only; 100% readable"),
+    DeclaredDocument("2330", 2024, "financial_report", "locked", note="100% readable"),
+    DeclaredDocument(
+        "2317",
+        2023,
+        "annual_report",
+        "locked",
+        usable=False,
+        note="unusable text layer: only 148/707 pages (21%) extract readable text",
+    ),
     DeclaredDocument(
         "2317",
         2024,
         "annual_report",
         "locked",
         usable=False,
-        note="unusable text layer: fonts lack a ToUnicode mapping, extraction yields glyph codes",
+        note="unusable text layer: 0% readable; fonts lack a ToUnicode mapping",
     ),
-    DeclaredDocument("2317", 2024, "financial_report", "locked"),
-    DeclaredDocument("2882", 2024, "annual_report", "locked", note="narrative only"),
-    DeclaredDocument("2882", 2024, "financial_report", "locked"),
+    DeclaredDocument("2317", 2024, "financial_report", "locked", note="95% readable"),
+    DeclaredDocument("2882", 2024, "annual_report", "locked", note="narrative only; 100% readable"),
+    DeclaredDocument("2882", 2024, "financial_report", "locked", note="100% readable"),
 )
 
 USABLE_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = tuple(

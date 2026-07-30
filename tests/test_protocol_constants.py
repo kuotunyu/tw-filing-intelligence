@@ -121,20 +121,42 @@ def test_financial_reports_exist_only_for_fy2024() -> None:
     assert {d.company_code for d in statements} == LOCKED_COMPANY_CODES
 
 
-def test_the_unreadable_filing_stays_declared_but_unusable() -> None:
-    """Deleting the record would delete the finding."""
-    unusable = [d for d in DECLARED_DOCUMENTS if not d.usable]
-    assert [d.doc_id for d in unusable] == ["2317-FY2024-AR"]
-    assert "ToUnicode" in unusable[0].note
-    assert unusable[0] not in USABLE_DOCUMENTS
-    assert len(USABLE_DOCUMENTS) == len(DECLARED_DOCUMENTS) - 1
+def test_the_unreadable_filings_stay_declared_but_unusable() -> None:
+    """Deleting the records would delete the finding; usable=False excludes them instead."""
+    unusable = {d.doc_id: d for d in DECLARED_DOCUMENTS if not d.usable}
+    assert set(unusable) == {"2317-FY2023-AR", "2317-FY2024-AR"}
+    for document in unusable.values():
+        assert "readable" in document.note or "ToUnicode" in document.note
+        assert document not in USABLE_DOCUMENTS
+    assert len(USABLE_DOCUMENTS) == len(DECLARED_DOCUMENTS) - 2
 
 
-def test_every_locked_company_still_has_two_fiscal_years_of_evidence() -> None:
-    """Cross-period questions need both years to be answerable from some document."""
-    for code in LOCKED_COMPANY_CODES:
-        years = {d.fiscal_year for d in USABLE_DOCUMENTS if d.company_code == code}
-        assert years == {2023, 2024} or code == "2882", f"{code} lost a fiscal year"
+def test_the_scale_of_the_extraction_failure_is_recorded() -> None:
+    """Two of seven annual reports, both from one issuer: a headline finding."""
+    annual = [d for d in DECLARED_DOCUMENTS if d.doc_type == "annual_report"]
+    assert len(annual) == 7
+    broken = [d for d in annual if not d.usable]
+    assert len(broken) == 2
+    assert {d.company_code for d in broken} == {"2317"}, "the failure is issuer-specific"
+    statements = [d for d in DECLARED_DOCUMENTS if d.doc_type == "financial_report"]
+    assert all(d.usable for d in statements), "every 財務報告書 extracted cleanly"
+
+
+def test_narrative_evidence_still_spans_two_industries() -> None:
+    """Losing 2317 and 1301 to encoding must not collapse the industry coverage."""
+    narrative_codes = {d.company_code for d in USABLE_DOCUMENTS if d.doc_type == "annual_report"}
+    industries = {c.industry for c in COMPANIES if c.code in narrative_codes}
+    assert len(industries) >= 2, f"narrative evidence covers only {industries}"
+
+
+def test_locked_numeric_evidence_covers_both_fiscal_years() -> None:
+    """Cross-period questions need statements from more than one year."""
+    years = {
+        d.fiscal_year
+        for d in USABLE_DOCUMENTS
+        if d.split == "locked" and (d.doc_type == "financial_report" or d.fiscal_year == 2023)
+    }
+    assert {2023, 2024} <= years
 
 
 def test_a_structurally_different_industry_is_included() -> None:

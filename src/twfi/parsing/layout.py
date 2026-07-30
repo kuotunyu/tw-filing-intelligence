@@ -39,7 +39,9 @@ __all__ = [
     "LayoutConfig",
     "RawPage",
     "detect_numbering_level",
+    "looks_tabular",
     "body_font_size",
+    "body_font_sizes",
     "repeated_furniture",
     "reading_order",
     "classify_pages",
@@ -64,10 +66,22 @@ _NUMBERING_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
     (re.compile(r"^[（(]\d+[)）]"), 4),
 )
 
-_DOTTED_NUMBER = re.compile(r"^(\d+(?:\.\d+)*)[.、\s]")
+#: Arabic numbering. A bare number followed by a space is deliberately NOT accepted:
+#: on a real filing that matched every table row beginning with a figure
+#: (``1 現金及約當現金 1,234``), which produced 23,677 "headings" in a 707-page report.
+#: A dotted form may be followed by a space because ``1.2 明細`` is unambiguous.
+_DOTTED_NUMBER = re.compile(r"^(\d{1,2}(?:\.\d{1,2})+)[.、\s]")
+_SINGLE_NUMBER = re.compile(r"^(\d{1,2})[.、]")
 
 #: A line ending in sentence punctuation is prose, not a heading.
 _SENTENCE_END = ("。", "；", ".", ";", "，", ",", "、")
+
+#: A figure with thousands separators, three or more digits, or a decimal point.
+_NUMBER_GROUP = re.compile(r"\d[\d,]{2,}|\d+\.\d+")
+
+#: Two or more figures on one line means a table row. One is fine: a heading may
+#: legitimately contain a year (``1.2 民國112年度概況``).
+_MAX_FIGURES_IN_A_HEADING = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,12 +100,28 @@ class LayoutConfig:
     min_pages_for_repeat: int = 3
     paragraph_gap_ratio: float = 1.8
     y_band: float = 3.0
+    #: A font size carrying at least this share of the document's characters is body
+    #: copy, not headings. Real filings use several body sizes -- 2317-FY2023 sets
+    #: 209k characters at 10pt and another 106k at 12pt -- and treating only the
+    #: single most common size as body promoted all 106k of those to headings.
+    body_share_threshold: float = 0.03
+    #: …but only once there is enough text for a share to mean anything. Without this
+    #: floor, a three-page fixture's headings would each clear 3% and be misread as
+    #: body copy.
+    min_chars_for_body_size: int = 2000
+    #: Headings deeper than this are collapsed. Ranking every distinct size produced
+    #: level 14 on a real filing, which is meaningless as a section path.
+    max_heading_level: int = 6
 
     def __post_init__(self) -> None:
         if self.heading_size_ratio <= 1.0:
             raise ValueError("heading_size_ratio must exceed 1.0 to distinguish headings")
         if not 0.0 < self.repeat_threshold <= 1.0:
             raise ValueError("repeat_threshold must be in (0, 1]")
+        if not 0.0 < self.body_share_threshold < 1.0:
+            raise ValueError("body_share_threshold must be in (0, 1)")
+        if self.max_heading_level < 1:
+            raise ValueError("max_heading_level must be at least 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,25 +152,84 @@ def detect_numbering_level(text: str) -> int | None:
     dotted = _DOTTED_NUMBER.match(stripped)
     if dotted:
         return min(dotted.group(1).count(".") + 1, 6)
+    if _SINGLE_NUMBER.match(stripped):
+        return 1
     return None
 
 
-def body_font_size(pages: tuple[RawPage, ...]) -> float:
-    """The dominant body text size, weighted by character count.
+def _strip_numbering(text: str) -> str:
+    """Remove a leading numbering token so it is not counted as a figure."""
+    stripped = text.strip()
+    for pattern, _level in _NUMBERING_PATTERNS:
+        match = pattern.match(stripped)
+        if match:
+            return stripped[match.end() :]
+    for pattern in (_DOTTED_NUMBER, _SINGLE_NUMBER):
+        match = pattern.match(stripped)
+        if match:
+            return stripped[match.end() :]
+    return stripped
 
-    Character weighting matters: a filing has a handful of large headings and
-    thousands of body characters, so an unweighted mode over lines would be
-    skewed by short lines.
+
+def looks_tabular(text: str) -> bool:
+    """True when a line carries enough figures to be a table row rather than a heading.
+
+    This is the guard that stopped statement rows from being promoted to headings.
+    ``一、營業收入 2,894,308 2,161,736`` has the shape of a heading and the content of
+    a table row; the figures are what give it away.
+
+    The numbering prefix is stripped before counting, or ``1.2 民國112年度概況`` would
+    look like two figures and lose its heading status.
     """
+    return len(_NUMBER_GROUP.findall(_strip_numbering(text))) > _MAX_FIGURES_IN_A_HEADING
+
+
+def _size_weights(pages: tuple[RawPage, ...]) -> Counter[float]:
+    """Characters per rounded font size across the whole document."""
     weights: Counter[float] = Counter()
     for page in pages:
         for line in page.lines:
             text = line.text
             if text:
                 weights[round(line.size, 1)] += len(text)
+    return weights
+
+
+def body_font_size(pages: tuple[RawPage, ...]) -> float:
+    """The dominant body text size, weighted by character count.
+
+    Character weighting matters: a filing has a handful of large headings and
+    thousands of body characters, so an unweighted mode over lines would be skewed
+    by short lines.
+    """
+    weights = _size_weights(pages)
     if not weights:
         return 0.0
     return max(weights.items(), key=lambda item: (item[1], -item[0]))[0]
+
+
+def body_font_sizes(
+    pages: tuple[RawPage, ...], config: LayoutConfig | None = None
+) -> tuple[float, ...]:
+    """Every font size that carries enough characters to be body copy.
+
+    Real filings use more than one body size -- 2317-FY2023 sets 209k characters at
+    10pt and another 106k at 12pt, in different chapters. Taking only the single most
+    common size as "body" made every 12pt character a heading candidate, which is how
+    that document produced 23,035 headings across 707 pages.
+
+    Falls back to the single dominant size when the document is too short for a share
+    to be meaningful, which keeps small fixtures behaving sensibly.
+    """
+    config = config or LayoutConfig()
+    weights = _size_weights(pages)
+    if not weights:
+        return ()
+
+    total = sum(weights.values())
+    floor = max(config.min_chars_for_body_size, total * config.body_share_threshold)
+    sizes = sorted(size for size, count in weights.items() if count >= floor)
+    return tuple(sizes) if sizes else (body_font_size(pages),)
 
 
 def _normalise(text: str) -> str:
@@ -193,24 +282,45 @@ def _could_be_heading(text: str, config: LayoutConfig) -> bool:
     running long and ending in sentence punctuation. Letting numbering bypass these
     checks turned body text into spurious headings, which then hijacked the section
     path for everything after it.
+
+    The tabular check matters even more on real filings, which are mostly statements:
+    a row like ``一、營業收入 2,894,308 2,161,736`` passes every other test.
     """
-    return bool(text) and len(text) <= config.heading_max_chars and not text.endswith(_SENTENCE_END)
+    return (
+        bool(text)
+        and len(text) <= config.heading_max_chars
+        and not text.endswith(_SENTENCE_END)
+        and not looks_tabular(text)
+    )
 
 
-def _is_heading(line: Line, body_size: float, config: LayoutConfig) -> bool:
-    """Typographic evidence for a heading: larger than body text, or bold at body size."""
+def _is_heading(line: Line, *, dominant: float, ceiling: float, config: LayoutConfig) -> bool:
+    """Typographic evidence for a heading.
+
+    The size bar is the *largest* body size, not the most common one: a document
+    whose chapters use 10pt and 12pt body copy must not treat the 12pt chapters as
+    one enormous heading. Boldness is still judged against the dominant size, since
+    a bold run at ordinary size is a recognisable heading style.
+    """
     if not _could_be_heading(line.text, config):
         return False
-    if body_size <= 0:
+    if ceiling <= 0:
         return line.bold
-    if line.size >= body_size * config.heading_size_ratio:
+    if line.size >= ceiling * config.heading_size_ratio:
         return True
-    return line.bold and line.size >= body_size
+    return line.bold and line.size >= dominant
 
 
-def _level_by_size(sizes: list[float]) -> dict[float, int]:
-    """Map heading sizes to levels: largest size is level 1, next is 2, and so on."""
-    return {size: index for index, size in enumerate(sorted(set(sizes), reverse=True), start=1)}
+def _level_by_size(sizes: list[float], max_level: int) -> dict[float, int]:
+    """Map heading sizes to levels: largest size is level 1, next is 2, and so on.
+
+    Levels are capped: ranking every distinct size on a real filing produced level
+    14, which is not a section path anyone can use.
+    """
+    return {
+        size: min(index, max_level)
+        for index, size in enumerate(sorted(set(sizes), reverse=True), start=1)
+    }
 
 
 def classify_pages(
@@ -222,7 +332,9 @@ def classify_pages(
     behaviour actually lives, and therefore where it is tested.
     """
     config = config or LayoutConfig()
-    body_size = body_font_size(pages)
+    dominant = body_font_size(pages)
+    body_sizes = body_font_sizes(pages, config)
+    ceiling = max(body_sizes) if body_sizes else 0.0
     furniture = repeated_furniture(pages, config)
 
     # First pass: which lines are headings, and at what size. Numbered headings are
@@ -233,9 +345,11 @@ def classify_pages(
             text = line.text
             if _normalise(text) in furniture or not _could_be_heading(text, config):
                 continue
-            if detect_numbering_level(text) is None and _is_heading(line, body_size, config):
+            if detect_numbering_level(text) is None and _is_heading(
+                line, dominant=dominant, ceiling=ceiling, config=config
+            ):
                 heading_sizes.append(round(line.size, 1))
-    size_levels = _level_by_size(heading_sizes)
+    size_levels = _level_by_size(heading_sizes, config.max_heading_level)
 
     # The section stack persists across pages, which is what makes a table that
     # continues onto the next page keep the section it belongs to.
@@ -248,7 +362,8 @@ def classify_pages(
             blocks=_classify_page(
                 page,
                 furniture=furniture,
-                body_size=body_size,
+                dominant=dominant,
+                ceiling=ceiling,
                 size_levels=size_levels,
                 section_stack=section_stack,
                 config=config,
@@ -286,7 +401,8 @@ def _classify_page(
     page: RawPage,
     *,
     furniture: set[str],
-    body_size: float,
+    dominant: float,
+    ceiling: float,
     size_levels: dict[float, int],
     section_stack: list[tuple[int, str]],
     config: LayoutConfig,
@@ -324,7 +440,9 @@ def _classify_page(
 
         shaped_like_heading = _could_be_heading(text, config)
         numbering_level = detect_numbering_level(text) if shaped_like_heading else None
-        is_heading = numbering_level is not None or _is_heading(line, body_size, config)
+        is_heading = numbering_level is not None or _is_heading(
+            line, dominant=dominant, ceiling=ceiling, config=config
+        )
         if is_heading:
             paragraph = _paragraph_block(
                 pending, page.number, order, tuple(name for _level, name in section_stack)
@@ -334,7 +452,10 @@ def _classify_page(
                 order += 1
             pending = []
 
-            level = numbering_level or size_levels.get(round(line.size, 1), 1)
+            level = min(
+                numbering_level or size_levels.get(round(line.size, 1), 1),
+                config.max_heading_level,
+            )
             while section_stack and section_stack[-1][0] >= level:
                 section_stack.pop()
             section_stack.append((level, text))

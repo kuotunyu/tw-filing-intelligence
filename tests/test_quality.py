@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from twfi.parsing.quality import (
     ANCHOR_TERMS,
     MIN_PAGES_FOR_JUDGEMENT,
+    MIN_READABLE_PAGE_RATIO,
     STATEMENT_TERMS,
     assess_pages,
 )
@@ -16,10 +19,10 @@ MOJIBAKE_PAGE = "Ҟ ᒵ ൘ǵठިܿ ൔ֋ਜ ມǵϦљݯ౛ൔ֋ ႜӼ֡Ⴋ" * 
 
 
 def pages(*texts: str, count: int = 0) -> list[str]:
-    """A page list padded to ``count`` pages with the last text."""
+    """A page list padded to ``count`` pages by repeating the first text."""
     body = list(texts)
     while len(body) < count:
-        body.append(texts[-1])
+        body.append(body[0])
     return body
 
 
@@ -88,6 +91,55 @@ def test_unusable_beats_missing_statements() -> None:
     assert result.verdict == "unusable_text_layer"
 
 
+# ----------------------------------------------------- partially unusable layer
+
+
+def mixed(readable: int, broken: int) -> list[str]:
+    """A filing where some embedded fonts map and some do not."""
+    return [GOOD_PAGE] * readable + [MOJIBAKE_PAGE] * broken
+
+
+def test_partial_breakage_is_diagnosed() -> None:
+    """The 2317-FY2023 case: 20% of pages readable, which a document-level check misses."""
+    result = assess_pages("2317-FY2023-AR", mixed(readable=141, broken=566))
+    assert result.verdict == "partially_unusable_text_layer"
+    assert result.readable_pages == 141
+    assert result.pages_with_text == 707
+    assert result.readable_ratio == pytest.approx(141 / 707, abs=0.001)
+    assert "141/707" in result.reasons[0]
+
+
+def test_a_document_level_anchor_check_would_have_passed_it() -> None:
+    """Which is exactly why readability is measured per page."""
+    result = assess_pages("D", mixed(readable=141, broken=566))
+    assert sum(result.anchor_hits.values()) > 0, "anchors do appear -- just not on most pages"
+    assert result.verdict != "usable"
+
+
+def test_the_readable_threshold_is_the_declared_one() -> None:
+    just_under = assess_pages("D", mixed(readable=59, broken=41))
+    just_over = assess_pages("D", [*mixed(readable=61, broken=39)[:99], STATEMENT_PAGE])
+    assert MIN_READABLE_PAGE_RATIO == 0.6
+    assert just_under.verdict == "partially_unusable_text_layer"
+    assert just_over.verdict == "usable"
+
+
+def test_blank_pages_do_not_count_against_readability() -> None:
+    """A filing with section-divider blanks is not partially broken."""
+    body = [*pages(GOOD_PAGE, STATEMENT_PAGE, count=60), *([""] * 40)]
+    result = assess_pages("D", body)
+    assert result.pages == 100
+    assert result.pages_with_text == 60
+    assert result.readable_ratio == 1.0
+    assert result.verdict == "usable"
+
+
+def test_readable_ratio_of_a_textless_document_is_zero() -> None:
+    result = assess_pages("D", pages("", count=50))
+    assert result.readable_ratio == 0.0
+    assert result.verdict == "unusable_text_layer"
+
+
 # --------------------------------------------------- missing financial statements
 
 
@@ -137,12 +189,22 @@ def test_json_shape_is_stable() -> None:
         "pages",
         "characters",
         "chars_per_page",
+        "pages_with_text",
+        "readable_pages",
+        "readable_ratio",
         "anchor_hits",
         "statement_pages",
         "verdict",
         "reasons",
     }
     assert payload["doc_id"] == "D"
+
+
+def test_a_pure_statements_page_counts_as_readable() -> None:
+    """Narrative vocabulary alone marked statement pages unreadable."""
+    result = assess_pages("D", pages(STATEMENT_PAGE, count=40))
+    assert result.readable_ratio == 1.0
+    assert result.verdict == "usable"
 
 
 def test_statement_terms_cover_both_industry_families() -> None:

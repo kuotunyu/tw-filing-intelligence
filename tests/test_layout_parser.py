@@ -22,6 +22,7 @@ from twfi.parsing.layout import (
     classify_pages,
     detect_numbering_level,
     extract_raw_pages,
+    looks_tabular,
     parse_layout,
     reading_order,
     repeated_furniture,
@@ -72,7 +73,65 @@ def test_prose_has_no_numbering(text: str) -> None:
 
 
 def test_deep_numbering_is_capped() -> None:
-    assert detect_numbering_level("1.2.3.4.5.6.7.8 very deep") == 6
+    assert detect_numbering_level("1.2.3.4.5 very deep") == 5
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1 現金及約當現金 1,234,567",
+        "3 應收帳款淨額 987,654",
+        "12 存貨 456,789",
+    ],
+)
+def test_a_table_row_beginning_with_a_figure_is_not_numbering(text: str) -> None:
+    """The defect this fixes: on a 707-page filing it produced 23,677 "headings".
+
+    A bare number followed by a space matched every statement row that starts with a
+    line number, and each one then hijacked the section path for what followed.
+    """
+    assert detect_numbering_level(text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "level"),
+    [("1. 概述", 1), ("1、概述", 1), ("1.2 明細", 2), ("1.2.3 子項", 3)],
+)
+def test_real_arabic_numbering_still_works(text: str, level: int) -> None:
+    """A dot or 、 is what makes numbering unambiguous; a space alone is not."""
+    assert detect_numbering_level(text) == level
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "一、營業收入 2,894,308 2,161,736",
+        "營業成本 1,266,151 1,053,405",
+        "（一）毛利率 45.6 38.2",
+    ],
+)
+def test_lines_carrying_two_or_more_figures_look_tabular(text: str) -> None:
+    assert looks_tabular(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["1.2 民國112年度概況", "一、公司概況", "三、財務概況", "營業收入", ""],
+)
+def test_a_heading_may_carry_a_single_figure(text: str) -> None:
+    """A year in a heading is normal; two figures side by side is a table row."""
+    assert looks_tabular(text) is False
+
+
+def test_a_tabular_line_is_never_a_heading_however_numbered() -> None:
+    pages = (
+        page_of(
+            make_line("一、營業收入 2,894,308 2,161,736", y=100, size=14.0),
+            make_line("本文內容，維持一般字級大小說明。", y=140, size=10.5),
+            make_line("第二段本文內容，同樣字級。", y=160, size=10.5),
+        ),
+    )
+    assert classify_pages(pages, "D").blocks_of_kind("heading") == ()
 
 
 # ------------------------------------------------------------------- body size
