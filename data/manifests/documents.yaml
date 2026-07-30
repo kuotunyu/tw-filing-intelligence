@@ -15,6 +15,16 @@
 #     is form simulation rather than use of a documented download path.
 # Seven documents do not justify either. See docs/DATA_PROVENANCE.md 8.
 #
+# FORM PATH (read off the real page, not from memory -- see 8.3):
+#   資料類型 has NO「年報」option. The annual report lives under
+#   「F 股東會相關資料」→ 資料細節說明「股東會年報」:
+#     F18 股東會年報(適用永續揭露準則)     <- newer filings
+#     F04 股東會年報(尚未適用永續揭露準則) <- older filings
+#     F11 股東會年報(股東會後修訂本)       <- revised after the AGM
+#   資料年度 is a 民國 year (3 digits). 季別/月份 stays empty for 股東會相關資料.
+#   Trust the report's cover page (「民國112年度年報」) over the index year: the
+#   filename must state the fiscal year the report COVERS.
+#
 # Protocol reference: docs/FEASIBILITY_PROTOCOL.md 1.2
 version: 1
 
@@ -29,7 +39,8 @@ documents:
     split: dev
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 2412, 資料年度 112 (民國), 資料類型「年報」.
+      代號 2412 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國112年度年報」.
       Save as data/raw/manual/2412-FY2023-AR.pdf
 
   - doc_id: 1301-FY2023-AR
@@ -41,7 +52,8 @@ documents:
     split: dev
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 1301, 資料年度 112 (民國), 資料類型「年報」.
+      代號 1301 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國112年度年報」.
       Save as data/raw/manual/1301-FY2023-AR.pdf
 
   # ------------------------------------------------------------- LOCKED split
@@ -54,7 +66,8 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 2330, 資料年度 112 (民國), 資料類型「年報」.
+      代號 2330 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國112年度年報」.
       Save as data/raw/manual/2330-FY2023-AR.pdf
 
   - doc_id: 2330-FY2024-AR
@@ -66,7 +79,8 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 2330, 資料年度 113 (民國), 資料類型「年報」.
+      代號 2330 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國113年度年報」.
       Save as data/raw/manual/2330-FY2024-AR.pdf
 
   - doc_id: 2317-FY2023-AR
@@ -78,7 +92,8 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 2317, 資料年度 112 (民國), 資料類型「年報」.
+      代號 2317 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國112年度年報」.
       Save as data/raw/manual/2317-FY2023-AR.pdf
 
   - doc_id: 2317-FY2024-AR
@@ -90,7 +105,8 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 2317, 資料年度 113 (民國), 資料類型「年報」.
+      代號 2317 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國113年度年報」.
       Save as data/raw/manual/2317-FY2024-AR.pdf
 
   - doc_id: 2882-FY2024-AR
@@ -102,6 +118,7 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      電子資料查詢作業: 公司代號 2882, 資料年度 113 (民國), 資料類型「年報」.
-      金控年報: 報表結構與一般業完全不同, 是本研究刻意保留的 hard case.
+      代號 2882 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      封面須為「民國113年度年報」. 金控年報的報表結構與一般業完全不同,
+      是本研究刻意保留的 hard case.
       Save as data/raw/manual/2882-FY2024-AR.pdf

@@ -63,9 +63,19 @@ uv run python scripts/explore_sources.py                      # 重建 endpoint 
 uv run python scripts/sample_endpoint.py /opendata/t187ap06_L_ci   # 檢查某 endpoint 實際內容
 uv run python scripts/probe_mops.py                           # 重驗 MOPS 是否仍為 SPA
 uv run python scripts/fetch_twse_openapi.py                   # 自動抓結構化當期資料
-uv run python scripts/fetch_documents.py --manual-dir data/raw/manual --record-hash
-uv run python scripts/verify_manifests.py
+uv run python scripts/fetch_documents.py                      # 記錄人工放置檔案的 SHA-256
+uv run python scripts/verify_manifests.py                     # integrity + coverage
+uv run python scripts/verify_manifests.py --require-all       # G1 證據（缺檔即失敗）
 ```
+
+## 年報在表單裡的位置（最容易走錯的一步）
+
+`doc.twse.com.tw/server-java/t57sb01` 的 `資料類型` **沒有「年報」選項**。
+年報在 **`F 股東會相關資料`** → `資料細節說明`：
+`F18 股東會年報(適用永續揭露準則)`／`F04 股東會年報(尚未適用永續揭露準則)`／
+`F11 股東會年報(股東會後修訂本)`。
+`資料年度` 是**民國**年；`F` 類**不需要**季別。
+**以封面年度命名檔案**（「民國112年度年報」→ `FY2023`），不以索引年度為準。
 
 ## 下載失敗 → 人工放置 fallback（不是繞過限制）
 
