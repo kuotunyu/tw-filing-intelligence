@@ -15,12 +15,17 @@
 #     is form simulation rather than use of a documented download path.
 # Seven documents do not justify either. See docs/DATA_PROVENANCE.md 8.
 #
-# FORM PATH (read off the real page, not from memory -- see 8.3):
-#   資料類型 has NO「年報」option. The annual report lives under
-#   「F 股東會相關資料」→ 資料細節說明「股東會年報」:
-#     F18 股東會年報(適用永續揭露準則)     <- newer filings
-#     F04 股東會年報(尚未適用永續揭露準則) <- older filings
-#     F11 股東會年報(股東會後修訂本)       <- revised after the AGM
+# FORM PATH (read off the real page, then confirmed against the live index -- see 8.3):
+#   資料類型 has NO「年報」option, and the dropdowns show only the Chinese names, not
+#   the F-codes. The annual report lives under 資料類型「股東會相關資料」→
+#   資料細節說明「股東會年報(尚未適用永續揭露準則)」 (code F04).
+#
+#   Use F04 for FY2023 / FY2024. Empirically confirmed: 2412 + 年度 112 +
+#   「股東會年報(適用永續揭露準則)」 (F18) returns 查無所需資料. Taiwan's
+#   永續揭露準則 phases in from 2026, so filings for these years are all classified
+#   as 尚未適用.
+#
+#   Do NOT pick 股東會年報(僅永續專章), 特別股股東會年報, or 英文版-股東會年報.
 #   資料年度 is a 民國 year (3 digits). 季別/月份 stays empty for 股東會相關資料.
 #   Trust the report's cover page (「民國112年度年報」) over the index year: the
 #   filename must state the fiscal year the report COVERS.
@@ -39,7 +44,7 @@ documents:
     split: dev
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 2412 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 2412 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國112年度年報」.
       Save as data/raw/manual/2412-FY2023-AR.pdf
 
@@ -52,7 +57,7 @@ documents:
     split: dev
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 1301 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 1301 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國112年度年報」.
       Save as data/raw/manual/1301-FY2023-AR.pdf
 
@@ -66,7 +71,7 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 2330 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 2330 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國112年度年報」.
       Save as data/raw/manual/2330-FY2023-AR.pdf
 
@@ -79,7 +84,7 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 2330 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 2330 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國113年度年報」.
       Save as data/raw/manual/2330-FY2024-AR.pdf
 
@@ -92,7 +97,7 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 2317 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 2317 / 資料年度 112 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國112年度年報」.
       Save as data/raw/manual/2317-FY2023-AR.pdf
 
@@ -105,7 +110,7 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 2317 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 2317 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國113年度年報」.
       Save as data/raw/manual/2317-FY2024-AR.pdf
 
@@ -118,7 +123,7 @@ documents:
     split: locked
     source_page: https://doc.twse.com.tw/server-java/t57sb01
     notes: >-
-      代號 2882 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報」.
+      代號 2882 / 資料年度 113 / 資料類型「F 股東會相關資料」/ 細節「股東會年報(尚未適用永續揭露準則)」.
       封面須為「民國113年度年報」. 金控年報的報表結構與一般業完全不同,
       是本研究刻意保留的 hard case.
       Save as data/raw/manual/2882-FY2024-AR.pdf
