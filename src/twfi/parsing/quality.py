@@ -8,9 +8,12 @@ a file listing:
   document looks fine to a human and yields tens of thousands of characters of
   mojibake to a parser. ``2317-FY2024`` extracted 118,681 characters in which the
   string 鴻海 does not appear even once.
-* **A partial upload.** MOPS accepts an annual report as several files, so one
-  download can contain the narrative chapters and none of the financial
-  statements. ``2330-FY2024`` has 公司治理 and 風險事項 but no 合併資產負債表.
+* **Statements filed separately.** From FY2024 the 股東會年報 does not embed the
+  financial statements; they are a separate filing (資料類型「財務報告書」→
+  「IFRSs合併財報」), and the MOPS result page offers a 「查詢財務報告書」button for
+  exactly that reason. ``2330-FY2024`` has 公司治理 and 風險事項 but no
+  合併資產負債表, and MOPS lists only one file for that year -- so this is a
+  different filing, not a split one.
 
 Both would silently corrupt the study: unusable text would look like a retrieval
 failure, and a missing statements section would look like the numeric route being
@@ -116,8 +119,9 @@ def assess_pages(doc_id: str, page_texts: Sequence[str]) -> DocumentQuality:
     elif all(page is None for page in statement_pages.values()):
         verdict = "missing_financial_statements"
         reasons.append(
-            f"none of {list(STATEMENT_TERMS)} appear; this is probably one part of a "
-            "multi-file annual report upload"
+            f"none of {list(STATEMENT_TERMS)} appear; from FY2024 the 股東會年報 does not "
+            "embed the statements -- acquire the separate 財務報告書 "
+            "(資料類型「財務報告書」→ 細節「IFRSs合併財報」→ 季別「第四季」)"
         )
 
     return DocumentQuality(

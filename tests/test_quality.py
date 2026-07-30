@@ -91,13 +91,18 @@ def test_unusable_beats_missing_statements() -> None:
 # --------------------------------------------------- missing financial statements
 
 
-def test_a_partial_upload_is_diagnosed() -> None:
-    """The 2330-FY2024 case: readable narrative, no statements section."""
+def test_statements_filed_separately_is_diagnosed() -> None:
+    """The 2330-FY2024 case: readable narrative, statements are a different filing.
+
+    MOPS lists exactly one 股東會年報 file for that year, so the statements were not
+    split off -- from FY2024 the annual report simply does not embed them.
+    """
     narrative = "公司治理報告\n風險事項\n本公司營業收入概況，股東會決議，董事名單。"
     result = assess_pages("2330-FY2024-AR", pages(narrative, count=91))
     assert result.verdict == "missing_financial_statements"
     assert result.has_financial_statements is False
-    assert "multi-file" in result.reasons[0]
+    assert "財務報告書" in result.reasons[0]
+    assert "IFRSs合併財報" in result.reasons[0]
 
 
 # --------------------------------------------------------------------- too short
