@@ -263,6 +263,42 @@
 
 ---
 
+## D-016 Gold 標註：作者只能是人，來源不能是被測的抽取器
+
+- **問題**：協議要求 `annotator = "human"`，但實作是由 LLM（Claude）協助進行的。
+  若由 LLM 產生答案再蓋上 `human`，那是**偽造整個研究賴以成立的欄位** ——
+  比任何程式 bug 嚴重，因為它讓事前註冊變成裝飾，而報告會包含一句假話。
+
+- **更尖銳的問題（實作時才發現）**：協議原本只禁「gold 不得由 candidate system 產生」，
+  但真正的陷阱在別處。**若 `table_cell` 的 gold 值來自本 repo 自己的表格抽取器，
+  它與正在被評測的 F1／F4 因子是循環的**：抽取器抽錯 → gold 錯 → candidate 用同一個
+  抽取器 → 它會「答對」一個錯答案。量到的增益是「用 parser 評測自己」的假象。
+  這個循環**沒有任何單元測試抓得到**，因為兩邊都「一致」。
+
+- **決定**：
+  1. `GoldRecord.annotator` 的型別是 `Literal["human"]`。沒有第二個可填值，
+     所以沒有任何程式路徑（包括之後趕時間寫的）能產生機器署名的 gold record。
+  2. 新增 `answer_provenance`，只允許 `human_read_pdf` 與 `official_structured`。
+     **本 repo 的抽取器在型別上不可表示** —— 不是「不建議」，是寫不出來。
+  3. 草稿走另一條型別 `DraftItem`，**根本沒有 `answer` 欄位**。
+     它是「指向證據的指標」，不是「少填一欄的 gold record」，不能靠加 key 升級。
+     草稿檔在 `data/evaluation/worklist/`，與 gold 檔分離。
+  4. `parse_record` 對 `annotator != "human"` 直接 raise，並在錯誤訊息裡說明
+     草稿該放哪裡 —— 讓下一個人不必重新推導這個結論。
+
+- **分工**：判斷類題型（narrative／chart／cross_page／cross_document／unanswerable／
+  table_cell／cross_period_comparison）由人對照原始 filing 產生答案。
+  只有 `numeric_calculation` 可由官方 OpenAPI 機械建置並自動重驗 ——
+  該答案的真值任何人都能重跑查驗，人工轉錄只會增加錯誤而非增加準確度。
+  工具負責預填機械欄位與切出證據 crop，**不得產生答案**。
+
+- **推論出的限制**：`cross_period_comparison` 需要 FY2023 vs FY2024，
+  但 OpenAPI 只有當期快照（D-011／§8 發現 1）→ 這 4 題的歷史值只能是 `human_read_pdf`。
+
+- **狀態**：ACCEPTED (2026-07-31，使用者拍板「按題型分工」)
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、

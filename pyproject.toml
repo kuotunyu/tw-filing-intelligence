@@ -91,7 +91,9 @@ ignore = [
 # ---------------------------------------------------------------- mypy
 [tool.mypy]
 python_version = "3.13"
-files = ["src"]
+# Scripts are checked too. They are the only code a human runs by hand, so a type
+# error there surfaces as a broken command rather than as a failing test.
+files = ["src", "scripts"]
 strict = true
 warn_unreachable = true
 disallow_untyped_decorators = false

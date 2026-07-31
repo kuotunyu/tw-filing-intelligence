@@ -98,6 +98,20 @@ class RepoPaths:
     def locked_probes(self) -> Path:
         return self.evaluation / "locked" / "probes.jsonl"
 
+    @property
+    def chart_challenger(self) -> Path:
+        """Protocol 2.3. Lives under dev: the challenger is chosen before the locked run."""
+        return self.evaluation / "dev" / "chart_challenger.jsonl"
+
+    @property
+    def worklist(self) -> Path:
+        """Machine-proposed annotation slots, carrying evidence pointers but no answers.
+
+        Kept apart from the gold files so a draft cannot be mistaken for -- or edited
+        into -- a graded record.
+        """
+        return self.evaluation / "worklist"
+
     # -- generated data (never committed) ---------------------------------
     @property
     def raw(self) -> Path:

@@ -95,8 +95,10 @@ def _is_relevant(path: str, summary: str, fields: list[str]) -> bool:
 
 
 def _render(document: dict[str, Any], *, url: str, digest: str, retrieved_at: str) -> str:
-    info = document.get("info") if isinstance(document.get("info"), dict) else {}
-    paths = document.get("paths") if isinstance(document.get("paths"), dict) else {}
+    info_field = document.get("info")
+    paths_field = document.get("paths")
+    info: dict[str, Any] = info_field if isinstance(info_field, dict) else {}
+    paths: dict[str, Any] = paths_field if isinstance(paths_field, dict) else {}
 
     rows: list[tuple[str, str, str, list[str]]] = []
     for path, methods in sorted(paths.items()):

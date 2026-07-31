@@ -137,6 +137,7 @@ Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境�
   "tolerance": {"type": "relative", "value": 0.005},
   "annotation_notes": "...",
   "annotator": "human",
+  "answer_provenance": "human_read_pdf | official_structured",
   "annotated_at": "2026-..-.."
 }
 ```
@@ -144,10 +145,33 @@ Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境�
 規則：
 
 - **Gold answer 不得由任何 candidate system output 自動產生**（`annotator` 必須是 `human`；
-  `scripts/check_leakage.py` 驗證此欄位）。
+  `scripts/check_leakage.py` 驗證此欄位）。程式層面由
+  `twfi.eval.gold.GoldRecord.annotator: Literal["human"]` 強制 —— 沒有第二個可填的值。
+- **`answer_provenance` 只允許兩個來源**（D-016，2026-07-31 增訂）：
+  `human_read_pdf`（人讀原始 filing）或 `official_structured`（TWSE 官方結構化資料集）。
+  **本 repository 自己的 table／figure 抽取器不是合法來源**，且在型別上不可表示。
+  理由是循環性：抽取器正是 F1／F4 要測的東西。若 gold 表格值由抽取器產生，
+  抽錯就會變成錯的 gold，而 candidate 用同一個抽取器會「答對」那個錯答案 ——
+  量到的 F1／F4 增益會是「用 parser 評測自己」的假象，而非能力。
+- 由此推論一個實務限制：`cross_period_comparison` 需要 FY2023 vs FY2024，
+  但 TWSE OpenAPI 只有當期快照（§8 發現 1）→ 這些題的歷史值**只能是 `human_read_pdf`**。
+- `answer_provenance = official_structured` 時**必須**填 `structured_source_key`，
+  否則無法重跑查驗。
 - 數值題必須有 `structured_source_key` 或 `bbox`（可取得時兩者都要）。
 - `required_evidence` 定義「完整證據集」，用於 complete evidence coverage 指標。
-- `unanswerable` 題 `answer` 固定為 `null`，並提供 `refusal_reason_class`。
+  各題型至少需要一種對應證據：`chart_value_trend` 需 `chart_crop`、
+  `table_cell` 需 `table_cell`、`numeric_calculation` 需 `sql_row` 或 `table_cell`。
+  只給頁碼的圖表題無法用來評分 crop-level citation，而那正是 chart route 的量測目的。
+- `unanswerable` 題 `answer` 固定為 `null`，並提供 `refusal_reason_class`
+  （`absent_from_documents` / `outside_selected_scope` / `irreconcilable_conflict`，
+  對應 §1.4 的 (a)(b)(c)）。
+
+**標註分工**（D-016）：判斷類題型（`narrative_fact`、`chart_value_trend`、`cross_page`、
+`cross_document`、`unanswerable`、`table_cell`、`cross_period_comparison`）的答案由人
+對照原始 filing 產生；只有 `numeric_calculation` 可由官方結構化資料機械建置並自動重驗。
+工具可以預填機械欄位（公司、期間、`doc_id`、頁碼、`bbox`、`unit`、`tolerance`、
+`source_url`）並切出證據 crop，但**不得產生答案**。機器提議的題目槽位寫入
+`data/evaluation/worklist/`，與 gold 檔完全分離。
 
 ---
 

@@ -97,15 +97,16 @@ def main(
             )
 
         typer.echo("")
-        for company in COMPANIES:
+        for study_company in COMPANIES:
             try:
-                schema = store.industry_schema_of(company.code)
+                schema = store.industry_schema_of(study_company.code)
             except NumericRouteError:
-                typer.echo(f"  {company.code} {company.name}: no figures loaded")
+                typer.echo(f"  {study_company.code} {study_company.name}: no figures loaded")
                 continue
-            accounts = store.accounts_for(company.code)
+            accounts = store.accounts_for(study_company.code)
             typer.echo(
-                f"  {company.code} {company.name:<8} {schema:<18} {len(accounts):>3} accounts"
+                f"  {study_company.code} {study_company.name:<8} "
+                f"{schema:<18} {len(accounts):>3} accounts"
             )
 
         typer.echo("")
