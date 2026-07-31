@@ -7,7 +7,7 @@
 
 ## 目前狀態
 
-- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：14/72 已標註**（probe 5 ／ locked 9 ／ dev 0 ／ challenger 0）。
+- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：23/72 已標註**（probe 5 ／ **locked 18/36** ／ dev 0 ／ challenger 0）。
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
   commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
   **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
@@ -104,10 +104,10 @@
   numeric route 必須**報錯或拒答，不能拿別的欄位硬湊**。
 - **Phase**：P0（Repo scaffold ＋ 規劃文件）— 🟢 **完成**
 - **Protocol 狀態**：`1.0.0-draft`，**尚未 freeze**（可以修改）
-- **Locked set 狀態**：標註中，9/36
+- **Locked set 狀態**：標註中，18/36（table_cell 5／cross_period 4／unanswerable 4／numeric_calculation 5）
 - **Toolchain 狀態**：`uv sync --extra dev` OK（Python 3.13.13）、
-  `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy src` strict 乾淨（28 個 source file）、
-  `pytest` **804 passed / 1 skipped**、coverage **97.83%**（gate 85%）
+  `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy` strict 乾淨（49 個 source file，含 `scripts/`）、
+  `pytest` **951 passed / 1 skipped**、coverage **97.90%**（gate 85%）
 - **最後更新**：2026-07-31
 
 ## 下一步（照順序）
@@ -122,20 +122,24 @@
    - `answer_provenance` 不得是本 repo 的抽取器 —— 那與 F1／F4 循環（D-016）。
    - **已有工具**：`make_worklist.py --for probe` 產出 25 個證據 slot；
      `validate_gold.py`、`check_leakage.py` 是 freeze 前的閘門。
-   - ✅ **probe 5 題完成**；**locked 9/36 完成**（table_cell 5 ＋ cross_period_comparison 4）。
+   - ✅ **probe 5 題完成**；**locked 18/36 完成**（table_cell 5／cross_period 4／
+     unanswerable 4／numeric_calculation 5）。剩 narrative_fact 6／chart_value_trend 5／
+     cross_page 4／cross_document 3。
      檔案：`data/evaluation/locked/probes.jsonl`、`gold.jsonl`。
      注意 probe **不是** unanswerable：G8 強制清空檢索，所以好的 probe 是
      **模型很可能記得答案**的題目。
-   - **標註流程已定型**，剩下 58 題照這個走：
+   - **標註流程已定型**，剩下 49 題照這個走：
      `make_worklist.py` 定位 → `render_pages.py` 渲染成圖 →
-     人**看圖**讀數字（不看抽取文字）→ `fill_probes.py` 填表單（不碰 JSON）→
-     `validate_gold.py` ＋ `check_leakage.py`。
+     人**看圖**讀數字（不看抽取文字）→ `fill_gold.py --set <set>` 填表單（不碰 JSON）→
+     `validate_gold.py` ＋ `check_leakage.py` ＋ `verify_gold_answers.py`。
    - **一批 4–5 題最順**：我一次給清單（哪張圖／哪一列／哪一欄），使用者一次讀完回報，
      我填表並跑三個檢查。逐題往返太慢。
    - **刻意重用頁面**：一張渲染圖出 2–3 題，切換成本大幅下降。
      locked batch 2 完全沒有開新圖。
-   - 剩 **62 題**（locked 27 ＋ dev 15 ＋ challenger 16）。
-     使用者決定：**先把 locked 做完**，dev／challenger 之後再決定是否減量。
+   - 剩 **49 題**（locked 18 ＋ dev 15 ＋ challenger 16）。
+   - **每一題的判斷都必須有一張圖可看。** unanswerable 題原本只給搜尋結果，
+     使用者拒絕在看不到的東西上簽名 —— 那是對的，四題因此各配一張證據圖。
+   - 使用者決定：**先把 locked 做完**，dev／challenger 之後再決定是否減量。
 2. **P4 收尾**（P5 之後才做）：把 P5 確定需要的 account，以
    `source_kind="extracted_table"` 載入 FY2023／FY2024 歷史數值（OpenAPI 只有當期）。
    刻意排在 P5 後面 —— 先知道要哪些 account，才不用載入整份年報的所有表格。
@@ -156,7 +160,7 @@
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
-| P5 | Gold set 標註 | 🟡 進行中 | — | **14/72**（probe 5 ＋ locked 9）。關鍵路徑，CPU |
+| P5 | Gold set 標註 | 🟡 進行中 | — | **23/72**（probe 5 ＋ locked 18）。關鍵路徑，CPU |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |

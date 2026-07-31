@@ -111,7 +111,11 @@ def main(
         typer.echo(f"no form at {form_path.relative_to(paths.root)} -- run with --skeleton first")
         raise typer.Exit(code=2)
 
-    answers, problems = _parse_form(form_path.read_text(encoding="utf-8"))
+    # An unanswerable question has no answer to write, so the form must not demand one.
+    unanswerable = {
+        str(record["question_id"]) for record in records if record.get("answerable") is False
+    }
+    answers, problems = _parse_form(form_path.read_text(encoding="utf-8"), unanswerable)
     known = {str(record["question_id"]) for record in records}
     problems.extend(f"{qid}: not in the template" for qid in sorted(set(answers) - known))
     for qid in sorted(known - set(answers)):
@@ -192,7 +196,9 @@ def _skeleton(records: list[dict[str, Any]]) -> str:
     return "".join(parts)
 
 
-def _parse_form(text: str) -> tuple[dict[str, _Answer], list[str]]:
+def _parse_form(
+    text: str, unanswerable: set[str] | None = None
+) -> tuple[dict[str, _Answer], list[str]]:
     answers: dict[str, _Answer] = {}
     problems: list[str] = []
     current: str | None = None
@@ -224,10 +230,11 @@ def _parse_form(text: str) -> tuple[dict[str, _Answer], list[str]]:
         else:
             entry.currency = value or None
 
+    skip = unanswerable or set()
     for qid, entry in sorted(answers.items()):
         if not entry.question:
             problems.append(f"{qid}: Q is empty -- write the question you want asked")
-        if not entry.answer:
+        if not entry.answer and qid not in skip:
             problems.append(f"{qid}: A is empty -- read the figure off the rendered page")
     return answers, problems
 
@@ -235,6 +242,12 @@ def _parse_form(text: str) -> tuple[dict[str, _Answer], list[str]]:
 def _merge(record: dict[str, Any], answer: _Answer) -> dict[str, Any]:
     merged = dict(record)
     merged["question"] = answer.question
+    if record.get("answerable") is False:
+        # Whatever the form says, an unanswerable question's answer is null. The point of
+        # the record is that there is nothing to write, and a placeholder string would be
+        # a stated answer to a question the filings cannot answer.
+        merged["answer"] = None
+        return merged
     merged["answer"] = answer.answer
     if answer.unit is not None:
         merged["unit"] = answer.unit
