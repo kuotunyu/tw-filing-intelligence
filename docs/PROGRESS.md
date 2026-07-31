@@ -11,7 +11,8 @@
   **標註方式已於 2026-07-31 修訂（D-019）**：模型起草 ＋ 固定種子人工抽樣稽核。
   目前 locked 組成：fully_human 19／question_model_chosen 7／answer_model_drafted 5／
   needs_audit 12／audited 0。**報告必須印出這組數字。**
-  只剩  5 題 —— 建議人工，因為「LLM 讀圖表」對「LLM 讀圖表」最接近循環。
+  只剩 `chart_value_trend` 5 題 —— 建議人工，因為「LLM 讀圖表」去考「LLM 讀圖表」
+  是這裡最接近循環的組合。
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
   commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
   **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
@@ -126,13 +127,15 @@
    - `answer_provenance` 不得是本 repo 的抽取器 —— 那與 F1／F4 循環（D-016）。
    - **已有工具**：`make_worklist.py --for probe` 產出 25 個證據 slot；
      `validate_gold.py`、`check_leakage.py` 是 freeze 前的閘門。
-   - ✅ **probe 5 題完成**；**locked 18/36 完成**（table_cell 5／cross_period 4／
-     unanswerable 4／numeric_calculation 5）。剩 narrative_fact 6／chart_value_trend 5／
-     cross_page 4／cross_document 3。
+   - ✅ **probe 5 題完成**；**locked 31/36 完成** —— table_cell 5／cross_period 4／
+     unanswerable 4／numeric_calculation 5／narrative_fact 6／cross_page 4／
+     cross_document 3。**只剩 `chart_value_trend` 5 題。**
      檔案：`data/evaluation/locked/probes.jsonl`、`gold.jsonl`。
      注意 probe **不是** unanswerable：G8 強制清空檢索，所以好的 probe 是
      **模型很可能記得答案**的題目。
-   - **標註流程已定型**，剩下 49 題照這個走：
+   - **下一個要人做的事**：`audit_gold.py --set locked` 抽出的 8 題稽核
+     （種子 20260731 決定，我無法挑）。目前抽到 LOCK-0020…0024、0027、0028 等。
+   - **標註流程已定型**，剩下 41 題照這個走：
      `make_worklist.py` 定位 → `render_pages.py` 渲染成圖 →
      人**看圖**讀數字（不看抽取文字）→ `fill_gold.py --set <set>` 填表單（不碰 JSON）→
      `validate_gold.py` ＋ `check_leakage.py` ＋ `verify_gold_answers.py`。
@@ -140,7 +143,7 @@
      我填表並跑三個檢查。逐題往返太慢。
    - **刻意重用頁面**：一張渲染圖出 2–3 題，切換成本大幅下降。
      locked batch 2 完全沒有開新圖。
-   - 剩 **49 題**（locked 18 ＋ dev 15 ＋ challenger 16）。
+   - 剩 **41 題**（locked 5 ＋ dev 15 ＋ challenger 16）。
    - **每一題的判斷都必須有一張圖可看。** unanswerable 題原本只給搜尋結果，
      使用者拒絕在看不到的東西上簽名 —— 那是對的，四題因此各配一張證據圖。
    - 使用者決定：**先把 locked 做完**，dev／challenger 之後再決定是否減量。
