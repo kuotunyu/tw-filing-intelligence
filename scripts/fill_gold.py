@@ -86,6 +86,14 @@ def main(
     records = _raw_records(template)
 
     if skeleton:
+        # --skeleton once destroyed a filled-in form, and the answers in it had taken an
+        # hour to collect. Overwriting work is not something a convenience flag should be
+        # able to do by accident.
+        if form_path.is_file() and _has_answers(form_path.read_text(encoding="utf-8")):
+            typer.echo(f"{form_path.relative_to(paths.root)} already has answers in it.")
+            typer.echo("Refusing to overwrite. Delete it first if that is really the intent,")
+            typer.echo("or edit it by hand to add the new blocks.")
+            raise typer.Exit(code=2)
         form_path.write_text(_skeleton(records), encoding="utf-8")
         typer.echo(f"wrote the form: {form_path.relative_to(paths.root)}")
         typer.echo("")
@@ -148,6 +156,14 @@ class _Answer:
     answer: str = ""
     unit: str | None = None
     currency: str | None = None
+
+
+def _has_answers(text: str) -> bool:
+    """Whether a form carries at least one filled-in answer."""
+    return any(
+        line.strip().upper().startswith("A:") and line.split(":", 1)[1].strip()
+        for line in text.splitlines()
+    )
 
 
 def _raw_records(template: Path) -> list[dict[str, Any]]:

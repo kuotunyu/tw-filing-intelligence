@@ -594,3 +594,60 @@ def test_several_empty_questions_are_not_reported_as_duplicates_of_each_other() 
     problems = set_problems(blanks, gold_set="locked", type_counts={})
     assert sum("question text is empty" in problem for problem in problems) == 5
     assert not any("repeats the question text" in problem for problem in problems)
+
+
+# ------------------------------------------------------- derived answers
+
+
+def _derived(**overrides: Any) -> GoldRecord:
+    base: dict[str, Any] = {
+        "question_type": "cross_period_comparison",
+        "question": "營業收入從民國112年度到113年度成長了百分之多少？",
+        "answer": "11.32",
+        "unit": "%",
+        "currency": None,
+        "period": "FY2023-FY2024",
+        "tolerance": Tolerance("absolute", 0.1),
+        "required_evidence": (EvidenceRef("table_cell", "2330-FY2023-AR#p64/營業收入/112年度"),),
+        "structured_source_key": StructuredSourceKey("pdf_table", "2330-FY2023-AR|p64|營業收入"),
+        "derived_from": ("6,162,221,359", "6,859,615,493"),
+    }
+    base.update(overrides)
+    return make(**base)
+
+
+def test_a_growth_rate_records_the_figures_it_came_from() -> None:
+    """A derived answer is on no page; the two figures behind it are.
+
+    Recording them is what lets anyone re-run the arithmetic instead of trusting whoever
+    did it -- the lesson from PROBE-0004, where a check was performed but not reported.
+    """
+    record = _derived()
+    assert record.is_derived is True
+    assert record_problems(record, gold_set="locked") == []
+
+
+def test_a_derived_answer_with_one_operand_is_refused() -> None:
+    problems = record_problems(_derived(derived_from=("6,162,221,359",)), gold_set="locked")
+    assert any("needs the figures it came from" in problem for problem in problems)
+
+
+def test_an_answer_read_straight_off_the_page_is_not_derived() -> None:
+    assert make().is_derived is False
+    assert record_problems(make(), gold_set="locked") == []
+
+
+def test_derived_operands_survive_a_round_trip() -> None:
+    body = payload_of(
+        _derived(),
+        derived_from=["6,162,221,359", "6,859,615,493"],
+        question_type="cross_period_comparison",
+        period="FY2023-FY2024",
+        unit="%",
+        tolerance={"type": "absolute", "value": 0.1},
+        structured_source_key={"table": "pdf_table", "row_key": "x|y"},
+        required_evidence=[{"kind": "table_cell", "ref": "d#p1/r/c"}],
+    )
+    parsed = parse_record(body)
+    assert parsed.derived_from == ("6,162,221,359", "6,859,615,493")
+    assert parsed.is_derived is True

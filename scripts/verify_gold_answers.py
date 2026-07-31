@@ -119,6 +119,18 @@ def _verify(
         pages = {page: _WHITESPACE.sub("", "\n".join(text)) for page, text in by_page.items()}
         cache[doc_id] = pages
 
+    # A derived answer -- a growth rate, a difference -- is not printed anywhere. What
+    # must be corroborated is the figures it was computed from.
+    if record.is_derived:
+        missing = [
+            operand
+            for operand in record.derived_from
+            if not _appears(operand, pages, record.page_numbers)
+        ]
+        if missing:
+            return "absent", f"operand(s) {missing} not on cited page(s)"
+        return "cited", f"derived; {len(record.derived_from)} operand(s) on the cited page"
+
     answer = record.answer or ""
     bare = _SEPARATORS.sub("", answer)
     found = sorted(
@@ -135,6 +147,14 @@ def _verify(
     if all(not pages.get(page, "").strip() for page in cited):
         return "unverifiable", f"cited page(s) {sorted(cited)} have no text layer"
     return "absent", f"does not appear anywhere in {doc_id}"
+
+
+def _appears(value: str, pages: dict[int, str], cited: tuple[int, ...]) -> bool:
+    bare = _SEPARATORS.sub("", value)
+    return any(
+        value in pages.get(page, "") or (bare and bare in _SEPARATORS.sub("", pages.get(page, "")))
+        for page in cited
+    )
 
 
 def _entrypoint() -> None:

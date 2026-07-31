@@ -224,8 +224,21 @@ class GoldRecord:
     structured_source_key: StructuredSourceKey | None = None
     tolerance: Tolerance | None = None
     refusal_reason_class: RefusalReasonClass | None = None
+    #: The figures this answer was computed from, exactly as printed on the page.
+    #:
+    #: A growth rate is not on the page; the two figures it comes from are. Recording
+    #: them is what lets anyone re-run the arithmetic instead of trusting whoever did
+    #: it -- the lesson from PROBE-0004, where a check was performed but not reported
+    #: and so could not be confirmed to have been performed on the recorded number.
+    #: Empty means the answer was read directly and must appear on the cited page.
+    derived_from: tuple[str, ...] = ()
     annotation_notes: str = ""
     annotator: Literal["human"] = "human"
+
+    @property
+    def is_derived(self) -> bool:
+        """Whether the answer was computed rather than read off the page."""
+        return bool(self.derived_from)
 
     @property
     def route(self) -> str:
@@ -313,6 +326,11 @@ def _answerability_problems(record: GoldRecord) -> list[str]:
         problems.append(f"{where}: refusal_reason_class belongs only on unanswerable questions")
     if record.question_type in NUMERIC_QUESTION_TYPES and record.tolerance is None:
         problems.append(f"{where}: {record.question_type} needs an explicit tolerance")
+    if record.is_derived and len(record.derived_from) < 2:
+        problems.append(
+            f"{where}: a derived answer needs the figures it came from, so the arithmetic "
+            "can be re-run by someone other than whoever did it"
+        )
     return problems
 
 
@@ -540,6 +558,7 @@ def parse_record(payload: Mapping[str, Any]) -> GoldRecord:
                 else None
             ),
             refusal_reason_class=payload.get("refusal_reason_class"),
+            derived_from=tuple(payload.get("derived_from", ())),
             annotation_notes=str(payload.get("annotation_notes", "")),
         )
     except KeyError as exc:
@@ -571,6 +590,7 @@ _FIELD_NAMES: Final[frozenset[str]] = frozenset(
         "annotated_at",
         "answer_provenance",
         "refusal_reason_class",
+        "derived_from",
     }
 )
 

@@ -1,13 +1,8 @@
-# LOCKED GOLD -- batch 1, the five table_cell questions.
+# LOCKED GOLD -- batches 1 and 2.
 #
-# Every figure read by kuotunyu off a rendered page and dictated; Claude transcribed.
-# Each was corroborated on the page before being written down:
-#   LOCK-0001  six asset components sum to 資產總額
-#   LOCK-0002  流動資產合計 on this page equals 流動資產 in the five-year table on p63
-#   LOCK-0003  營業收入 − 營業成本 = 營業毛利, all three printed
-#   LOCK-0004  利息收入 − 利息費用 = 利息淨收益, all three printed
-#   LOCK-0005  製成品 + 在製品 + 原料 + 物料及零件 = 合計, and the 112 comparative equals
-#              the 存貨 line in 2330-FY2023-AR p102
+# Every figure read by kuotunyu off a rendered page. LOCK-0001..0005 were read directly;
+# LOCK-0006..0009 are derived from two read figures by exact arithmetic, with both
+# operands recorded in the template so the derivation is re-checkable.
 
 LOCK-0001
 Q: 台積電 2023 年度（民國112年）合併報表的資產總額是多少？
@@ -32,4 +27,24 @@ UNIT: 千元
 LOCK-0005
 Q: 台積電截至民國113年12月31日的存貨合計為多少？
 A: 287,868,810
+UNIT: 千元
+
+LOCK-0006
+Q: 台積電的合併資產總額，從民國111年到民國112年成長了百分之多少？
+A: 11.43
+UNIT: %
+
+LOCK-0007
+Q: 鴻海的合併營業收入，從民國112年度到民國113年度成長了百分之多少？
+A: 11.32
+UNIT: %
+
+LOCK-0008
+Q: 國泰金控的合併利息淨收益，從民國112年度到民國113年度成長了百分之多少？
+A: 6.75
+UNIT: %
+
+LOCK-0009
+Q: 台積電的存貨合計，從民國112年12月31日到民國113年12月31日增加了多少？
+A: 36,871,722
 UNIT: 千元

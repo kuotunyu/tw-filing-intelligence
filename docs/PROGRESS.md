@@ -122,15 +122,20 @@
    - `answer_provenance` 不得是本 repo 的抽取器 —— 那與 F1／F4 循環（D-016）。
    - **已有工具**：`make_worklist.py --for probe` 產出 25 個證據 slot；
      `validate_gold.py`、`check_leakage.py` 是 freeze 前的閘門。
-   - ✅ **5 題 probe 已完成**（2026-07-31，`data/evaluation/locked/probes.jsonl`）。
+   - ✅ **probe 5 題完成**；**locked 9/36 完成**（table_cell 5 ＋ cross_period_comparison 4）。
+     檔案：`data/evaluation/locked/probes.jsonl`、`gold.jsonl`。
      注意 probe **不是** unanswerable：G8 強制清空檢索，所以好的 probe 是
      **模型很可能記得答案**的題目。
    - **標註流程已定型**，剩下 67 題照這個走：
      `make_worklist.py` 定位 → `render_pages.py` 渲染成圖 →
      人**看圖**讀數字（不看抽取文字）→ `fill_probes.py` 填表單（不碰 JSON）→
      `validate_gold.py` ＋ `check_leakage.py`。
-   - **實測每題約 5–10 分鐘**，含定位、確認欄位年度、自我檢查加總。
-     67 題約需 **6–11 小時**，可分次進行。
+   - **一批 4–5 題最順**：我一次給清單（哪張圖／哪一列／哪一欄），使用者一次讀完回報，
+     我填表並跑三個檢查。逐題往返太慢。
+   - **刻意重用頁面**：一張渲染圖出 2–3 題，切換成本大幅下降。
+     locked batch 2 完全沒有開新圖。
+   - 剩 **62 題**（locked 27 ＋ dev 15 ＋ challenger 16）。
+     使用者決定：**先把 locked 做完**，dev／challenger 之後再決定是否減量。
 2. **P4 收尾**（P5 之後才做）：把 P5 確定需要的 account，以
    `source_kind="extracted_table"` 載入 FY2023／FY2024 歷史數值（OpenAPI 只有當期）。
    刻意排在 P5 後面 —— 先知道要哪些 account，才不用載入整份年報的所有表格。
