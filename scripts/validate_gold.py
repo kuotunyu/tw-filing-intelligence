@@ -98,7 +98,12 @@ def _report(name: GoldSet, path: Path, *, require_complete: bool) -> tuple[int, 
     from twfi.protocol import LOCKED_TYPE_COUNTS
 
     counts = dict(LOCKED_TYPE_COUNTS) if (require_complete and name == "locked") else None
-    problems = set_problems(records, gold_set=name, type_counts=counts)
+    # Audit is asked for on its own, for every set, once a set claims to be finished. It used
+    # to ride along on `counts`, which only the locked set gets -- so dev could be entirely
+    # model-drafted with zero audits and pass. The rule exists to catch precisely that.
+    problems = set_problems(
+        records, gold_set=name, type_counts=counts, require_audit=require_complete
+    )
     if require_complete:
         problems.extend(_completeness_problems(name, records))
 

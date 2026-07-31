@@ -763,3 +763,65 @@ def test_composition_states_what_the_report_must_disclose() -> None:
         "audited": 1,
         "trustworthy": 2,
     }
+
+
+# ------------------------------------------------- the audit rule, asked on its own
+
+
+def _all_drafted(count: int = 3) -> list[GoldRecord]:
+    """A set nobody has checked: every question machine-chosen, every answer machine-read."""
+    return [
+        make(
+            question_id=f"DEV-{n:04d}",
+            question=f"這是第 {n} 個問題？",
+            company=CompanyRef("台塑", "1301"),
+            source_document=("1301-FY2023-AR",),
+            required_evidence=(EvidenceRef("page", "1301-FY2023-AR#p188"),),
+            page_numbers=(188,),
+            annotator="claude-opus-5",
+            question_author="claude-opus-5",
+            answer_provenance="model_read_rendered_page",
+        )
+        for n in range(1, count + 1)
+    ]
+
+
+def test_an_entirely_unaudited_set_is_flagged_without_type_counts() -> None:
+    """The rule used to ride along on type_counts, which only the locked set is given.
+
+    dev is fully model-drafted, so it was the one set that most needed this check and the
+    one set that never got it. require_audit asks the question on its own.
+    """
+    problems = set_problems(_all_drafted(), gold_set="dev", require_audit=True)
+    assert any("unaudited" in problem for problem in problems)
+
+
+def test_one_audited_record_satisfies_the_rule() -> None:
+    """It asks whether anyone has looked, not whether everyone has: the sample is a sample."""
+    records = _all_drafted()
+    records[1] = dataclasses.replace(records[1], audited=True)
+    problems = set_problems(records, gold_set="dev", require_audit=True)
+    assert not any("unaudited" in problem for problem in problems)
+
+
+def test_the_audit_rule_stays_quiet_while_a_set_is_being_written() -> None:
+    """Mid-annotation, zero audits is progress rather than a failure."""
+    problems = set_problems(_all_drafted(), gold_set="dev", require_audit=False)
+    assert not any("unaudited" in problem for problem in problems)
+
+
+def test_a_fully_human_set_is_never_asked_to_be_audited() -> None:
+    """There is nothing for an audit to check when a person chose and answered every item."""
+    human = [
+        make(question_id=f"LOCK-{n:04d}", question=f"這是第 {n} 個問題？") for n in range(1, 4)
+    ]
+    problems = set_problems(human, gold_set="locked", require_audit=True)
+    assert not any("unaudited" in problem for problem in problems)
+
+
+def test_the_default_still_follows_type_counts() -> None:
+    """Existing callers must not change behaviour just because the parameter now exists."""
+    records = _all_drafted()
+    assert not any("unaudited" in p for p in set_problems(records, gold_set="dev"))
+    with_counts = set_problems(records, gold_set="dev", type_counts={"narrative_fact": 3})
+    assert any("unaudited" in p for p in with_counts)

@@ -482,12 +482,22 @@ def set_problems(
     *,
     gold_set: GoldSet,
     type_counts: Mapping[str, int] | None = None,
+    require_audit: bool | None = None,
 ) -> list[str]:
     """Return every violation across a whole set, including its composition.
 
     ``type_counts`` is checked only when given. Pass ``LOCKED_TYPE_COUNTS`` once the
     locked set claims to be finished; while it is being annotated, a partial set is
     progress rather than a pile of failures.
+
+    ``require_audit`` is separate from ``type_counts`` deliberately. The audit rule used to
+    be gated on ``type_counts`` being present, which was an accident of implementation
+    rather than a decision: ``type_counts`` is about how many questions of each kind a set
+    holds, and has nothing to do with whether a person has checked any of them. Because
+    ``validate_gold`` passes ``type_counts`` for the locked set alone, a fully
+    model-drafted dev set sitting at zero audits did not trip the rule that exists to catch
+    exactly that. Defaults to following ``type_counts`` so existing callers behave as
+    before; pass it explicitly to ask the question on its own.
     """
     problems: list[str] = []
 
@@ -527,7 +537,8 @@ def set_problems(
                 )
 
     needs_audit = [r for r in records if not r.is_fully_human]
-    if needs_audit and type_counts is not None and not any(r.audited for r in needs_audit):
+    audit_wanted = require_audit if require_audit is not None else type_counts is not None
+    if needs_audit and audit_wanted and not any(r.audited for r in needs_audit):
         problems.append(
             f"{gold_set}: all {len(needs_audit)} record(s) with a machine-chosen question "
             "or a machine-drafted answer are unaudited. A chooser that also answers can "

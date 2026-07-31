@@ -256,7 +256,9 @@ ollama 版本 `0.32.0`。
 | R2 | 年報 300+ 頁，VLM caption 成本高 | figure crop 數量上限 ＋ embedding cache ＋ cold/warm 分開量 |
 | **R8** | **F5／F6 的輸入幾乎全是有框表格，不是圖表** | 逐一目視：503 個 candidate 中確認的真圖表只有 **4 張**（全台積電、2 頁）；DEV 20 個幾何正例 **0 張**。兩階**保留**（只做增益歸因、不參與 gate），但 report **不得**把它們的增益說成 chart-reading 能力（D-021） |
 | **R9** | **`chart_value_trend` 只有 2 題且同一家公司** | 這是語料事實不是取樣偷懶。G2 已把 chart 移出單一類別 gate、pooled 門檻提到 15pp。report limitations 必須寫：這兩題答的是「能不能讀台積電那兩張圖」（D-020） |
-| R3 | `qwen3.6:27b` Q4_K_M 17GB ＋ KV cache ＋ 檢索模型 2.2GB ≈ 20–21GB，逼近 G10 的 22GB | **已實測（2026-08-01，`results/runs/resource_budget.json`）：generation model 駐留時整張卡 19.00 GiB（含桌面 1.7 GiB），對 22 GB 餘裕 +3.00 GB。原本的紙上估計方向正確、餘裕確實很薄。**檢索模型（bge-m3 ＋ reranker，fp16 約 2.2 GB）**尚未實測**（需安裝 2–3 GB 的 torch），2.2 < 3.0 但只剩約 0.8 GB。offload CPU 的備案**可能真的會用到**。`num_ctx=8192`、crop 最長邊 1024、每題 ≤3 crop。**gate 不因模型放寬** |
+| ~~R3~~ | ~~VRAM ≈ 20–21GB，逼近 G10 的 22GB~~ | **已解決，方法與原本設想相反（D-026）**。實測：三個模型同時放 GPU = **21.91 GiB**（餘裕 90 MB，不可行）；把 reranker 移到 CPU = **top-10 要 5.85 s**（超過 3 s 上限兩倍，原本的備案是死的）。**正解是 embedder 移到 CPU、reranker 留在 GPU** → **21.07 GiB（top-20），餘裕 +0.93 GB**，query embed 55 ms、rerank 61 ms。理由：embedder 查詢時只跑一次（CPU 55 ms）卻佔 2 GB；reranker 要對 top-k 個 pair 各跑一次 cross-encoder，CPU 上慢 96 倍 |
+| **R11** | **top-k 是被 VRAM 綁住的，不是被檢索品質決定的** | top-20 → 21.07 GiB（+0.93 GB）／top-30 → 21.31（+0.69）／top-50 → 21.70（+0.30）。report **不得**把 top-k 呈現為自由選擇的超參數（D-026） |
+| **R12** | **線上服務配置在這張卡上過不了 22 GB** | 批次評估可把檢索階段與生成階段分開跑、各自獨佔顯卡；真的線上服務兩者必須同時駐留。**本研究能證明的是前者**，report 必須這樣寫（D-026） |
 | ~~R10~~ | ~~generation p95 可能超過 G10 的 60 秒~~ | **已解除**：實測真實負載（3,557 token 輸入 ＋ 512 token 輸出）**12.3–13.3 秒**，對 60 秒有 4.5 倍餘裕。短 prompt 的 0.7–2.4 秒是**下限不是工作負載**，兩者都記進 `resource_budget.json` 以免被誤引 |
 | R6 | Q4_K_M 量化可能影響敘述題品質 | 數值題走 SQL 不受影響；敘述題影響會如實反映在指標，不換模型補救 |
 | R4 | 我自己標註 gold 的偏誤 | 答案必須指回頁碼/bbox/row；標註前不看 pipeline 輸出 |
