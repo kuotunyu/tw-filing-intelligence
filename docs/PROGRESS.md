@@ -38,9 +38,10 @@
   - ✅ `tables.py`（pdfplumber `text` strategy ＋ `UnitSpec` ＋ 跨頁接續）
   - ✅ `figures.py`（向量繪圖密度分群 ＋ raster image ＋ caption ＋ crop 渲染）
   - ✅ `results/runs/parse_stats.json`、`results/runs/document_quality.json`
-  - ⬜ `document.py`（把 layout / tables / figures 合併成一份 ParsedDocument，
-    並解決重疊：落在表格 bbox 內的 paragraph 要讓位給 table block）
-  - ⬜ figure 數量偏高（2412-FY2023 有 457 個），需要更嚴的 chart route 篩選
+  - ✅ `document.py`（三個抽取器合併 ＋ 重疊解析 ＋ section 繼承 ＋ 統一 reading order）
+  - ✅ chart 候選規則（D-014）：**1,744 → 503**（減 71%），
+    caption 成本 ~145 分 → ~42 分，且不靠任意上限
+  - **P3 完成**
 - **Phase**：P2（資料取得）— 🟡 **自動化半邊完成，等使用者放 7 份 PDF**
   - ✅ 9 個 OpenAPI dataset 已取得並記入 `acquisition.lock.yaml`
     （swagger 306KB／t187ap03_L 1092 列／t187ap05_L 1082 列／

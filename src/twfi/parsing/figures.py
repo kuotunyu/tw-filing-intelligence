@@ -36,6 +36,8 @@ __all__ = [
     "Figure",
     "cluster_rects",
     "find_caption",
+    "count_numeric_labels",
+    "chart_candidates",
     "detect_figures",
     "figures_to_blocks",
     "render_crop",
@@ -45,6 +47,8 @@ __all__ = [
 #: Matching a bare 圖 prefix picked up prose instead -- on 2882-FY2024-AR it attached
 #: 「圖」之規定，每年將進行滾動式盤點…」 to a chart. Requiring the number removes that
 #: whole class of false positive.
+_DIGIT = re.compile(r"\d")
+
 _CAPTION_PATTERN = re.compile(
     r"^\s*(?:附?圖(?:表)?|Figure|Fig\.?|Chart|Exhibit)\s*[一二三四五六七八九十百\d]+\s*[：:.、\-\s]"
 )
@@ -77,6 +81,15 @@ class FigureConfig:
     crop_dpi: int = 200
     #: Longest crop edge, to bound VLM image tokens. Protocol 2.5.
     crop_max_edge: int = 1024
+    #: How far outside a region an axis label may sit and still belong to it.
+    label_margin: float = 14.0
+    #: Numeric labels required before a region counts as a *chart* rather than
+    #: decoration. An annual report's front section is full of vector artwork; a chart
+    #: is distinguished by carrying axis ticks and data labels.
+    min_numeric_labels: int = 3
+    #: How much of a figure region must sit inside a detected table before the region
+    #: is treated as that table rather than as a chart.
+    table_overlap_ratio: float = 0.5
 
     def __post_init__(self) -> None:
         if not 0.0 < self.min_area_ratio < self.max_area_ratio <= 1.0:
@@ -94,6 +107,16 @@ class Figure:
     kind: str  # "image" | "vector"
     caption: str = ""
     path_count: int = 0
+    numeric_labels: int = 0
+
+    def has_labels(self, config: FigureConfig | None = None) -> bool:
+        """Whether anything numeric sits inside or beside this region.
+
+        Cover artwork, dividers, and logos have none, which is what this rules out.
+        It does *not* rule out tables -- see :func:`chart_candidates`.
+        """
+        config = config or FigureConfig()
+        return self.numeric_labels >= config.min_numeric_labels
 
     @property
     def crop_ref(self) -> str:
@@ -179,6 +202,51 @@ def find_caption(region: BBox, candidates: list[tuple[BBox, str]], config: Figur
     return best[1]
 
 
+def chart_candidates(
+    figures: tuple[Figure, ...],
+    table_regions: list[tuple[int, BBox]],
+    config: FigureConfig | None = None,
+) -> tuple[Figure, ...]:
+    """Narrow detected figures down to regions the chart route should read.
+
+    Two exclusions, in the order they matter:
+
+    1. **Ruled tables.** Vector clustering finds table grids, not just charts -- a
+       bordered statement is hundreds of small rectangles in a compact area with
+       numbers all over it, which is exactly the shape a bar chart has. The strongest
+       available discriminator is the table extractor's own output: if pdfplumber
+       already read a table there, the region is a table.
+    2. **Artwork.** A logo or cover graphic has no numeric labels near it.
+
+    Ordering matters because a ruled table scores *higher* than a real chart on every
+    density measure; filtering on labels alone kept the tables and dropped the charts.
+    """
+    config = config or FigureConfig()
+    kept: list[Figure] = []
+    for figure in figures:
+        area = figure.bbox.area
+        overlaps_table = any(
+            page == figure.page
+            and area > 0
+            and box.intersection_area(figure.bbox) / area >= config.table_overlap_ratio
+            for page, box in table_regions
+        )
+        if overlaps_table or not figure.has_labels(config):
+            continue
+        kept.append(figure)
+    return tuple(kept)
+
+
+def count_numeric_labels(
+    region: BBox, candidates: list[tuple[BBox, str]], config: FigureConfig
+) -> int:
+    """Count text boxes carrying digits inside or immediately around ``region``."""
+    grown = region.expanded(config.label_margin)
+    return sum(
+        1 for box, text in candidates if _DIGIT.search(text) and grown.intersection_area(box) > 0
+    )
+
+
 def detect_figures(pdf_path: Path, config: FigureConfig | None = None) -> tuple[Figure, ...]:
     """Find every figure region in a PDF, with captions attached.
 
@@ -213,6 +281,7 @@ def detect_figures(pdf_path: Path, config: FigureConfig | None = None) -> tuple[
                         bbox=box,
                         kind="image",
                         caption=find_caption(box, captions, config),
+                        numeric_labels=count_numeric_labels(box, captions, config),
                     )
                 )
 
@@ -229,6 +298,7 @@ def detect_figures(pdf_path: Path, config: FigureConfig | None = None) -> tuple[
                         kind="vector",
                         caption=find_caption(box, captions, config),
                         path_count=members,
+                        numeric_labels=count_numeric_labels(box, captions, config),
                     )
                 )
 
