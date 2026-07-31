@@ -7,7 +7,10 @@
 
 ## 目前狀態
 
-- **Phase**：P2 🟢 **完成**（10 份文件全部取得並 hash）／P3 🟡 進行中
+- **Phase**：**P0–P4 全部 🟢 完成。下一步是 P5（gold 標註，關鍵路徑）。**
+- **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
+  commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
+  **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
 - **資料現況**（`results/runs/document_quality.json`）：
 
   | 文件 | 頁 | 可讀頁% | 財報標記 | 可用性 |
@@ -27,7 +30,7 @@
   所有 財務報告書 都乾淨（95–100%）。
 - **P3 parser 現況**：2895 頁，F0 `0.003s/頁`、F1 `0.008s/頁`，
   candidate chunk **100%** 帶 section path（fixed window 0%）
-- **Phase**：P3（parsing 層）— 🟡 **進行中**
+- **Phase**：P3（parsing 層）— 🟢 **完成**
   - ✅ `types.py` 文件模型（BBox／Span／Line／Block／ParsedDocument／Chunk，
     全部 frozen，帶 page＋bbox 以承載 citation 契約）
   - ✅ `baseline.py`（F0：PyMuPDF 純文字 ＋ 固定 800/100 chunk）
@@ -42,13 +45,38 @@
   - ✅ chart 候選規則（D-014）：**1,744 → 503**（減 71%），
     caption 成本 ~145 分 → ~42 分，且不靠任意上限
   - **P3 完成**
-- **Phase**：P2（資料取得）— 🟡 **自動化半邊完成，等使用者放 7 份 PDF**
+- **Phase**：P4（數值層）— 🟢 **完成**
+  - ✅ `numeric/amounts.py`（括號負數／全形／placeholder→None／`仟元`→`千元` 正規化，
+    全程 `Decimal`；與未來的 grader 共用同一份解析，避免兩邊對 `(12,345)` 的理解不一致）
+  - ✅ `numeric/schema.sql` ＋ `store.py`（DuckDB；PK 含 `source_kind`）
+  - ✅ `numeric/calculator.py`（`difference` / `growth_rate` / `ratio`，輸出 formula ＋ operands）
+  - ✅ `numeric/sql_tools.py`（5 個 template；template 外一律 `TemplateMissError`）
+  - ✅ `numeric/loaders.py` ＋ `scripts/load_numeric.py`：**253 筆 figures** 載入，
+    2882 正確標為 `financial_holding`（69 個 account）
+  - ✅ 端對端實測：`營業毛利（毛損） ÷ 營業收入 × 100
+    = 751,295,421 ÷ 1,134,103,440 × 100 = 66.25%`，兩個 operand 都附來源欄位
+  - **三個被真實資料修正的設計**（詳見 `docs/DECISIONS.md` D-015）：
+    1. **不猜單位**：`t187ap14_L` 的 `營業收入` 完全沒有單位標記。慣例是千元，
+       但「慣例」是猜測 → 以 `unit=None` 載入且 `is_usable=False`。
+       **載入但不可用**比假設誠實；假設會產出一個看起來精確、卻差一千倍的數字。
+    2. **不挑來源**：`require()` 遇到同一 key 有多個候選就拒絕，並列出每個候選的
+       `statement/unit=value` ＋ 消歧方式。真實觸發：2330 的 `營業收入`
+       同時存在於損益表（千元）與營益分析（百萬元）。
+    3. **`declares_industry`**：`t187ap14_L` 涵蓋所有上市公司（含金控），
+       當成一般業載入會把 2882 重新標記、抹掉它之所以是 hard case 的差異。
+       只有 per-industry 的 `_ci`／`_fh` 可以決定產業別，彙總 endpoint 不行。
+  - ⬜ **未做**：把已驗證的表格數值以 `source_kind="extracted_table"` 載入
+    （FY2023／FY2024 歷史數值）。刻意延後到 P5 確定需要哪些 account。
+- **Phase**：P2（資料取得）— 🟢 **完成**（宣告 10 份、全部取得並 hash、8 份可用）
   - ✅ 9 個 OpenAPI dataset 已取得並記入 `acquisition.lock.yaml`
     （swagger 306KB／t187ap03_L 1092 列／t187ap05_L 1082 列／
     t187ap06_L_ci 1045 列／**t187ap06_L_fh 13 列**／t187ap07_L_ci 1045 列／
     t187ap07_L_fh 13 列／t187ap14_L 1081 列／t187ap17_L 1051 列，共 5.3MB）
-  - ✅ `verify_manifests.py`：integrity 全過，7 份文件如實標為「尚未取得」
-  - ⬜ 7 份年報 PDF 需人工放置（`uv run python scripts/fetch_documents.py` 會印出精確指示）
+  - ✅ 10 份 filing 全部由使用者依 `fetch_documents.py` 的指示自 MOPS 取得並 hash
+    （`acquisition.lock.yaml` 共 19 筆 artifact）。`verify_manifests.py` integrity 全過。
+  - ⚠️ **取得路徑上我錯了三次，每次都是使用者拿真實頁面糾正**（見下方 Session 日誌）：
+    資料類型沒有「年報」選項（在股東會相關資料底下）／下拉只顯示中文名／
+    F04 與 F18 優先序被我寫反。**下次改任何抓取指示前先看實際頁面，不要憑推測。**
 - **Phase**：P1（資料來源探勘 ＋ manifest schema）— 🟢 **完成**
 - **P1 的三個關鍵發現**（改變了 P2/P4 設計，詳見 `docs/DATA_PROVENANCE.md §8`）：
   1. **TWSE OpenAPI 是單期快照**（`t187ap06_L_ci` 1045 列全部 `年度=115 季別=1`）
@@ -65,20 +93,22 @@
 - **Protocol 狀態**：`1.0.0-draft`，**尚未 freeze**（可以修改）
 - **Locked set 狀態**：尚未建立
 - **Toolchain 狀態**：`uv sync --extra dev` OK（Python 3.13.13）、
-  `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy src` strict 乾淨、
-  `pytest` **308 passed / 1 skipped**、coverage **99.87%**（gate 85%）
+  `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy src` strict 乾淨（28 個 source file）、
+  `pytest` **804 passed / 1 skipped**、coverage **97.83%**（gate 85%）
 - **最後更新**：2026-07-31
 
 ## 下一步（照順序）
 
-1. **P4 收尾**：把已驗證的表格數值以 `source_kind="extracted_table"` 載入
-   （FY2023／FY2024 的歷史數值，OpenAPI 只有當期）。
-   要等 P5 確定題目需要哪些 account 再做，避免載入整份年報的所有表格。
-2. **P5**：gold 標註（locked 36 ＋ dev 15 ＋ probes 5 ＋ challenger 16）。
-   出題只能用 `USABLE_DOCUMENTS`（8 份）。
+1. **P5（關鍵路徑）**：gold 標註（locked 36 ＋ dev 15 ＋ probes 5 ＋ challenger 16）。
+   出題只能用 `USABLE_DOCUMENTS`（8 份）。**純 CPU，不需要 GPU。**
    注意：鴻海沒有可用的敘述文件 → narrative 題只能來自 2412／1301／2330／2882；
    chart 題不能落在沒有數字標籤的示意圖上（D-014）。
-3. **P6**：檢索（bge-m3 ＋ BM25 ＋ RRF ＋ reranker）—— **這裡開始需要 GPU**。
+   gold answer **不得由 candidate 產生**，必須人工標註並指回原始文件頁碼。
+2. **P4 收尾**（P5 之後才做）：把 P5 確定需要的 account，以
+   `source_kind="extracted_table"` 載入 FY2023／FY2024 歷史數值（OpenAPI 只有當期）。
+   刻意排在 P5 後面 —— 先知道要哪些 account，才不用載入整份年報的所有表格。
+3. **P6**：檢索（bge-m3 ＋ BM25 ＋ RRF ＋ reranker）—— **這裡開始需要 GPU**，
+   跑之前先 `nvidia-smi` 確認 SafeSynth 沒在用。
 
 **不阻塞但可選**：XBRL 7 份仍未提供（`optional`）。有的話歷史結構化數值
 來源升級為官方 XBRL；沒有的話報告要把說法降級為「已驗證結構化數值」。
@@ -158,6 +188,41 @@ ollama 版本 `0.32.0`。
 ---
 
 ## Session 日誌
+
+### 2026-07-31 — Session 7（P4 commit ＋ 發布到 GitHub）
+
+**做了什麼**
+
+- **P4 commit**（`cc38147`）：數值層完成，ruff／mypy 全綠、804 passed、coverage 97.83%
+- 修掉本檔三處自我矛盾：P3 同時標成「進行中」與「完成」、
+  P4 在 phase 表出現兩次（一列完成一列未開始）、P2 還寫著「等使用者放 7 份 PDF」
+- `README.md` 加「現況」段：**明講尚未 freeze、`results/feasibility/` 是空的、
+  本 repository 目前不宣稱任何可行性結論**。並說明「8/10 可用」的真正原因。
+- **`CLAUDE.md` 規則 9 改寫**：原本禁止建立 GitHub remote，與實際做法衝突。
+  改為允許 push 到 `origin`、仍禁 tag／release／deploy，
+  並新增常駐規則：**commit 不得帶 `Co-authored-by:` trailer**。
+- **發布**：`kuotunyu/tw-filing-intelligence`（public），22 commits／335 objects／349 KB。
+  push 前稽核：無 PDF／模型權重／DuckDB／`.env` 被追蹤；98 個檔案，最大 `uv.lock` 172 KB。
+
+**Contributors 只留 kuotunyu 的做法**
+
+`git filter-branch` 一次處理兩件事：`--msg-filter` 刪掉 20 個 `Co-authored-by:` trailer，
+`--env-filter` 把作者與 committer 都設成 `61350295+kuotunyu@users.noreply.github.com`。
+用 GitHub noreply 位址而非學校信箱，是為了保證歸屬正確、同時不把個人信箱
+永久公開在 public repo 的 commit 紀錄裡。改寫在 push 前完成，所以不需要 force push。
+
+**兩個教訓（都是我自己的錯，記下來免得重犯）**
+
+1. **驗證用的 pattern 必須跟過濾用的 pattern 一致。**
+   `sed` 用行首錨定 `/^[Cc]o-.../d`，但我的計數器用了未錨定的
+   `grep -ci 'co-authored-by'`，於是把 commit 訊息裡一句「commits carry no
+   Co-authored-by trailer」的**散文**也算進去，報出「remaining: 1（must be 0）」的假警報。
+   使用者是在門檻顯示未通過的情況下 push 的。
+2. **`git log --all` 會走訪 `refs/original/`。**
+   `filter-branch` 把改寫前的 commit 留在那裡當備份，所以用 `--all` 掃描會看到
+   20 個「還沒清掉」的 trailer —— 那是備份，不是 `main`。
+   驗證改寫結果要用 `git log main`，並用 `git ls-remote origin` 確認 remote 只有一個 ref。
+   確認無誤後才刪 `refs/original/` ＋ `reflog expire` ＋ `gc --prune=now`。
 
 ### 2026-07-31 — Session 1（P0）
 
