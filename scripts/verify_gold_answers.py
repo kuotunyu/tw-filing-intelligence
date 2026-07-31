@@ -26,12 +26,19 @@ Three outcomes, deliberately distinguished:
   unverifiable rather than as wrong.
 
 A fourth outcome exists for chart records, and it is deliberately not "ok". A chart answer
-is a set of values *plus* the year and series each belongs to. The values are checkable:
-they must appear as labels inside the cited crop, and a bbox pointing at the wrong chart on
-the same page fails that. The attribution is not checkable, because the thing that carries
-it -- an axis label, a legend colour -- is exactly what the text layer loses. So those
-records are reported as partly corroborated and are force-included in the audit sample,
-never counted as verified.
+is a set of values *plus* the year and series each belongs to. Two of those three are
+checkable: the value must be labelled inside the cited crop (a bbox aimed at the wrong chart
+on the same page fails), and it must sit on the row of the year the answer assigns it to.
+What is not checkable is the *series*: a row of the capacity chart carries both 9% and
+15-16, and only the legend's colours say which is the growth rate. So chart records report
+as partly corroborated, and are force-included in the audit sample.
+
+The first version of this claimed year attribution was unverifiable too, because "the CJK
+on these pages comes out of the extractor as mojibake". It does not. That mojibake was this
+tool's own stdout being encoded as cp950 -- the bug `twfi.console` was added to fix -- and
+it corrupted the diagnosis before it corrupted any output. The year labels, legend text and
+titles are all in the text layer. A wrong belief about the data had been written into a
+check as a reason not to look.
 """
 
 from __future__ import annotations
@@ -142,10 +149,10 @@ def main(
     if partial:
         typer.echo("")
         typer.echo(
-            f"{partial} chart answer(s) only partly corroborated: the values are inside the "
-            "cited crop,\nbut which year and which series each belongs to survives only in "
-            "the pixels. Those\nrecords are force-included in the audit sample -- a person "
-            "has to look at the chart."
+            f"{partial} chart answer(s) partly corroborated: each value is labelled inside "
+            "the cited crop\nand sits on the row of the year it is assigned to. What no text "
+            "check can settle is\nwhich of a row's values belongs to which series -- that is "
+            "in the legend colours. Those\nrecords are force-included in the audit sample."
         )
 
 
@@ -180,42 +187,93 @@ def _verify_crop(record: GoldRecord, lock: object, root: Path) -> tuple[str, str
     this check -- a bbox aimed at the wrong chart on the right page is the mistake D-020
     was made of, and only coordinates catch it.
     """
-    values = _chart_values(record.answer or "")
-    if not values:
-        return "unverifiable", "no chart values to check"
+    pairs = _chart_pairs(record.answer or "")
+    if not pairs:
+        return "unverifiable", "no year/value pairs to check"
 
-    labels, problem = _labels_in_crop(record, lock, root)
+    words, problem = _words_in_crop(record, lock, root)
     if problem is not None:
         return "unverifiable", problem
 
-    # A multiset, because 「民國112年 6%；民國113年 6%」 needs two 6% labels in the crop.
-    # Collapsing to a set would let one label stand in for a year that has none.
-    remaining = list(labels)
+    rows = _rows_by_year(words)
+    if not rows:
+        return "unverifiable", "the cited crop carries no year labels to attribute values to"
+
     missing: list[str] = []
-    for value in values:
-        if value in remaining:
-            remaining.remove(value)
-        else:
-            missing.append(value)
+    for year, value in pairs:
+        on_row = rows.get(year)
+        if on_row is None:
+            missing.append(f"{year}: no such label in the crop")
+        elif value not in on_row:
+            missing.append(f"{year}: {value} is not on that row (row has {sorted(on_row)})")
     if missing:
-        return "absent", (
-            f"{len(missing)} of {len(values)} value(s) not labelled inside the cited crop: "
-            f"{missing}"
-        )
+        return "absent", f"{len(missing)} of {len(pairs)} pair(s) wrong: {missing}"
     return "partial", (
-        f"all {len(values)} value(s) labelled inside the cited crop; year and series "
-        "attribution is not in the text layer"
+        f"all {len(pairs)} year/value pair(s) sit on the right row of the cited crop; "
+        "which of a row's values belongs to which series is only in the legend colours"
     )
 
 
-def _chart_values(answer: str) -> list[str]:
-    """The values a chart answer claims, without the axis labels naming the years."""
-    stripped = _ERA_YEAR.sub(" ", _normalise_text(answer))
-    return [match.group() for match in _CHART_VALUE.finditer(stripped)]
+def _chart_pairs(answer: str) -> list[tuple[str, str]]:
+    """The (year label, value) pairs a chart answer claims.
+
+    Checking values as an unordered multiset was the weaker earlier version of this: it
+    accepted 「民國111年 6%；民國112年 9%」 for a chart that says the opposite, because both
+    values are somewhere in the crop. The year is right there in the answer, so the pairing
+    is checkable and the loose version was leaving a real error class through.
+    """
+    flat = _normalise_text(answer)
+    pairs: list[tuple[str, str]] = []
+    for match in _ERA_YEAR.finditer(flat):
+        tail = flat[match.end() : match.end() + 24]
+        value = _CHART_VALUE.search(tail)
+        if value is not None:
+            pairs.append((match.group(), value.group()))
+    return pairs
 
 
-def _labels_in_crop(record: GoldRecord, lock: object, root: Path) -> tuple[list[str], str | None]:
-    """Every text label lying inside any of the record's cited bboxes."""
+#: Half the row pitch on the pages this runs against. Measured, not guessed: the capacity
+#: chart's year labels sit at vertical centres 103.6 / 133.3 / 163.0, so the pitch is ~29.7
+#: and a value's centre is within ~5.5 of its own year's. Twelve points separates rows with
+#: room to spare while staying well under the pitch.
+_ROW_BAND = 12.0
+
+
+def _rows_by_year(
+    words: list[tuple[float, float, float, float, str]],
+) -> dict[str, set[str]]:
+    """Map each era-year label in the crop to the values printed on its row.
+
+    This exists because of a mistake worth naming: the first version of this check declared
+    year attribution unverifiable, on the grounds that these pages' CJK came out of the
+    extractor as mojibake. It does not. The mojibake was this tool's own stdout being
+    encoded as cp950 -- the very bug `twfi.console` was added to fix -- and it corrupted the
+    diagnosis before it corrupted the output. The year labels, the legend text and the
+    titles are all in the text layer, so the pairing can be checked and now is.
+    """
+    years = [w for w in words if _ERA_YEAR.fullmatch(w[4])]
+    rows: dict[str, set[str]] = {}
+    for word in years:
+        centre = (word[1] + word[3]) / 2
+        rows.setdefault(word[4], set()).update(
+            other[4]
+            for other in words
+            if _CHART_VALUE.fullmatch(other[4])
+            and abs((other[1] + other[3]) / 2 - centre) <= _ROW_BAND
+        )
+    return rows
+
+
+def _words_in_crop(
+    record: GoldRecord, lock: object, root: Path
+) -> tuple[list[tuple[float, float, float, float, str]], str | None]:
+    """Every text label lying inside any of the record's cited bboxes, with its box.
+
+    Word coordinates rather than the baseline parser's blocks: on these pages the baseline
+    returns one block covering the whole sheet, so block containment could not tell the
+    left-hand chart from the right-hand one, and telling them apart is most of the value
+    here.
+    """
     import pymupdf
 
     wanted: dict[int, list[tuple[float, float, float, float]]] = {}
@@ -224,7 +282,7 @@ def _labels_in_crop(record: GoldRecord, lock: object, root: Path) -> tuple[list[
 
     # A chart record cites one filing; if that ever changes, every source is searched and
     # the labels are pooled, which is the same rule the prose branch already uses.
-    labels: list[str] = []
+    found: list[tuple[float, float, float, float, str]] = []
     for doc_id in record.source_document:
         acquired = lock.get(doc_id)  # type: ignore[attr-defined]
         if acquired is None or not acquired.local_path(root).is_file():
@@ -235,14 +293,19 @@ def _labels_in_crop(record: GoldRecord, lock: object, root: Path) -> tuple[list[
                     if not 1 <= page <= document.page_count:
                         continue
                     for word in document.load_page(page - 1).get_text("words"):
-                        x0, y0, x1, y1, text = word[0], word[1], word[2], word[3], word[4]
-                        if any(_inside((x0, y0, x1, y1), box) for box in boxes):
-                            labels.append(_normalise_text(text))
+                        box = (
+                            float(word[0]),
+                            float(word[1]),
+                            float(word[2]),
+                            float(word[3]),
+                        )
+                        if any(_inside(box, target) for target in boxes):
+                            found.append((*box, _normalise_text(word[4])))
         except (ParsingError, RuntimeError) as exc:  # pragma: no cover - corrupt PDF
             return [], f"{doc_id} unreadable: {exc}"
-    if not labels:
+    if not found:
         return [], "the cited crop contains no text labels at all"
-    return labels, None
+    return found, None
 
 
 def _inside(
