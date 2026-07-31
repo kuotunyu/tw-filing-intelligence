@@ -47,15 +47,28 @@ _WHITESPACE = re.compile(r"\s+")
 #: sides are also compared without separators, so 1,465,427,753 matches 1465427753.
 _SEPARATORS = re.compile(r"[,\s]")
 
-#: A prose answer is checked item by item, not as one string. Demanding a verbatim quote
-#: fails on things that are plainly right: the page writes
-#: 「…日本熊本縣以及德國德勒斯登」 while the answer joins the list with 、, and it writes
-#: 「114 年 1 月 1 日」 where the answer says 民國114年1月1日. Those are the same facts.
-_LIST_SEPARATORS = re.compile(r"[、,，;；]|以及|及(?![期權])|和(?!解)")
-#: Dropped before comparing, because a filing states the era name inconsistently.
+#: A prose answer is checked atom by atom, not as one string. Demanding a verbatim quote
+#: fails on things that are plainly right: the page writes 「…日本熊本縣以及德國德勒斯登」
+#: while the answer joins with 、, wraps names in 「」, and writes 民國114年1月1日 where the
+#: page says 「114 年 1 月 1 日」. Those are the same facts.
+#:
+#: Atoms, not clauses. A composite answer like
+#: 「資產總額 5,532,371,215 千元；營業毛利 1,175,110,628 千元」 pairs labels with figures
+#: from different table cells, so no clause of it appears contiguously anywhere -- while
+#: the labels and the figures each do. The sentence joining them is the annotator's.
+#:
+#: The comma is deliberately not a separator: it is the thousands separator, and splitting
+#: on it shredded every figure into 資產總額5 / 215千元 and called them all missing.
+_FIGURE_ATOM = re.compile(r"\d[\d,]{2,}(?:\.\d+)?")
+_CJK_ATOM = re.compile(r"[\u4e00-\u9fff]{2,}")
+#: Dropped before comparing: era names a filing states inconsistently, and words that are
+#: the annotator's connective tissue rather than anything a page must contain.
 _ERA_PREFIX = re.compile(r"^(?:中華民國|民國)")
-#: Ignored as parts: quote marks and brackets the filing puts round names.
-_DECORATION = re.compile(r"[「」『』（）()\[\]《》\s]")
+_CONNECTIVES = frozenset(
+    {"分別", "是多少", "以及", "單位", "單位為", "金額", "經董事會", "通過發布", "增加為"}
+)
+#: 仟 and 千 are the same unit written two ways; a filing uses one and an answer the other.
+_UNIT_ALIAS = str.maketrans({"仟": "千", "臺": "台"})
 
 
 @app.command()
@@ -113,21 +126,42 @@ def _verify(
     root: Path,
     cache: dict[str, dict[int, str]],
 ) -> tuple[str, str]:
-    doc_id = record.source_document[0]
+    # A cross_document answer cites two filings. Loading only the first reported every
+    # atom from the second as missing, which looked like a wrong answer and was a wrong
+    # reader.
+    merged: dict[int, str] = {}
+    for doc in record.source_document:
+        loaded, problem = _pages_of(doc, lock, root, cache)
+        if problem is not None:
+            return "unverifiable", problem
+        for page, text in loaded.items():
+            merged[page] = merged.get(page, "") + text
+    return _verify_against(record, merged, ", ".join(record.source_document))
+
+
+def _pages_of(
+    doc_id: str, lock: object, root: Path, cache: dict[str, dict[int, str]]
+) -> tuple[dict[int, str], str | None]:
+    """Every page of one filing as flattened text, cached across records."""
     pages = cache.get(doc_id)
     if pages is None:
         acquired = lock.get(doc_id)  # type: ignore[attr-defined]
         if acquired is None or not acquired.local_path(root).is_file():
-            return "unverifiable", f"{doc_id} not acquired"
+            return {}, f"{doc_id} not acquired"
         try:
             parsed = parse_baseline(acquired.local_path(root), doc_id)
         except ParsingError as exc:
-            return "unverifiable", f"{doc_id} unreadable: {exc}"
+            return {}, f"{doc_id} unreadable: {exc}"
         by_page: dict[int, list[str]] = {}
         for block in parsed.blocks:
             by_page.setdefault(block.page, []).append(block.text)
         pages = {page: _WHITESPACE.sub("", "\n".join(text)) for page, text in by_page.items()}
         cache[doc_id] = pages
+    return pages, None
+
+
+def _verify_against(record: GoldRecord, pages: dict[int, str], doc_id: str) -> tuple[str, str]:
+    """Judge one record against already-loaded page text."""
 
     # A derived answer -- a growth rate, a difference -- is not printed anywhere. What
     # must be corroborated is the figures it was computed from.
@@ -163,14 +197,19 @@ def _verify(
     return "absent", f"does not appear anywhere in {doc_id}"
 
 
+def _normalise_text(text: str) -> str:
+    return _WHITESPACE.sub("", text).translate(_UNIT_ALIAS)
+
+
 def _parts(answer: str) -> list[str]:
-    """The substantive items of a prose answer, stripped of decoration."""
-    found = []
-    for chunk in _LIST_SEPARATORS.split(answer):
-        cleaned = _ERA_PREFIX.sub("", _DECORATION.sub("", chunk))
-        if len(cleaned) >= 2:
-            found.append(cleaned)
-    return found
+    """The atoms a cited page must contain: every figure, and every substantive term."""
+    flat = _normalise_text(answer)
+    atoms = [atom for atom in _FIGURE_ATOM.findall(flat) if len(atom) >= 3]
+    for term in _CJK_ATOM.findall(flat):
+        cleaned = _ERA_PREFIX.sub("", term)
+        if len(cleaned) >= 2 and cleaned not in _CONNECTIVES:
+            atoms.append(cleaned)
+    return atoms
 
 
 def _verify_prose(
@@ -185,22 +224,23 @@ def _verify_prose(
     parts = _parts(answer)
     if not parts:
         return "unverifiable", "no substantive text to check"
-    text = "".join(pages.get(page, "") for page in cited)
-    if not text.strip():
+    text = _normalise_text("".join(pages.get(page, "") for page in cited))
+    if not text:
         return "unverifiable", f"cited page(s) {sorted(cited)} have no text layer"
     missing = [part for part in parts if part not in text]
     if missing:
-        elsewhere = "".join(pages.values())
+        elsewhere = _normalise_text("".join(pages.values()))
         where = (
-            " (but present elsewhere in the filing)"
+            " (present elsewhere, so the citation is wrong)"
             if all(part in elsewhere for part in missing)
             else f" (absent from {doc_id} entirely)"
         )
-        return "absent", f"{len(missing)} of {len(parts)} item(s) missing: {missing}{where}"
-    return "cited", f"all {len(parts)} item(s) on cited page(s) {sorted(cited)}"
+        return "absent", f"{len(missing)} of {len(parts)} atom(s) missing: {missing}{where}"
+    return "cited", f"all {len(parts)} atom(s) on cited page(s) {sorted(cited)}"
 
 
 def _appears(value: str, pages: dict[int, str], cited: tuple[int, ...]) -> bool:
+    """Whether one figure appears on any cited page, with or without separators."""
     bare = _SEPARATORS.sub("", value)
     return any(
         value in pages.get(page, "") or (bare and bare in _SEPARATORS.sub("", pages.get(page, "")))

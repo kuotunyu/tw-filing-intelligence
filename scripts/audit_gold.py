@@ -120,8 +120,11 @@ def audit_sample(records: list[GoldRecord], *, size: int) -> list[GoldRecord]:
     Seeded from the protocol so the drafter cannot choose which records get checked. Sorts
     by id first so the input order -- which the drafter controls -- cannot change the draw.
     """
+    # Anything a person did not both choose and answer is eligible: the audit exists to
+    # check question selection, so a human-read figure under a machine-chosen question
+    # still needs looking at.
     drafted = sorted(
-        (record for record in records if record.annotator != "human"),
+        (record for record in records if not record.is_fully_human),
         key=lambda record: record.question_id,
     )
     if len(drafted) <= size:
@@ -198,10 +201,9 @@ def _report_composition(path: Path) -> None:
     typer.echo("composition (this is what the report must print):")
     for key, value in counts.items():
         typer.echo(f"  {key:<24} {value}")
-    drafted = counts["model_drafted"]
-    if drafted:
-        rate = counts["model_drafted_audited"] / drafted
-        typer.echo(f"  {'audit rate':<24} {rate:.0%}")
+    pending = counts["needs_audit"]
+    if pending:
+        typer.echo(f"  {'audit rate':<24} {counts['audited'] / pending:.0%}")
 
 
 def _entrypoint() -> None:

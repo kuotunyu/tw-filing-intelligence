@@ -261,15 +261,26 @@ class GoldRecord:
     #: Empty means the answer was read directly and must appear on the cited page.
     derived_from: tuple[str, ...] = ()
     annotation_notes: str = ""
+    #: Who produced the *answer*.
     annotator: Annotator = "human"
-    #: True when a person checked this specific record against its rendered page. The
-    #: defence against a drafter drifting toward questions the pipeline handles well.
+    #: Who chose and wrote the *question*. Separate from ``annotator`` because the two
+    #: can differ and the audit cares about this one: an answer read off a page is
+    #: checkable against that page, while a question is a choice, and a chooser who also
+    #: answers can drift toward what the pipeline handles well. Several records here
+    #: combine figures a person read with a question a model composed.
+    question_author: Annotator = "human"
+    #: True when a person checked this specific record against its rendered page.
     audited: bool = False
 
     @property
+    def is_fully_human(self) -> bool:
+        """A person both chose the question and produced the answer."""
+        return self.annotator == "human" and self.question_author == "human"
+
+    @property
     def is_trustworthy(self) -> bool:
-        """Either a person wrote it, or a person checked it."""
-        return self.annotator == "human" or self.audited
+        """Either a person authored both halves, or a person checked the record."""
+        return self.is_fully_human or self.audited
 
     @property
     def is_derived(self) -> bool:
@@ -515,13 +526,12 @@ def set_problems(
                     f"{gold_set} set needs {want} {qtype} questions, has {actual.get(qtype, 0)}"
                 )
 
-    drafted = [r for r in records if r.annotator != "human"]
-    unchecked = [r for r in drafted if not r.audited]
-    if drafted and type_counts is not None and len(unchecked) == len(drafted):
+    needs_audit = [r for r in records if not r.is_fully_human]
+    if needs_audit and type_counts is not None and not any(r.audited for r in needs_audit):
         problems.append(
-            f"{gold_set}: all {len(drafted)} model-drafted record(s) are unaudited. A "
-            "drafter that also chooses the questions can drift toward what the pipeline "
-            "handles well, and nothing here would show it."
+            f"{gold_set}: all {len(needs_audit)} record(s) with a machine-chosen question "
+            "or a machine-drafted answer are unaudited. A chooser that also answers can "
+            "drift toward what the pipeline handles well, and nothing here would show it."
         )
 
     # Also completeness, and only when unanswerable questions are actually expected. A
@@ -612,6 +622,7 @@ def parse_record(payload: Mapping[str, Any]) -> GoldRecord:
             refusal_reason_class=payload.get("refusal_reason_class"),
             derived_from=tuple(payload.get("derived_from", ())),
             annotator=annotator,
+            question_author=_author(payload, "question_author"),
             audited=bool(payload.get("audited", False)),
             annotation_notes=str(payload.get("annotation_notes", "")),
         )
@@ -646,8 +657,17 @@ _FIELD_NAMES: Final[frozenset[str]] = frozenset(
         "refusal_reason_class",
         "derived_from",
         "audited",
+        "question_author",
     }
 )
+
+
+def _author(payload: Mapping[str, Any], field: str) -> Annotator:
+    """Read an authorship field, refusing anything unaccountable."""
+    value = payload.get(field, "human")
+    if value not in get_args(Annotator):
+        raise ValueError(f"{field} must be one of {sorted(get_args(Annotator))}, got {value!r}")
+    return value  # type: ignore[no-any-return]
 
 
 def load_gold(lines: Iterable[str]) -> list[GoldRecord]:
@@ -674,12 +694,14 @@ def composition(records: Sequence[GoldRecord]) -> dict[str, int]:
     A study that leans on model-drafted gold has to say so and say how much, which means
     the numbers must be available without anyone choosing to compute them.
     """
-    drafted = [r for r in records if r.annotator != "human"]
+    needs_audit = [r for r in records if not r.is_fully_human]
     return {
         "records": len(records),
-        "human_annotated": sum(1 for r in records if r.annotator == "human"),
-        "model_drafted": len(drafted),
-        "model_drafted_audited": sum(1 for r in drafted if r.audited),
+        "fully_human": sum(1 for r in records if r.is_fully_human),
+        "answer_model_drafted": sum(1 for r in records if r.annotator != "human"),
+        "question_model_chosen": sum(1 for r in records if r.question_author != "human"),
+        "needs_audit": len(needs_audit),
+        "audited": sum(1 for r in needs_audit if r.audited),
         "trustworthy": sum(1 for r in records if r.is_trustworthy),
     }
 

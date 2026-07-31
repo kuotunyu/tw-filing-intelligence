@@ -703,6 +703,20 @@ def test_a_wholly_unaudited_drafted_set_is_flagged() -> None:
     assert any("are unaudited" in problem for problem in problems)
 
 
+def test_a_machine_chosen_question_needs_auditing_even_with_a_human_answer() -> None:
+    """The audit defends question selection, so human figures do not exempt a record.
+
+    Several cross-page records pair figures a person read with a pairing a model chose.
+    Treating those as fully human would leave the choosing unchecked, which is the only
+    thing the audit is for.
+    """
+    record = make(question_author="claude-opus-5")
+    assert record.annotator == "human"
+    assert record.is_fully_human is False
+    assert record.is_trustworthy is False
+    assert record_problems(record, gold_set="locked") == []
+
+
 def test_one_audited_record_lifts_the_set_level_objection() -> None:
     """The check is about the set having some human oversight, not about every record."""
     drafted = [
@@ -742,8 +756,10 @@ def test_composition_states_what_the_report_must_disclose() -> None:
     ]
     assert composition(records) == {
         "records": 3,
-        "human_annotated": 1,
-        "model_drafted": 2,
-        "model_drafted_audited": 1,
+        "fully_human": 1,
+        "answer_model_drafted": 2,
+        "question_model_chosen": 0,
+        "needs_audit": 2,
+        "audited": 1,
         "trustworthy": 2,
     }
