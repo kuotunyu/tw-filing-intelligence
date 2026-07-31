@@ -1,7 +1,7 @@
-"""Merge hand-written probe answers into valid JSONL, so nobody edits JSON by hand.
+"""Merge hand-written gold answers into valid JSONL, so nobody edits JSON by hand.
 
-    uv run python scripts/fill_probes.py --skeleton    # write the form to fill in
-    uv run python scripts/fill_probes.py               # merge it and validate
+    uv run python scripts/fill_gold.py --set probe --skeleton   # write the form
+    uv run python scripts/fill_gold.py --set probe              # merge and validate
 
 The mechanical fields of a gold record are long and JSON is unforgiving: a missing quote
 in a text editor produces "the file is not valid JSON", which says nothing about which
@@ -31,12 +31,12 @@ from twfi.paths import repo_paths
 
 app = typer.Typer(add_completion=False, help=__doc__)
 
-_ID = re.compile(r"^\s*(PROBE-\d{4})\s*$")
+_ID = re.compile(r"^\s*((?:PROBE|LOCK|DEV|CHAL)-\d{4})\s*$")
 _FIELD = re.compile(r"^\s*(Q|A|UNIT|CURRENCY)\s*:\s*(.*)$", re.IGNORECASE)
 
 SKELETON_HEADER = """\
-# PROBE ANSWERS -- fill in Q and A for each block, then run:
-#     uv run python scripts/fill_probes.py
+# GOLD ANSWERS -- fill in Q and A for each block, then run:
+#     uv run python scripts/fill_gold.py --set <set>
 #
 # Q: the question, in your own words.
 # A: the figure exactly as printed on the page, digits and separators only.
@@ -55,6 +55,9 @@ SKELETON_HEADER = """\
 
 @app.command()
 def main(
+    gold_set: Annotated[
+        str, typer.Option("--set", help="Which set: probe, locked, dev, challenger.")
+    ] = "probe",
     skeleton: Annotated[
         bool, typer.Option("--skeleton", help="Write the form to fill in, then stop.")
     ] = False,
@@ -64,8 +67,18 @@ def main(
 ) -> None:
     """Write the answer form, or merge a filled-in one into probes.jsonl."""
     paths = repo_paths()
-    template = paths.locked_probes.with_suffix(".template.jsonl")
-    form_path = form or paths.locked_probes.with_name("probes.answers.txt")
+    targets = {
+        "probe": paths.locked_probes,
+        "locked": paths.locked_gold,
+        "dev": paths.dev_gold,
+        "challenger": paths.chart_challenger,
+    }
+    if gold_set not in targets:
+        typer.echo(f"unknown set {gold_set!r}; choose from {sorted(targets)}")
+        raise typer.Exit(code=2)
+    target = targets[gold_set]
+    template = target.with_suffix(".template.jsonl")
+    form_path = form or target.with_name(f"{target.stem}.answers.txt")
 
     if not template.is_file():
         typer.echo(f"missing template: {template}")
@@ -92,7 +105,7 @@ def main(
 
     answers, problems = _parse_form(form_path.read_text(encoding="utf-8"))
     known = {str(record["question_id"]) for record in records}
-    problems.extend(f"{qid}: not a probe in the template" for qid in sorted(set(answers) - known))
+    problems.extend(f"{qid}: not in the template" for qid in sorted(set(answers) - known))
     for qid in sorted(known - set(answers)):
         problems.append(f"{qid}: no block in the form")
 
@@ -103,21 +116,21 @@ def main(
         raise typer.Exit(code=1)
 
     merged = [_merge(record, answers[str(record["question_id"])]) for record in records]
-    paths.locked_probes.write_text(
+    target.write_text(
         "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in merged),
         encoding="utf-8",
     )
-    typer.echo(f"wrote {len(merged)} record(s): {paths.locked_probes.relative_to(paths.root)}")
+    typer.echo(f"wrote {len(merged)} record(s): {target.relative_to(paths.root)}")
 
-    loaded = load_gold(paths.locked_probes.read_text(encoding="utf-8").splitlines())
-    remaining = set_problems(loaded, gold_set="probe")
+    loaded = load_gold(target.read_text(encoding="utf-8").splitlines())
+    remaining = set_problems(loaded, gold_set=gold_set)  # type: ignore[arg-type]
     typer.echo("")
     if remaining:
         typer.echo("VALIDATION PROBLEMS:")
         for problem in remaining:
             typer.echo(f"  - {problem}")
         raise typer.Exit(code=1)
-    typer.echo(f"all {len(loaded)} probe(s) valid.")
+    typer.echo(f"all {len(loaded)} {gold_set} record(s) valid.")
     # Not `record`: that name is already bound to a raw dict above, and rebinding it to a
     # GoldRecord is how one function ends up with two types under one name.
     for probe in loaded:
@@ -179,10 +192,10 @@ def _parse_form(text: str) -> tuple[dict[str, _Answer], list[str]]:
             continue
         field = _FIELD.match(line)
         if not field:
-            problems.append(f"line {number}: expected 'PROBE-nnnn', 'Q:', 'A:' or 'UNIT:'")
+            problems.append(f"line {number}: expected '<ID>-nnnn', 'Q:', 'A:' or 'UNIT:'")
             continue
         if current is None:
-            problems.append(f"line {number}: a field before any PROBE-nnnn header")
+            problems.append(f"line {number}: a field before any id header")
             continue
         key, value = field.group(1).upper(), field.group(2).strip()
         entry = answers[current]
