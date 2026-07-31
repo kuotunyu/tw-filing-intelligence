@@ -143,16 +143,35 @@ class DeclaredDocument:
 #:          USABLE_DOCUMENTS, but the unusable ones stay declared so the finding keeps
 #:          its SHA-256 and its place in the report.
 #:
-#: Readable-page ratios measured by ``scripts/check_document_quality.py``. The first
-#: measurement was wrong: an anchor list of narrative vocabulary only also condemned
-#: 1301 and understated 2330, because a page that is nothing but 合併資產負債表 and
-#: figures contains no narrative words. Widening the anchors put 1301 at 96%.
+#: Readable-page ratios measured by ``scripts/check_document_quality.py``. That
+#: instrument has been wrong twice, in opposite directions, and both corrections are
+#: recorded because the ratios below are only as good as the thing measuring them:
+#:   1. An anchor list of narrative vocabulary only condemned 1301 and understated 2330,
+#:      because a page that is nothing but 合併資產負債表 and figures contains no
+#:      narrative words. Widening the anchors put 1301 at 96%.
+#:   2. The ratio divided by pages *with text*, so a page yielding zero characters left
+#:      the denominator along with the numerator and could never lower the score. It
+#:      reported 2330-FY2024-FS as 100% readable while nine consecutive pages -- its four
+#:      primary statements -- had no text layer at all. D-017.
+#:
+#: Which question types each filing can actually source is measured separately, by
+#: ``scripts/check_question_sources.py``: a single usable/unusable flag is too coarse to
+#: annotate against when a document's notes are readable and its statements are not.
 DECLARED_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = (
     DeclaredDocument("2412", 2023, "annual_report", "dev", note="95% of pages readable"),
     DeclaredDocument("1301", 2023, "annual_report", "dev", note="96% of pages readable"),
-    DeclaredDocument("2330", 2023, "annual_report", "locked", note="99% of pages readable"),
+    DeclaredDocument("2330", 2023, "annual_report", "locked", note="98% of pages readable"),
     DeclaredDocument("2330", 2024, "annual_report", "locked", note="narrative only; 100% readable"),
-    DeclaredDocument("2330", 2024, "financial_report", "locked", note="100% readable"),
+    DeclaredDocument(
+        "2330",
+        2024,
+        "financial_report",
+        "locked",
+        note=(
+            "91% readable; the four primary statements (pp.7-15) have no text layer, so "
+            "figures are sourceable only from the notes -- D-017"
+        ),
+    ),
     DeclaredDocument(
         "2317",
         2023,
@@ -171,7 +190,7 @@ DECLARED_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = (
     ),
     DeclaredDocument("2317", 2024, "financial_report", "locked", note="95% readable"),
     DeclaredDocument("2882", 2024, "annual_report", "locked", note="narrative only; 100% readable"),
-    DeclaredDocument("2882", 2024, "financial_report", "locked", note="100% readable"),
+    DeclaredDocument("2882", 2024, "financial_report", "locked", note="99% readable"),
 )
 
 USABLE_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = tuple(

@@ -10,6 +10,7 @@ from twfi.parsing.quality import (
     MIN_READABLE_PAGE_RATIO,
     STATEMENT_TERMS,
     assess_pages,
+    image_only_runs,
 )
 
 GOOD_PAGE = "本公司民國112年度營業收入成長，財務狀況穩健，股東權益增加，董事會決議如下。"
@@ -124,14 +125,71 @@ def test_the_readable_threshold_is_the_declared_one() -> None:
     assert just_over.verdict == "usable"
 
 
-def test_blank_pages_do_not_count_against_readability() -> None:
-    """A filing with section-divider blanks is not partially broken."""
+def test_blank_pages_count_against_readability() -> None:
+    """This test previously asserted the opposite, and the assertion was the bug.
+
+    Dividing by ``pages_with_text`` made a page yielding zero characters invisible: it
+    left the denominator along with the numerator, so no number of blank pages could
+    lower the score. Eleven of them hid inside 2330-FY2024-FS, which this module called
+    100% readable while its four primary statements had no text layer at all.
+
+    The two failures are still separable -- ``legible_text_ratio`` keeps the old
+    denominator and answers the narrower question about glyph breakage.
+    """
     body = [*pages(GOOD_PAGE, STATEMENT_PAGE, count=60), *([""] * 40)]
     result = assess_pages("D", body)
     assert result.pages == 100
     assert result.pages_with_text == 60
-    assert result.readable_ratio == 1.0
+    assert result.image_only_pages == 40
+    assert result.readable_ratio == 0.6, "silence counts against the document"
+    assert result.legible_text_ratio == 1.0, "no page that has text is illegible"
+
+
+def test_a_long_run_of_textless_pages_is_named_as_a_structural_gap() -> None:
+    """The failure the old denominator could not see."""
+    body = [*pages(GOOD_PAGE, STATEMENT_PAGE, count=20), *([""] * 9), *pages(GOOD_PAGE, count=20)]
+    result = assess_pages("D", body)
+    assert result.verdict == "statements_not_machine_readable"
+    assert result.image_only_runs == ((21, 29),)
+    assert result.longest_image_only_run == 9
+    assert "no text layer" in result.reasons[0]
+
+
+def test_scattered_blank_pages_are_dividers_not_a_gap() -> None:
+    """Length is the signal. Four separate blanks are covers; nine in a row are not."""
+    body: list[str] = []
+    for _ in range(4):
+        body.extend(pages(GOOD_PAGE, STATEMENT_PAGE, count=10))
+        body.append("")
+    result = assess_pages("D", body)
+    assert result.image_only_pages == 4
+    assert result.longest_image_only_run == 1
     assert result.verdict == "usable"
+
+
+def test_image_only_runs_are_inclusive_one_based_spans() -> None:
+    runs = image_only_runs(["a", "", "", "b", "", "c"])
+    assert runs == ((2, 3), (5, 5))
+
+
+def test_a_run_reaching_the_last_page_is_closed() -> None:
+    assert image_only_runs(["a", "", ""]) == ((2, 3),)
+
+
+def test_a_document_with_no_gaps_has_no_runs() -> None:
+    assert image_only_runs(["a", "b"]) == ()
+
+
+def test_glyph_breakage_is_still_reported_as_glyph_breakage() -> None:
+    """A document can fail both ways; the verdict must name the right cause.
+
+    Mojibake pages carry text, so they must be judged on ``legible_text_ratio``.
+    Blaming a font problem for pages that have no text at all would misdescribe it.
+    """
+    body = [*pages(GOOD_PAGE, count=20), *pages(MOJIBAKE_PAGE, count=80)]
+    result = assess_pages("D", body)
+    assert result.verdict == "partially_unusable_text_layer"
+    assert "glyph codes" in result.reasons[0]
 
 
 def test_readable_ratio_of_a_textless_document_is_zero() -> None:
@@ -190,14 +248,19 @@ def test_json_shape_is_stable() -> None:
         "characters",
         "chars_per_page",
         "pages_with_text",
+        "image_only_pages",
+        "image_only_runs",
+        "longest_image_only_run",
         "readable_pages",
         "readable_ratio",
+        "legible_text_ratio",
         "anchor_hits",
         "statement_pages",
         "verdict",
         "reasons",
     }
     assert payload["doc_id"] == "D"
+    assert payload["image_only_runs"] == [], "serialised as lists, for JSON"
 
 
 def test_a_pure_statements_page_counts_as_readable() -> None:
