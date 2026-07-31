@@ -71,16 +71,14 @@
 
 ## 下一步（照順序）
 
-1. **P3 收尾**：`tables.py`（pdfplumber 表格 → typed Table ＋ 單位偵測
-   ＋ 跨頁接續）、`figures.py`（向量繪圖密度偵測 figure region → crop bbox）。
-   兩者都不需要使用者再動手。
-2. **P4**：DuckDB schema ＋ deterministic SQL。
-   注意 per-industry schema（`_ci` vs `_fh`，金控沒有 `營業收入`）
-   與單位陷阱（`t187ap17_L` 是百萬元、`t187ap06_L_ci` 是千元）。
-   歷史數值來源：`extracted_table`（未提供 XBRL 時），
-   當期用 `openapi_current` 作獨立交叉來源。
-3. **P5**：gold 標註。出題只能用 `USABLE_DOCUMENTS`（8 份）。
-   注意鴻海沒有可用的敘述文件 → narrative 題只能來自 2412／1301／2330／2882。
+1. **P4 收尾**：把已驗證的表格數值以 `source_kind="extracted_table"` 載入
+   （FY2023／FY2024 的歷史數值，OpenAPI 只有當期）。
+   要等 P5 確定題目需要哪些 account 再做，避免載入整份年報的所有表格。
+2. **P5**：gold 標註（locked 36 ＋ dev 15 ＋ probes 5 ＋ challenger 16）。
+   出題只能用 `USABLE_DOCUMENTS`（8 份）。
+   注意：鴻海沒有可用的敘述文件 → narrative 題只能來自 2412／1301／2330／2882；
+   chart 題不能落在沒有數字標籤的示意圖上（D-014）。
+3. **P6**：檢索（bge-m3 ＋ BM25 ＋ RRF ＋ reranker）—— **這裡開始需要 GPU**。
 
 **不阻塞但可選**：XBRL 7 份仍未提供（`optional`）。有的話歷史結構化數值
 來源升級為官方 XBRL；沒有的話報告要把說法降級為「已驗證結構化數值」。
@@ -94,7 +92,8 @@
 | P0 | Repo scaffold ＋ 規劃文件 | 🟢 完成 | 2026-07-31 | 文件 ＋ 骨架 ＋ toolchain 全綠 |
 | P1 | 資料來源探勘 ＋ manifest schema | 🟢 完成 | 2026-07-31 | 3 個關鍵發現，見上方 |
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟡 等使用者放 PDF | — | OpenAPI 部分可先自動化 |
-| P3 | Parsing（baseline ＋ layout-aware） | 🟡 進行中 | — | tables/figures 未完成 |
+| P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
+| P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
 | P4 | 結構化數值層（DuckDB ＋ SQL） | ⚪ 未開始 | — | CPU |
 | P5 | Gold set 標註 | ⚪ 未開始 | — | 需先有 P2/P3 |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
@@ -222,6 +221,41 @@ ollama 版本 `0.32.0`。
 - 3 個新測試把上述固定住（合併 21 題、`Wilson`、小樣本節存在）。
 
 **沒做什麼**：任何連外請求、任何 GPU 任務、任何 evaluation、任何 gold 標註。
+
+---
+
+### 2026-07-31 — Session 6（P3 收尾 ＋ P4 數值層）
+
+**P3 收尾**
+
+- `document.py`：三個抽取器合併、重疊解析、section 繼承、統一 reading order。
+  抓到自己第一版的 bug：只走 layout 頁面會讓**只有框線表格的頁面**上的表格被無聲丟棄。
+- **chart 候選規則（D-014）試了三次**。1,744 個圖表區、~145 分鐘 caption 成本。
+  「有數字標籤」只減 22%；看分布才發現最高分的「圖表」是**有框線的表格**
+  （253 標籤／529 路徑／31 萬面積）。正解不是再一個門檻，
+  而是**用表格抽取器自己的輸出**排除。**1,744 → 503，成本 → ~42 分鐘**，不需任意上限。
+
+**P4 數值層**
+
+- `amounts.py`（`Decimal`，括號負數／全形／仟千同義／百萬元換算）、
+  `schema.sql`、`store.py`、`calculator.py`、`sql_tools.py`、`loaders.py`
+- **實跑載入 253 筆 figures**，2882 正確標記為 `financial_holding`（69 個 account）
+- 實測 `營業毛利（毛損） ÷ 營業收入 × 100 = 66.25%`，formula 與 2 個 citation
+  都指回實際來源欄位
+
+**載入真實資料時抓到的三件事**
+
+1. `t187ap14_L`（跨產業彙總）**會把 2882 重新標記為一般業** → 加
+   `declares_industry`，只信 `_ci`／`_fh`。
+2. 2330 的 `營業收入` 同時存在於損益表（千元）與營益分析（百萬元）→
+   `require()` **拒絕自行選擇**，並列出每個候選與消歧方式。
+3. **「金控沒有營業收入」這句話不夠精確**：
+   `t187ap14_L` 對 2882 回報 `營業收入 = 72,538,053`（且**無單位標註**）。
+   精確的說法是「損益表沒有這一行，彙總 endpoint 合成了一個，兩者不是同一個量」——
+   而且跨公司比較這兩個數字**沒有任何單位檢查抓得到**。
+
+**結果**：`ruff` 乾淨、`mypy --strict` 乾淨、`pytest` **804 passed / 1 skipped**、
+coverage 97.83%
 
 ---
 
