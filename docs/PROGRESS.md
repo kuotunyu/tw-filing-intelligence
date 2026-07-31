@@ -109,10 +109,10 @@
   numeric route 必須**報錯或拒答，不能拿別的欄位硬湊**。
 - **Phase**：P0（Repo scaffold ＋ 規劃文件）— 🟢 **完成**
 - **Protocol 狀態**：`1.0.0-draft`，**尚未 freeze**（可以修改）
-- **Locked set 狀態**：標註中，18/36（table_cell 5／cross_period 4／unanswerable 4／numeric_calculation 5）
+- **Locked set 狀態**：標註中，**31/36**。只缺 chart_value_trend 5 題。
 - **Toolchain 狀態**：`uv sync --extra dev` OK（Python 3.13.13）、
-  `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy` strict 乾淨（49 個 source file，含 `scripts/`）、
-  `pytest` **951 passed / 1 skipped**、coverage **97.90%**（gate 85%）
+  `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy` strict 乾淨（50 個 source file，含 `scripts/`）、
+  `pytest` **960 passed / 1 skipped**、coverage **97.88%**（gate 85%）
 - **最後更新**：2026-07-31
 
 ## 下一步（照順序）
@@ -121,7 +121,8 @@
    **純 CPU，不需要 GPU。**
    - 出題來源以 `results/runs/question_sources.json` 為準，**不是** `USABLE_DOCUMENTS`
      ——後者是二元旗標，不知道 `2330-FY2024-FS` 不能出數值題（D-017）。
-   - gold answer **不得由 candidate 產生**，`annotator` 必須是 `human`（型別強制）。
+   - gold answer **不得由 candidate 產生**（型別強制，candidate 不可表示）。
+     `annotator` 與 `question_author` 各自具名；模型起草需人工抽樣稽核（D-019）。
    - **72 題全部需要人讀 PDF。** OpenAPI 只有 FY2026Q1，與文件集（FY2023／FY2024）
      交集為空，所以沒有可機械建置的子集（D-016）。
    - `answer_provenance` 不得是本 repo 的抽取器 —— 那與 F1／F4 循環（D-016）。
