@@ -20,6 +20,17 @@
 // Pages come from `uv run python scripts/make_worklist.py --for probe`
 // (data/evaluation/worklist/probe.jsonl carries the excerpts).
 //
+// HOW TO READ THE PAGE:
+//     uv run python scripts/render_pages.py --from-probes
+// then open the PNGs in results/runs/pages/. Read the figure off the image. Do NOT read
+// it off any text this repository extracts: the extractor is the thing under test, so a
+// digit it misreads would become a wrong gold answer that the candidate -- running the
+// same extractor -- reproduces and is scored correct for (D-016).
+//
+// page_numbers are PDF POSITIONS, not printed page labels. That is what the parser emits
+// and what the G4 citation gate compares against; a printed label here would fail every
+// citation check, and the failure would be misread as the model citing wrongly.
+//
 // question_type is narrative_fact throughout: it routes to `narrative`, which is where
 // an unguarded model would answer from memory, and it needs only page evidence. Change
 // it to table_cell if you would rather cite the cell -- that then requires a tolerance

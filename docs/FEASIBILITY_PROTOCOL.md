@@ -157,6 +157,17 @@ Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境�
   但 TWSE OpenAPI 只有當期快照（§8 發現 1）→ 這些題的歷史值**只能是 `human_read_pdf`**。
 - `answer_provenance = official_structured` 時**必須**填 `structured_source_key`，
   否則無法重跑查驗。
+- **`page_numbers` 與 `bbox.page` 一律是 PDF 位置（1-based），不是印刷頁碼。**
+  parser 產出的是 PDF 位置，G4 citation 閘門比對的也是它。若標註者填印刷頁碼，
+  每一筆 citation 檢查都會失敗，而失敗會被誤讀成模型引用錯誤。
+  實測三份文件的抽樣頁：`2330-FY2024-FS` p55／p56、`2882-FY2024-FS` p12 兩者一致；
+  其餘抽樣頁前段沒有印刷頁碼標記（年報圖表頁常無）。
+  讀頁時用 `scripts/render_pages.py` 或 PDF 檢視器的頁次，不要用頁面上印的數字。
+- **答案必須讀自渲染的頁面像素或原始 PDF，不得讀自本 repo 的文字抽取結果。**
+  抽取器是被測物；若它算錯一個數字，gold 就會錯，而 candidate 用同一個抽取器
+  會「答對」那個錯答案。`scripts/render_pages.py` 存在就是為了提供一個合法的閱讀面 ——
+  渲染出的像素與 PDF 檢視器顯示的相同，完全繞過文字層。
+  這也是唯一能讀到 `2330-FY2024-FS` pp.7–15 的方式（那些頁沒有文字層，D-017）。
 - 數值題必須有 `structured_source_key` 或 `bbox`（可取得時兩者都要）。
 - `required_evidence` 定義「完整證據集」，用於 complete evidence coverage 指標。
   各題型至少需要一種對應證據：`chart_value_trend` 需 `chart_crop`、
