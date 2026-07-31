@@ -27,7 +27,12 @@
 7. **大檔不進 git**：PDF、模型權重、index、cache、DuckDB 檔都不 commit。
 8. **GPU 禮讓**：跑 GPU 前先 `nvidia-smi`；若別的專案（如 SafeSynth）正在用，
    先做 CPU／資料／測試工作。
-9. **不 push、不 tag、不 deploy、不建立 GitHub remote。** 只做本機 commit。
+9. **Commit 署名只有 kuotunyu**：作者一律
+   `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
+   **不得加 `Co-authored-by:` trailer**（那會讓別人出現在 GitHub Contributors）。
+   可 push 到 `origin`（`kuotunyu/tw-filing-intelligence`，public）；
+   **不 tag、不發 release、不 deploy**。push 前先跑 `git status` 確認沒有 PDF／
+   大檔／`.env` 被夾帶進去。
 10. **README／任何 UI 文案**都必須寫明「不是投資建議、不是 production 系統」。
 
 ## 常用指令

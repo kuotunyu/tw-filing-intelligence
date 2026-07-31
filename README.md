@@ -51,6 +51,29 @@ hash 凍結，再跑 baseline 與 candidate，最後由程式依門檻自動產�
 
 ## 現況
 
+> **尚未 freeze，因此尚無任何結果。**
+> 目前完成到 P4。protocol 還沒 hash 凍結，locked evaluation 還沒跑，
+> `results/feasibility/` 是空的。**這個 repository 目前不宣稱任何可行性結論。**
+
+| | Phase | 狀態 |
+|---|---|---|
+| 🟢 | P0 protocol／gate／toolchain | 完成 |
+| 🟢 | P1 來源探勘 | 完成 |
+| 🟢 | P2 資料取得 ＋ SHA-256 provenance | 完成（宣告 10 份，可用 8 份） |
+| 🟢 | P3 Parsing（layout／table／figure） | 完成 |
+| 🟢 | P4 數值層（DuckDB ＋ deterministic SQL） | 完成 |
+| ⚪ | P5 Gold set 人工標註 | 未開始（關鍵路徑） |
+| ⚪ | P6–P9 retrieval／chart／router／eval | 未開始 |
+| ⚪ | P10 freeze → locked run → gate → report | 未開始 |
+
+**「可用 8 份」不是失敗，是量測結果。** 兩份不可用的都是鴻海（2317）年報：
+FY2023 只有 148/707 頁（21%）能抽出可讀文字，FY2024 是 **0%** —— 字型沒有
+ToUnicode mapping，PDF 看得到字但抽不出字。
+
+這兩份**留在宣告清單裡**而不是被悄悄換掉。「臺灣公開文件有多少比例真的機器可讀」
+本身就是研究問題的一部分；出題時只從可用文件取材，但把不可用的刪掉會讓事前註冊
+失去意義，也會把一個真實的負面發現粉飾掉。
+
 進度、下一步、以及「隔一段時間回來怎麼接手」請看 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
 
 | 文件 | 內容 |

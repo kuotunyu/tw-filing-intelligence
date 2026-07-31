@@ -91,11 +91,10 @@
 |---|---|---|---|---|
 | P0 | Repo scaffold ＋ 規劃文件 | 🟢 完成 | 2026-07-31 | 文件 ＋ 骨架 ＋ toolchain 全綠 |
 | P1 | 資料來源探勘 ＋ manifest schema | 🟢 完成 | 2026-07-31 | 3 個關鍵發現，見上方 |
-| P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟡 等使用者放 PDF | — | OpenAPI 部分可先自動化 |
+| P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
-| P4 | 結構化數值層（DuckDB ＋ SQL） | ⚪ 未開始 | — | CPU |
-| P5 | Gold set 標註 | ⚪ 未開始 | — | 需先有 P2/P3 |
+| P5 | Gold set 標註 | ⚪ 未開始 | — | **關鍵路徑**，CPU |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
