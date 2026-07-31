@@ -32,6 +32,7 @@ from typing import Literal
 import pdfplumber
 
 from twfi.errors import ParsingError
+from twfi.parsing.normalise import normalise
 from twfi.parsing.types import BBox, Block
 
 __all__ = [
@@ -430,7 +431,9 @@ def extract_tables(
             page = document.pages[index]
             number = index + 1
             page_heights[number] = float(page.height)
-            page_text = page.extract_text() or ""
+            # Normalised like the two text parsers: the unit-declaration regexes match
+            # Chinese, and 除另予註明者外 set as compatibility characters would not fire.
+            page_text = normalise(page.extract_text() or "")
             # Keep every page's text, including pages holding no table: the declaration
             # that governs a note table usually sits on a page of prose (D-018).
             while len(page_texts) < number - 1:
@@ -439,7 +442,8 @@ def extract_tables(
 
             for candidate in page.find_tables(config.plumber_settings()):
                 rows = tuple(
-                    tuple((cell or "").strip() for cell in row) for row in candidate.extract()
+                    tuple(normalise(cell or "").strip() for cell in row)
+                    for row in candidate.extract()
                 )
                 if not is_table_like(rows, config):
                     continue

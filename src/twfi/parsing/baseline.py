@@ -20,6 +20,7 @@ from pathlib import Path
 import pymupdf
 
 from twfi.errors import ParsingError
+from twfi.parsing.normalise import normalise
 from twfi.parsing.types import BBox, Block, Chunk, PageRef, ParsedDocument, ParsedPage
 
 __all__ = ["PARSER_NAME", "FixedChunkConfig", "parse_baseline", "chunk_fixed"]
@@ -57,7 +58,11 @@ def parse_baseline(pdf_path: Path, doc_id: str) -> ParsedDocument:
         for index in range(1, document.page_count + 1):
             page = document.load_page(index - 1)  # type: ignore[no-untyped-call]
             rect = page.rect
-            text = str(page.get_text()).strip()
+            # Normalised here, at the extraction boundary, and identically in the
+            # layout-aware parser: compatibility characters are a corpus property, not a
+            # factor under test, so fixing them on one side only would show up as that
+            # side's gain.
+            text = normalise(str(page.get_text())).strip()
             bbox = BBox(0.0, 0.0, float(rect.width), float(rect.height))
             blocks = (
                 (

@@ -17,6 +17,7 @@ import json
 import pymupdf
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.io.manifest import load_acquisition_lock, load_document_manifest
 from twfi.parsing.quality import assess_pages
 from twfi.paths import repo_paths
@@ -105,6 +106,7 @@ def main() -> None:
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

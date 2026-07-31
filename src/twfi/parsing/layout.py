@@ -32,6 +32,7 @@ from typing import Any
 import pymupdf
 
 from twfi.errors import ParsingError
+from twfi.parsing.normalise import normalise
 from twfi.parsing.types import BBox, Block, Line, ParsedDocument, ParsedPage, Span
 
 __all__ = [
@@ -499,7 +500,9 @@ def _classify_page(
 
 
 def _span_from_dict(payload: dict[str, Any]) -> Span | None:
-    text = str(payload.get("text", ""))
+    # Same normalisation as the baseline parser, for the same reason: 年 as U+F98E must
+    # compare equal to 年 as U+5E74 on both sides of the comparison or on neither.
+    text = normalise(str(payload.get("text", "")))
     if not text.strip():
         return None
     raw_bbox = payload.get("bbox")

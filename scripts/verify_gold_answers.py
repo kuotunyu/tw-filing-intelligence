@@ -54,6 +54,7 @@ from twfi.errors import ParsingError
 from twfi.eval.gold import GoldRecord, GoldSet, load_gold
 from twfi.io.manifest import load_acquisition_lock
 from twfi.parsing.baseline import parse_baseline
+from twfi.parsing.normalise import normalise
 from twfi.paths import repo_paths
 
 app = typer.Typer(add_completion=False, help=__doc__)
@@ -86,9 +87,8 @@ _CONNECTIVES = frozenset(
 #: 仟 and 千 are the same unit written two ways; a filing uses one and an answer the other.
 _UNIT_ALIAS = str.maketrans({"仟": "千", "臺": "台"})
 
-#: Stripped from a chart answer before its values are read out. 民國111年 is an axis label,
-#: and on these pages the axis labels are CJK the extractor renders as mojibake -- looking
-#: for "111" would fail on a correct answer.
+#: An era-year axis label. Used both to split a chart answer into (year, value) pairs and to
+#: find the year labels inside a crop, so the same pattern defines both sides of the pairing.
 _ERA_YEAR = re.compile(r"(?:中華民國|民國)?\d{2,3}年(?:度)?")
 #: A chart value as the chart prints it: a number, a percentage, or a forecast range.
 _CHART_VALUE = re.compile(r"\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?%?")
@@ -378,7 +378,10 @@ def _verify_against(record: GoldRecord, pages: dict[int, str], doc_id: str) -> t
 
 
 def _normalise_text(text: str) -> str:
-    return _WHITESPACE.sub("", text).translate(_UNIT_ALIAS)
+    # NFKC on both sides via `normalise`: the parsers now canonicalise what they extract,
+    # and a gold answer typed as 年度 has to compare equal to a page that set 年 as U+F98E.
+    # Without it this reported correct answers as absent on 91 pages of 1301-FY2023-AR.
+    return _WHITESPACE.sub("", normalise(text)).translate(_UNIT_ALIAS)
 
 
 def _parts(answer: str) -> list[str]:
