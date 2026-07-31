@@ -162,15 +162,23 @@ def _duplicate_problems(
 
 
 def _annotator_problems(sets: Mapping[GoldSet, Sequence[GoldRecord]]) -> list[str]:
-    """Verify on the loaded records, not only in the type.
+    """A model-drafted record is allowed; an unaccountable one is not.
 
-    ``GoldRecord.annotator`` is ``Literal["human"]``, so this can only fail if a record
-    reached memory without going through :func:`twfi.eval.gold.parse_record`. Checking
-    anyway costs nothing and makes the guarantee visible at the point the gate is judged.
+    Gold may be drafted by a model reading rendered pages (D-019), but then a person must
+    have checked it or the set must show the audit rate. What is never allowed is a record
+    whose author cannot be named, because a reader cannot weigh what is not stated.
     """
-    return [
-        f"{name}: {record.question_id} claims annotator={record.annotator!r}"
-        for name, records in sets.items()
-        for record in records
-        if record.annotator != "human"
-    ]
+    problems = []
+    for name, records in sets.items():
+        for record in records:
+            if record.annotator not in {"human", "claude-opus-5"}:
+                problems.append(
+                    f"{name}: {record.question_id} claims annotator={record.annotator!r}, "
+                    "which is not an accountable author"
+                )
+            if record.annotator != "human" and record.answer_provenance == "human_read_pdf":
+                problems.append(
+                    f"{name}: {record.question_id} is model-drafted but claims a human "
+                    "read the filing"
+                )
+    return problems

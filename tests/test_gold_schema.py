@@ -15,6 +15,7 @@ import pytest
 
 from twfi.eval.gold import (
     ALLOWED_UNITS,
+    Annotator,
     AnswerProvenance,
     BBoxRef,
     CompanyRef,
@@ -24,6 +25,7 @@ from twfi.eval.gold import (
     RefusalReasonClass,
     StructuredSourceKey,
     Tolerance,
+    composition,
     default_tolerance,
     gold_route,
     load_gold,
@@ -79,26 +81,51 @@ def payload_of(record: GoldRecord, **overrides: Any) -> dict[str, Any]:
 # --------------------------------------------------- the barrier against forgery
 
 
-def test_a_machine_annotator_is_refused() -> None:
-    """The single most important refusal in the codebase.
+@pytest.mark.parametrize("forged", ["model", "llm", "tooling", "auto", "candidate", "", None])
+def test_an_unaccountable_annotator_is_refused(forged: object) -> None:
+    """Model-drafted gold is allowed (D-019); anonymous gold is not.
 
-    If a gold answer could be attributed to a machine, the pre-registration would be
-    decoration: the study would be grading a model against a model.
+    A reader can weigh "drafted by claude-opus-5, 25% human-audited". There is nothing to
+    weigh in "model", and nothing at all in an absent author.
     """
-    with pytest.raises(ValueError, match="annotator must be 'human'"):
-        parse_record(payload_of(make(), annotator="claude-opus-5"))
-
-
-@pytest.mark.parametrize("forged", ["model", "llm", "tooling", "auto", "", None])
-def test_no_spelling_of_machine_authorship_is_accepted(forged: object) -> None:
-    with pytest.raises(ValueError, match="annotator must be 'human'"):
+    with pytest.raises(ValueError, match="annotator must be one of"):
         parse_record(payload_of(make(), annotator=forged))
 
 
-def test_the_gold_record_type_admits_only_one_annotator() -> None:
-    """Enforced by the type, not only by the parser, so no other construction path differs."""
-    annotation = GoldRecord.__dataclass_fields__["annotator"].type
-    assert "Literal['human']" in str(annotation).replace('"', "'")
+def test_the_candidate_can_never_supply_its_own_gold() -> None:
+    """The refusal that still matters most: grading a system against itself."""
+    assert "qwen3.6:27b" not in get_args(Annotator)
+    for forged in ("qwen3.6:27b", "qwen3-vl:8b", "candidate"):
+        with pytest.raises(ValueError, match="annotator must be one of"):
+            parse_record(payload_of(make(), annotator=forged))
+
+
+def test_a_named_model_annotator_is_accepted() -> None:
+    body = payload_of(
+        make(), annotator="claude-opus-5", answer_provenance="model_read_rendered_page"
+    )
+    record = parse_record(body)
+    assert record.annotator == "claude-opus-5"
+    assert record.is_trustworthy is False, "unaudited model draft is not yet trustworthy"
+
+
+def test_a_model_draft_may_not_claim_a_human_read_the_filing() -> None:
+    """The one way the amended schema could still mislead, so it is checked."""
+    record = make(annotator="claude-opus-5", answer_provenance="human_read_pdf")
+    problems = record_problems(record, gold_set="locked")
+    assert any("cannot claim human_read_pdf" in problem for problem in problems)
+
+
+def test_an_audited_model_draft_is_trustworthy() -> None:
+    record = make(
+        annotator="claude-opus-5", answer_provenance="model_read_rendered_page", audited=True
+    )
+    assert record.is_trustworthy is True
+    assert record_problems(record, gold_set="locked") == []
+
+
+def test_a_human_record_is_trustworthy_without_an_audit() -> None:
+    assert make().is_trustworthy is True
 
 
 def test_our_own_extractor_is_not_an_admissible_answer_source() -> None:
@@ -108,9 +135,14 @@ def test_our_own_extractor_is_not_an_admissible_answer_source() -> None:
     the same extractor -- would reproduce and be scored correct for, making the measured
     F1/F4 gain an artefact of grading a parser against itself.
     """
-    assert set(get_args(AnswerProvenance)) == {"human_read_pdf", "official_structured"}
-    with pytest.raises(ValueError, match="answer_provenance must be one of"):
-        parse_record(payload_of(make(), answer_provenance="extracted_table"))
+    assert set(get_args(AnswerProvenance)) == {
+        "human_read_pdf",
+        "model_read_rendered_page",
+        "official_structured",
+    }
+    for forged in ("extracted_table", "pdf_table", "parser"):
+        with pytest.raises(ValueError, match="answer_provenance must be one of"):
+            parse_record(payload_of(make(), answer_provenance=forged))
 
 
 def test_a_missing_provenance_is_refused_rather_than_defaulted() -> None:
@@ -553,7 +585,7 @@ def test_a_broken_line_is_reported_with_its_number() -> None:
 def test_a_bad_record_is_reported_with_its_line_number() -> None:
     good = json.dumps(payload_of(make()), ensure_ascii=False)
     bad = json.dumps(payload_of(make(), annotator="model"), ensure_ascii=False)
-    with pytest.raises(ValueError, match="line 2: annotator must be 'human'"):
+    with pytest.raises(ValueError, match="line 2: annotator must be one of"):
         load_gold([good, bad])
 
 
@@ -651,3 +683,67 @@ def test_derived_operands_survive_a_round_trip() -> None:
     parsed = parse_record(body)
     assert parsed.derived_from == ("6,162,221,359", "6,859,615,493")
     assert parsed.is_derived is True
+
+
+# --------------------------------------------- accountability of a drafted set
+
+
+def test_a_wholly_unaudited_drafted_set_is_flagged() -> None:
+    """Model-drafted gold with no audit at all has nothing defending question selection."""
+    drafted = [
+        make(
+            question_id=f"LOCK-{n:04d}",
+            question=f"問題 {n}？",
+            annotator="claude-opus-5",
+            answer_provenance="model_read_rendered_page",
+        )
+        for n in range(1, 4)
+    ]
+    problems = set_problems(drafted, gold_set="locked", type_counts={})
+    assert any("are unaudited" in problem for problem in problems)
+
+
+def test_one_audited_record_lifts_the_set_level_objection() -> None:
+    """The check is about the set having some human oversight, not about every record."""
+    drafted = [
+        make(
+            question_id=f"LOCK-{n:04d}",
+            question=f"問題 {n}？",
+            annotator="claude-opus-5",
+            answer_provenance="model_read_rendered_page",
+            audited=(n == 1),
+        )
+        for n in range(1, 4)
+    ]
+    assert set_problems(drafted, gold_set="locked", type_counts={}) == []
+
+
+def test_a_human_set_is_never_flagged_for_lacking_an_audit() -> None:
+    humans = [make(question_id=f"LOCK-{n:04d}", question=f"問題 {n}？") for n in range(1, 4)]
+    assert set_problems(humans, gold_set="locked", type_counts={}) == []
+
+
+def test_composition_states_what_the_report_must_disclose() -> None:
+    records = [
+        make(question_id="LOCK-0001", question="甲？"),
+        make(
+            question_id="LOCK-0002",
+            question="乙？",
+            annotator="claude-opus-5",
+            answer_provenance="model_read_rendered_page",
+            audited=True,
+        ),
+        make(
+            question_id="LOCK-0003",
+            question="丙？",
+            annotator="claude-opus-5",
+            answer_provenance="model_read_rendered_page",
+        ),
+    ]
+    assert composition(records) == {
+        "records": 3,
+        "human_annotated": 1,
+        "model_drafted": 2,
+        "model_drafted_audited": 1,
+        "trustworthy": 2,
+    }

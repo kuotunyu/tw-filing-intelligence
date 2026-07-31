@@ -3,18 +3,35 @@
 Two properties of the gold set decide whether this study means anything, so both are
 enforced by the type system rather than by a reviewer remembering to check.
 
-**Who wrote the answer.** ``GoldRecord.annotator`` is ``Literal["human"]``. There is no
-other admissible value, so no code path -- including code written later, in a hurry,
-by someone who has forgotten why -- can produce a gold record attributed to a machine.
-Drafts live in :class:`DraftItem`, which has no ``answer`` field at all.
+**Who wrote the answer.** ``GoldRecord.annotator`` names it -- ``"human"`` or the model
+that drafted it. It was ``Literal["human"]`` until annotating 24 questions by hand made
+clear the remaining 48 would not get done, and a study that never runs measures nothing.
 
-**Where the answer came from.** ``answer_provenance`` admits exactly two origins:
-a human reading the original filing, or an official TWSE structured dataset. This
-repository's own table and figure extractors are deliberately *not* representable.
-They are the thing under test: if gold table values came from the extractor, then a
-wrong extraction would produce a wrong gold answer that the candidate -- using the
-same extractor -- would reproduce and be scored correct for. The measured gain of
-factors F1 and F4 would be an artefact of grading a parser against itself.
+The rule that matters is narrower than "a person typed it". Gold must not come from the
+*candidate* (qwen3.6:27b behind the retrieval pipeline) or from this repository's own
+extractor, because either would be grading a system against itself. A different model
+reading a rendered page image violates neither. And on transcription the human is not the
+more reliable party: the one wrong answer in this set so far, PROBE-0004, was a human slip
+that a machine check caught.
+
+What a person is irreplaceable for is *choosing* the questions -- an annotator who also
+writes the answers can drift toward questions the pipeline handles well. That is what the
+audit sample defends, so ``audited`` records whether a person checked each specific record
+against its page, and ``set_problems`` reports the rate. Nothing here can be hidden: every
+record names its author, says whether it was audited, and the report prints both.
+
+Drafts still live in :class:`DraftItem`, which has no ``answer`` field at all.
+
+**Where the answer came from.** ``answer_provenance`` admits three origins: a human
+reading the filing, a model reading a *rendered page image*, or an official TWSE
+structured dataset. This repository's own table and figure extractors are deliberately
+not representable. They are the thing under test: if gold table values came from the
+extractor, a wrong extraction would become a wrong gold answer that the candidate --
+running the same extractor -- would reproduce and be scored correct for. The measured
+gain of factors F1 and F4 would be an artefact of grading a parser against itself.
+
+Reading rendered pixels avoids that: it bypasses the text layer entirely, which is why
+it is the only mode a model may use.
 
 ``docs/FEASIBILITY_PROTOCOL.md`` §1.5 is the authoritative schema for a human reader;
 this module is the same schema in enforceable form.
@@ -40,6 +57,7 @@ from twfi.protocol import (
 __all__ = [
     "GoldSet",
     "AnswerProvenance",
+    "Annotator",
     "RefusalReasonClass",
     "EvidenceKind",
     "ALLOWED_UNITS",
@@ -58,6 +76,7 @@ __all__ = [
     "set_problems",
     "parse_record",
     "load_gold",
+    "composition",
     "gold_route",
 ]
 
@@ -65,9 +84,18 @@ __all__ = [
 #: different gates (G8, protocol 2.3) and so are kept apart from the answer sets.
 GoldSet = Literal["dev", "locked", "probe", "challenger"]
 
-#: The only two origins a gold answer may have. See the module docstring for why this
-#: repository's own extractors are absent.
-AnswerProvenance = Literal["human_read_pdf", "official_structured"]
+#: Where a gold answer came from. This repository's own extractors are absent by design:
+#: they are the thing under test (see the module docstring).
+AnswerProvenance = Literal[
+    "human_read_pdf",
+    "model_read_rendered_page",
+    "official_structured",
+]
+
+#: Who produced the answer. Named rather than asserted, so a reader can weigh it.
+#: ``candidate`` is deliberately unrepresentable -- the system under test may never
+#: supply its own gold.
+Annotator = Literal["human", "claude-opus-5"]
 
 #: Protocol 1.4. The three reasons a question can be unanswerable, all of which the
 #: locked set must exercise.
@@ -233,7 +261,15 @@ class GoldRecord:
     #: Empty means the answer was read directly and must appear on the cited page.
     derived_from: tuple[str, ...] = ()
     annotation_notes: str = ""
-    annotator: Literal["human"] = "human"
+    annotator: Annotator = "human"
+    #: True when a person checked this specific record against its rendered page. The
+    #: defence against a drafter drifting toward questions the pipeline handles well.
+    audited: bool = False
+
+    @property
+    def is_trustworthy(self) -> bool:
+        """Either a person wrote it, or a person checked it."""
+        return self.annotator == "human" or self.audited
 
     @property
     def is_derived(self) -> bool:
@@ -326,6 +362,11 @@ def _answerability_problems(record: GoldRecord) -> list[str]:
         problems.append(f"{where}: refusal_reason_class belongs only on unanswerable questions")
     if record.question_type in NUMERIC_QUESTION_TYPES and record.tolerance is None:
         problems.append(f"{where}: {record.question_type} needs an explicit tolerance")
+    if record.annotator != "human" and record.answer_provenance == "human_read_pdf":
+        problems.append(
+            f"{where}: annotator {record.annotator!r} cannot claim human_read_pdf; a "
+            "model-drafted answer reads a rendered page, so say so"
+        )
     if record.is_derived and len(record.derived_from) < 2:
         problems.append(
             f"{where}: a derived answer needs the figures it came from, so the arithmetic "
@@ -474,9 +515,19 @@ def set_problems(
                     f"{gold_set} set needs {want} {qtype} questions, has {actual.get(qtype, 0)}"
                 )
 
-    # Also completeness, for the same reason: a set part-way through annotation has no
-    # unanswerable questions yet, and demanding all three causes of nothing is noise.
-    if gold_set == "locked" and type_counts is not None:
+    drafted = [r for r in records if r.annotator != "human"]
+    unchecked = [r for r in drafted if not r.audited]
+    if drafted and type_counts is not None and len(unchecked) == len(drafted):
+        problems.append(
+            f"{gold_set}: all {len(drafted)} model-drafted record(s) are unaudited. A "
+            "drafter that also chooses the questions can drift toward what the pipeline "
+            "handles well, and nothing here would show it."
+        )
+
+    # Also completeness, and only when unanswerable questions are actually expected. A
+    # caller passing an empty distribution is saying "no composition requirement", so
+    # demanding all three causes of it would contradict what it asked for.
+    if gold_set == "locked" and type_counts and type_counts.get("unanswerable", 0) > 0:
         classes = {r.refusal_reason_class for r in records if r.question_type == "unanswerable"}
         missing = sorted(set(get_args(RefusalReasonClass)) - classes)
         if missing:
@@ -501,10 +552,11 @@ def parse_record(payload: Mapping[str, Any]) -> GoldRecord:
         raise ValueError(f"unknown gold fields: {sorted(unknown)}")
 
     annotator = payload.get("annotator", "human")
-    if annotator != "human":
+    if annotator not in get_args(Annotator):
         raise ValueError(
-            f"annotator must be 'human', got {annotator!r}. Gold answers are not "
-            "machine-generated; draft slots belong in a worklist file, not here."
+            f"annotator must be one of {sorted(get_args(Annotator))}, got {annotator!r}. "
+            "The candidate system may never supply its own gold, and an unnamed author "
+            "cannot be weighed by a reader."
         )
 
     if "answer_provenance" not in payload:
@@ -559,6 +611,8 @@ def parse_record(payload: Mapping[str, Any]) -> GoldRecord:
             ),
             refusal_reason_class=payload.get("refusal_reason_class"),
             derived_from=tuple(payload.get("derived_from", ())),
+            annotator=annotator,
+            audited=bool(payload.get("audited", False)),
             annotation_notes=str(payload.get("annotation_notes", "")),
         )
     except KeyError as exc:
@@ -591,6 +645,7 @@ _FIELD_NAMES: Final[frozenset[str]] = frozenset(
         "answer_provenance",
         "refusal_reason_class",
         "derived_from",
+        "audited",
     }
 )
 
@@ -611,6 +666,22 @@ def load_gold(lines: Iterable[str]) -> list[GoldRecord]:
         except ValueError as exc:
             raise ValueError(f"line {number}: {exc}") from exc
     return records
+
+
+def composition(records: Sequence[GoldRecord]) -> dict[str, int]:
+    """How a set was annotated, for the report to print verbatim.
+
+    A study that leans on model-drafted gold has to say so and say how much, which means
+    the numbers must be available without anyone choosing to compute them.
+    """
+    drafted = [r for r in records if r.annotator != "human"]
+    return {
+        "records": len(records),
+        "human_annotated": sum(1 for r in records if r.annotator == "human"),
+        "model_drafted": len(drafted),
+        "model_drafted_audited": sum(1 for r in drafted if r.audited),
+        "trustworthy": sum(1 for r in records if r.is_trustworthy),
+    }
 
 
 def gold_route(question_type: str) -> str:

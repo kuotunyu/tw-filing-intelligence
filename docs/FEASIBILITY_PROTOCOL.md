@@ -144,9 +144,13 @@ Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境�
 
 規則：
 
-- **Gold answer 不得由任何 candidate system output 自動產生**（`annotator` 必須是 `human`；
-  `scripts/check_leakage.py` 驗證此欄位）。程式層面由
-  `twfi.eval.gold.GoldRecord.annotator: Literal["human"]` 強制 —— 沒有第二個可填的值。
+- **Gold answer 不得由任何 candidate system output 產生。**
+  `annotator` 具名（`human` 或起草它的模型），**candidate 在型別上不可表示**。
+  2026-07-31 修訂（D-019）：允許 `claude-opus-5` 讀**渲染頁面像素**起草，
+  搭配**固定種子的人工抽樣稽核**；`audited` 逐筆記錄是否有人查過。
+  模型起草的記錄**不得**聲稱 `human_read_pdf`。
+  **報告必須印出 `composition()` 的組成數字**（human／model_drafted／audited 比率），
+  讓讀者自行折扣。整組模型起草且零稽核會被 `set_problems` 直接判為問題。
 - **`answer_provenance` 只允許兩個來源**（D-016，2026-07-31 增訂）：
   `human_read_pdf`（人讀原始 filing）或 `official_structured`（TWSE 官方結構化資料集）。
   **本 repository 自己的 table／figure 抽取器不是合法來源**，且在型別上不可表示。
