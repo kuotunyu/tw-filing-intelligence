@@ -206,9 +206,10 @@ def test_generation_model_matches_the_protocol(
     assert "不允許 LLM 自由生成 SQL" in protocol
 
 
-def test_chart_route_shares_the_generation_weights_until_the_challenger_runs(
+def test_the_chart_route_uses_the_generation_weights(
     declared_models: dict[str, object],
 ) -> None:
+    """The challenger was cancelled (D-021), so 27B serves the chart route as well."""
     roles = declared_models["roles"]
     assert isinstance(roles, dict)
     assert roles["chart"]["digest"] == roles["generation"]["digest"]  # type: ignore[index]
@@ -229,6 +230,42 @@ def test_chart_challenger_rule_is_fixed_in_advance(
     protocol = paths.protocol_doc.read_text(encoding="utf-8")
     assert "Chart challenger" in protocol
     assert str(challenger["digest"]) in protocol
+
+
+def test_a_cancelled_challenger_still_has_no_outcome(
+    declared_models: dict[str, object],
+) -> None:
+    """Cancellation and result must stay separate fields.
+
+    The comparison never ran, so there is no margin to report. If a cancellation could be
+    written into `outcome`, the file could later claim a winner for a run that does not
+    exist -- which is the one thing the pre-registered rule was meant to prevent.
+    """
+    from twfi.protocol import CHALLENGER_STATUS
+
+    challenger = declared_models["chart_challenger"]
+    assert isinstance(challenger, dict)
+    if challenger.get("status") == "cancelled" or CHALLENGER_STATUS == "cancelled":
+        assert challenger.get("status") == "cancelled", (
+            "protocol.py says the challenger is cancelled; models.yaml must say so too"
+        )
+        assert challenger["outcome"] is None
+        assert challenger.get("status_reason"), "a cancellation has to say why"
+
+
+def test_the_cancelled_challenger_set_is_absent(paths: RepoPaths) -> None:
+    """There is no legitimate way to build it, so its file must not exist.
+
+    The dev filings contain no charts. The only ways to produce 16 chart crops would be to
+    label tables as charts or to draw on the locked set, and both are forbidden.
+    """
+    from twfi.protocol import CHALLENGER_STATUS
+
+    if CHALLENGER_STATUS == "cancelled":
+        assert not paths.chart_challenger.exists(), (
+            f"{paths.chart_challenger} exists but the challenger was cancelled (D-021); "
+            "delete it rather than filling it in"
+        )
 
 
 def test_excluded_models_are_recorded_as_decisions(declared_models: dict[str, object]) -> None:

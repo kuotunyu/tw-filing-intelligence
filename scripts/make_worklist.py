@@ -20,6 +20,7 @@ from typing import Annotated, Any
 
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.errors import ParsingError
 from twfi.eval.gold import CompanyRef, DraftItem
 from twfi.eval.worklist import probe_slots
@@ -133,6 +134,7 @@ def _as_json(slot: DraftItem) -> dict[str, Any]:
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

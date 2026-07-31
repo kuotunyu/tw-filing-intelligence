@@ -65,6 +65,19 @@ chart_challenger:
     exceeds qwen3.6:27b by at least 10 percentage points (at least 2 more
     correct out of 16). Otherwise qwen3.6:27b serves every route.
   outcome: null # filled in by scripts/pin_models.py after the challenger runs
+  # D-021 (2026-08-01). Recorded separately from `outcome` on purpose: a cancellation is
+  # not a result, and `outcome` must stay machine-written and null so that nobody can
+  # later claim a margin for a comparison that never ran.
+  status: cancelled
+  status_reason: >-
+    The dev filings contain no charts. All 20 geometry positives in 2412-FY2023-AR and
+    1301-FY2023-AR were inspected one by one and all 20 are tables -- mostly the
+    diagonal-split header 「項目＼年度」, the rest seal stamps -- so the 16 dev chart
+    crops this comparison needs cannot be written. Selecting a model on the locked set's
+    4 charts is forbidden, and running the comparison on dev tables would report a
+    table-reading result as a chart-route decision. The pre-registered fallback applies:
+    qwen3.6:27b serves every route, which is exactly what the switch rule already said
+    would happen absent a clear margin.
 
 # Explicitly out of the pipeline. Recorded so the exclusion is a decision,
 # not an omission.

@@ -26,6 +26,7 @@ from typing import Annotated, Any
 
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.eval.gold import load_gold, set_problems
 from twfi.paths import repo_paths
 
@@ -257,6 +258,7 @@ def _merge(record: dict[str, Any], answer: _Answer) -> dict[str, Any]:
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

@@ -33,6 +33,8 @@ __all__ = [
     "DEV_TOTAL",
     "PROBE_COUNT",
     "CHALLENGER_ITEMS",
+    "CHALLENGER_STATUS",
+    "CHALLENGER_CANCELLED_REASON",
     "HARD_CATEGORIES",
     "SINGLE_GATE_CATEGORIES",
     "POOLED_HARD_SIZE",
@@ -226,6 +228,22 @@ LOCKED_TOTAL: Final = 33
 DEV_TOTAL: Final = 15
 PROBE_COUNT: Final = 5
 CHALLENGER_ITEMS: Final = 16
+
+#: Protocol 2.3 as amended by D-021. The challenger will not run, and this says so in code
+#: so that an unbuilt set does not read as unfinished work someone should go and finish.
+#:
+#: It was cancelled for want of material, not because of a result: nothing was ever
+#: compared. Its conclusion is identical to the fallback branch fixed in advance -- 27B
+#: serves every route -- so cancelling cannot have favoured this study.
+CHALLENGER_STATUS: Final = "cancelled"
+CHALLENGER_CANCELLED_REASON: Final = (
+    "The dev filings contain no charts. All 20 geometry positives in 2412-FY2023-AR and "
+    "1301-FY2023-AR were inspected one by one and all 20 are tables -- mostly the "
+    "diagonal-split header 「項目＼年度」, the rest seal stamps -- so the 16 dev chart crops "
+    "the comparison needs cannot be written. Selecting a model on the locked set's 4 charts "
+    "is forbidden, and running the comparison on dev tables would report a table-reading "
+    "result as a chart-route decision."
+)
 
 #: Protocol 1.4 / gate G2. These are the categories the study exists to move, and the
 #: pooled set G2's first condition is judged on.

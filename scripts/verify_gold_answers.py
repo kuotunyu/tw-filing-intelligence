@@ -24,6 +24,14 @@ Three outcomes, deliberately distinguished:
 * **not in the document** -- either a misread, or the page has no text layer. Those are
   different problems, so a page the extractor cannot read at all is reported as
   unverifiable rather than as wrong.
+
+A fourth outcome exists for chart records, and it is deliberately not "ok". A chart answer
+is a set of values *plus* the year and series each belongs to. The values are checkable:
+they must appear as labels inside the cited crop, and a bbox pointing at the wrong chart on
+the same page fails that. The attribution is not checkable, because the thing that carries
+it -- an axis label, a legend colour -- is exactly what the text layer loses. So those
+records are reported as partly corroborated and are force-included in the audit sample,
+never counted as verified.
 """
 
 from __future__ import annotations
@@ -34,6 +42,7 @@ from typing import Annotated
 
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.errors import ParsingError
 from twfi.eval.gold import GoldRecord, GoldSet, load_gold
 from twfi.io.manifest import load_acquisition_lock
@@ -70,6 +79,15 @@ _CONNECTIVES = frozenset(
 #: 仟 and 千 are the same unit written two ways; a filing uses one and an answer the other.
 _UNIT_ALIAS = str.maketrans({"仟": "千", "臺": "台"})
 
+#: Stripped from a chart answer before its values are read out. 民國111年 is an axis label,
+#: and on these pages the axis labels are CJK the extractor renders as mojibake -- looking
+#: for "111" would fail on a correct answer.
+_ERA_YEAR = re.compile(r"(?:中華民國|民國)?\d{2,3}年(?:度)?")
+#: A chart value as the chart prints it: a number, a percentage, or a forecast range.
+_CHART_VALUE = re.compile(r"\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?%?")
+#: Half a point, so a label sitting exactly on the crop edge is inside it.
+_CROP_TOLERANCE = 0.5
+
 
 @app.command()
 def main(
@@ -94,7 +112,9 @@ def main(
     lock = load_acquisition_lock(paths.acquisition_lock)
     pages_cache: dict[str, dict[int, str]] = {}
     problems = 0
+    partial = 0
     checked = 0
+    marks = {"cited": "ok  ", "unverifiable": "?   ", "partial": "~   "}
 
     for name, path in files.items():
         if not path.is_file():
@@ -106,18 +126,27 @@ def main(
                 continue
             checked += 1
             verdict, detail = _verify(record, lock, paths.root, pages_cache)
-            mark = (
-                "ok  " if verdict == "cited" else ("?   " if verdict == "unverifiable" else "!!  ")
+            typer.echo(
+                f"  {marks.get(verdict, '!!  ')}{record.question_id}  {record.answer:>18}  {detail}"
             )
-            typer.echo(f"  {mark}{record.question_id}  {record.answer:>18}  {detail}")
             if verdict in {"elsewhere", "absent"}:
                 problems += 1
+            elif verdict == "partial":
+                partial += 1
 
     typer.echo("")
     if problems:
         typer.echo(f"FAILED: {problems} of {checked} answer(s) not corroborated on the cited page")
         raise typer.Exit(code=1)
     typer.echo(f"{checked} answer(s) corroborated, or on a page with no text layer to check")
+    if partial:
+        typer.echo("")
+        typer.echo(
+            f"{partial} chart answer(s) only partly corroborated: the values are inside the "
+            "cited crop,\nbut which year and which series each belongs to survives only in "
+            "the pixels. Those\nrecords are force-included in the audit sample -- a person "
+            "has to look at the chart."
+        )
 
 
 def _verify(
@@ -126,6 +155,9 @@ def _verify(
     root: Path,
     cache: dict[str, dict[int, str]],
 ) -> tuple[str, str]:
+    if record.bbox and "chart_crop" in record.evidence_kinds:
+        return _verify_crop(record, lock, root)
+
     # A cross_document answer cites two filings. Loading only the first reported every
     # atom from the second as missing, which looked like a wrong answer and was a wrong
     # reader.
@@ -137,6 +169,91 @@ def _verify(
         for page, text in loaded.items():
             merged[page] = merged.get(page, "") + text
     return _verify_against(record, merged, ", ".join(record.source_document))
+
+
+def _verify_crop(record: GoldRecord, lock: object, root: Path) -> tuple[str, str]:
+    """Check a chart answer's values against the labels inside the cited crop.
+
+    Word coordinates, not the baseline parser's blocks: on these pages the baseline
+    returns one block covering the whole sheet, so block containment cannot tell the
+    left-hand chart from the right-hand one. Distinguishing them is the entire value of
+    this check -- a bbox aimed at the wrong chart on the right page is the mistake D-020
+    was made of, and only coordinates catch it.
+    """
+    values = _chart_values(record.answer or "")
+    if not values:
+        return "unverifiable", "no chart values to check"
+
+    labels, problem = _labels_in_crop(record, lock, root)
+    if problem is not None:
+        return "unverifiable", problem
+
+    # A multiset, because 「民國112年 6%；民國113年 6%」 needs two 6% labels in the crop.
+    # Collapsing to a set would let one label stand in for a year that has none.
+    remaining = list(labels)
+    missing: list[str] = []
+    for value in values:
+        if value in remaining:
+            remaining.remove(value)
+        else:
+            missing.append(value)
+    if missing:
+        return "absent", (
+            f"{len(missing)} of {len(values)} value(s) not labelled inside the cited crop: "
+            f"{missing}"
+        )
+    return "partial", (
+        f"all {len(values)} value(s) labelled inside the cited crop; year and series "
+        "attribution is not in the text layer"
+    )
+
+
+def _chart_values(answer: str) -> list[str]:
+    """The values a chart answer claims, without the axis labels naming the years."""
+    stripped = _ERA_YEAR.sub(" ", _normalise_text(answer))
+    return [match.group() for match in _CHART_VALUE.finditer(stripped)]
+
+
+def _labels_in_crop(record: GoldRecord, lock: object, root: Path) -> tuple[list[str], str | None]:
+    """Every text label lying inside any of the record's cited bboxes."""
+    import pymupdf
+
+    wanted: dict[int, list[tuple[float, float, float, float]]] = {}
+    for ref in record.bbox:
+        wanted.setdefault(ref.page, []).append(ref.bbox)
+
+    # A chart record cites one filing; if that ever changes, every source is searched and
+    # the labels are pooled, which is the same rule the prose branch already uses.
+    labels: list[str] = []
+    for doc_id in record.source_document:
+        acquired = lock.get(doc_id)  # type: ignore[attr-defined]
+        if acquired is None or not acquired.local_path(root).is_file():
+            return [], f"{doc_id} not acquired"
+        try:
+            with pymupdf.open(acquired.local_path(root)) as document:  # type: ignore[no-untyped-call]
+                for page, boxes in wanted.items():
+                    if not 1 <= page <= document.page_count:
+                        continue
+                    for word in document.load_page(page - 1).get_text("words"):
+                        x0, y0, x1, y1, text = word[0], word[1], word[2], word[3], word[4]
+                        if any(_inside((x0, y0, x1, y1), box) for box in boxes):
+                            labels.append(_normalise_text(text))
+        except (ParsingError, RuntimeError) as exc:  # pragma: no cover - corrupt PDF
+            return [], f"{doc_id} unreadable: {exc}"
+    if not labels:
+        return [], "the cited crop contains no text labels at all"
+    return labels, None
+
+
+def _inside(
+    word: tuple[float, float, float, float], box: tuple[float, float, float, float]
+) -> bool:
+    return (
+        word[0] >= box[0] - _CROP_TOLERANCE
+        and word[1] >= box[1] - _CROP_TOLERANCE
+        and word[2] <= box[2] + _CROP_TOLERANCE
+        and word[3] <= box[3] + _CROP_TOLERANCE
+    )
 
 
 def _pages_of(
@@ -249,6 +366,7 @@ def _appears(value: str, pages: dict[int, str], cited: tuple[int, ...]) -> bool:
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

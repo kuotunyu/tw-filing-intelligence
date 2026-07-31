@@ -11,10 +11,8 @@ PROBE-0004 showed -- but bad *question selection*: a drafter that also chooses t
 questions can drift toward what the pipeline handles well, and nothing in the record
 would reveal it.
 
-The audit sample is the defence, so it must not be choosable by the drafter. The sample
-is drawn with a fixed seed taken from the protocol's decoding seed, so the same set and
-the same size always yield the same records, and anyone can re-derive which ones should
-have been checked. Presenting a hand-picked "sample" would therefore be visible.
+The sampling rule -- seeded draw, plus types that are always audited rather than sampled --
+lives in `twfi.eval.audit`, where it is tested. This file is the CLI over it.
 
 `--accept` marks records audited. `--reject` clears the flag and is meant to be followed
 by redrafting the whole question type, not just the one record: a drafting habit that
@@ -24,24 +22,17 @@ produced one bad question probably produced others.
 from __future__ import annotations
 
 import json
-import random
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from twfi.console import use_utf8_output
+from twfi.eval.audit import AUDIT_SEED, DEFAULT_SAMPLE, audit_sample
 from twfi.eval.gold import GoldRecord, GoldSet, composition, load_gold
 from twfi.paths import repo_paths
 
 app = typer.Typer(add_completion=False, help=__doc__)
-
-#: The protocol's decoding seed (2.5), reused so the sample is fixed by the protocol
-#: rather than by whoever runs this.
-AUDIT_SEED = 20260731
-
-#: Protocol 1.5 as amended by D-019. Eight of the locked set is roughly a quarter, which
-#: is enough that a systematic drafting bias would show up in more than one record.
-DEFAULT_SAMPLE = 8
 
 
 def _files() -> dict[GoldSet, Path]:
@@ -114,28 +105,6 @@ def main(
     _report_composition(path)
 
 
-def audit_sample(records: list[GoldRecord], *, size: int) -> list[GoldRecord]:
-    """A reproducible sample of the model-drafted records, in id order.
-
-    Seeded from the protocol so the drafter cannot choose which records get checked. Sorts
-    by id first so the input order -- which the drafter controls -- cannot change the draw.
-    """
-    # Anything a person did not both choose and answer is eligible: the audit exists to
-    # check question selection, so a human-read figure under a machine-chosen question
-    # still needs looking at.
-    drafted = sorted(
-        (record for record in records if not record.is_fully_human),
-        key=lambda record: record.question_id,
-    )
-    if len(drafted) <= size:
-        return drafted
-    # Reproducibility is the requirement here, not unpredictability. A cryptographic
-    # source would make the sample unauditable: nobody could re-derive which records
-    # should have been checked, which is the whole point of seeding it.
-    chosen = random.Random(AUDIT_SEED).sample(range(len(drafted)), size)  # noqa: S311
-    return [drafted[index] for index in sorted(chosen)]
-
-
 def _record_outcome(path: Path, accept: list[str], reject: list[str]) -> int:
     accepted, rejected = set(accept), set(reject)
     overlap = accepted & rejected
@@ -186,10 +155,23 @@ def _render(sample: list[GoldRecord]) -> None:
                     for page in wanted:
                         if not 1 <= page <= document.page_count:
                             continue
-                        pixmap = document.load_page(page - 1).get_pixmap(dpi=200)
+                        loaded = document.load_page(page - 1)
+                        pixmap = loaded.get_pixmap(dpi=200)
                         out = target / f"AUDIT-{record.question_id}__{doc_id}__p{page}.png"
                         pixmap.save(out)
                         typer.echo(f"  rendered {out.name}")
+                        # A chart occupies a fifth of a spread; at whole-page scale its
+                        # labels are too small to check, and the crop is what the record
+                        # actually cites. Render it too, at a resolution that can be read.
+                        for index, ref in enumerate(
+                            [ref for ref in record.bbox if ref.page == page], start=1
+                        ):
+                            clip = pymupdf.Rect(*ref.bbox)  # type: ignore[no-untyped-call]
+                            crop = target / (
+                                f"AUDIT-{record.question_id}__{doc_id}__p{page}__crop{index}.png"
+                            )
+                            loaded.get_pixmap(dpi=300, clip=clip).save(crop)
+                            typer.echo(f"  rendered {crop.name}")
             except (ParsingError, RuntimeError) as exc:  # pragma: no cover - corrupt PDF
                 typer.echo(f"  {record.question_id}: cannot render: {exc}")
 
@@ -224,12 +206,13 @@ def _report_composition(path: Path) -> None:
     typer.echo("composition (this is what the report must print):")
     for key, value in counts.items():
         typer.echo(f"  {key:<24} {value}")
-    pending = counts["needs_audit"]
-    if pending:
-        typer.echo(f"  {'audit rate':<24} {counts['audited'] / pending:.0%}")
+    eligible = counts["needs_audit"]
+    if eligible:
+        typer.echo(f"  {'audit rate':<24} {counts['audited'] / eligible:.0%}")
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

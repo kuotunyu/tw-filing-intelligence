@@ -7,15 +7,19 @@
 
 ## 目前狀態
 
-- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：36/72 已標註**（probe 5 ／ **locked 31/36** ／ dev 0 ／ challenger 0）。
+- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：38/53 已標註**
+  （probe 5 ／ **locked 33/33 ✅ 完成** ／ dev 0/15 ／ ~~challenger~~ **已取消**）。
+  分母由 72 降為 53：locked 36→33（D-020）、challenger 16→0（D-021）。
   **標註方式已於 2026-07-31 修訂（D-019）**：模型起草 ＋ 固定種子人工抽樣稽核。
-  目前 locked 組成：fully_human 19／question_model_chosen 7／answer_model_drafted 5／
-  needs_audit 12／**audited 8（稽核率 67%）**／trustworthy 27。
+  目前 locked 組成：fully_human 19／question_model_chosen 9／answer_model_drafted 7／
+  needs_audit 14／**audited 8（稽核率 57%）**／trustworthy 27。
   **報告必須印出這組數字。**
   稽核結果（2026-07-31）：種子抽出的 8 題**全部通過**，使用者逐一對照渲染頁確認。
   未通過的處理原則是**整類重做**，不是只改那一題。
-  只剩 `chart_value_trend` 5 題 —— 建議人工，因為「LLM 讀圖表」去考「LLM 讀圖表」
-  是這裡最接近循環的組合。
+  **待稽核：LOCK-0032／LOCK-0033（chart 兩題，強制進稽核，D-022）** ——
+  跑 `audit_gold.py --set locked --render`，看 `AUDIT-LOCK-003*__*__crop1.png` 兩張圖。
+  抽籤池刻意**排除強制題**，所以新增 chart 類別**沒有**重抽其他類別，
+  原本那 8 題依然是那 8 題。
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
   commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
   **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
@@ -120,26 +124,39 @@
 
 ## 下一步（照順序）
 
-1. **P5（關鍵路徑）**：gold 標註（locked 36 ＋ dev 15 ＋ probes 5 ＋ challenger 16）。
-   **純 CPU，不需要 GPU。**
+0. **馬上可做（15 分鐘，使用者）**：稽核 chart 兩題。
+   ```
+   uv run python scripts/audit_gold.py --set locked --render
+   ```
+   看 `results/runs/pages/AUDIT-LOCK-0032__2330-FY2023-AR__p7__crop1.png`
+   與 `AUDIT-LOCK-0033__2330-FY2024-AR__p6__crop1.png` 兩張裁切圖，
+   對照題目與答案（0032：產能計劃的年成長率 9%／6%／6%；
+   0033：晶圓銷售計劃 7 奈米及以下 58%／69%），然後
+   ```
+   uv run python scripts/audit_gold.py --set locked --accept LOCK-0032 LOCK-0033
+   ```
+   為什麼這兩題非人看不可：**數值可以自動查**（`verify_gold_answers.py` 會確認它們
+   落在所引 bbox 內，指錯圖就會失敗），但**「哪個數字屬於哪一年、哪個系列」查不到** ——
+   承載那件事的是座標軸標籤與圖例顏色，正是 text layer 丟掉的東西（D-022）。
+
+1. **P5（關鍵路徑）**：gold 標註（locked **33 ✅** ＋ dev 15 ＋ probes 5 ✅
+   ＋ ~~challenger 16~~ **取消**）。**純 CPU，不需要 GPU。**
    - 出題來源以 `results/runs/question_sources.json` 為準，**不是** `USABLE_DOCUMENTS`
      ——後者是二元旗標，不知道 `2330-FY2024-FS` 不能出數值題（D-017）。
    - gold answer **不得由 candidate 產生**（型別強制，candidate 不可表示）。
      `annotator` 與 `question_author` 各自具名；模型起草需人工抽樣稽核（D-019）。
-   - **72 題全部需要人讀 PDF。** OpenAPI 只有 FY2026Q1，與文件集（FY2023／FY2024）
-     交集為空，所以沒有可機械建置的子集（D-016）。
+   - **53 題全部需要人讀 PDF（或人稽核模型讀的）。** OpenAPI 只有 FY2026Q1，
+     與文件集（FY2023／FY2024）交集為空，所以沒有可機械建置的子集（D-016）。
    - `answer_provenance` 不得是本 repo 的抽取器 —— 那與 F1／F4 循環（D-016）。
    - **已有工具**：`make_worklist.py --for probe` 產出 25 個證據 slot；
      `validate_gold.py`、`check_leakage.py` 是 freeze 前的閘門。
-   - ✅ **probe 5 題完成**；**locked 31/36 完成** —— table_cell 5／cross_period 4／
-     unanswerable 4／numeric_calculation 5／narrative_fact 6／cross_page 4／
-     cross_document 3。**只剩 `chart_value_trend` 5 題。**
+   - ✅ **probe 5 題完成**；✅ **locked 33/33 完成** —— narrative_fact 6／table_cell 5／
+     numeric_calculation 5／cross_period 4／cross_page 4／cross_document 3／
+     unanswerable 4／**chart_value_trend 2**。
      檔案：`data/evaluation/locked/probes.jsonl`、`gold.jsonl`。
      注意 probe **不是** unanswerable：G8 強制清空檢索，所以好的 probe 是
      **模型很可能記得答案**的題目。
-   - **下一個要人做的事**：`audit_gold.py --set locked` 抽出的 8 題稽核
-     （種子 20260731 決定，我無法挑）。目前抽到 LOCK-0020…0024、0027、0028 等。
-   - **標註流程已定型**，剩下 41 題照這個走：
+   - **標註流程已定型**，剩下 15 題（dev）照這個走：
      `make_worklist.py` 定位 → `render_pages.py` 渲染成圖 →
      人**看圖**讀數字（不看抽取文字）→ `fill_gold.py --set <set>` 填表單（不碰 JSON）→
      `validate_gold.py` ＋ `check_leakage.py` ＋ `verify_gold_answers.py`。
@@ -147,10 +164,10 @@
      我填表並跑三個檢查。逐題往返太慢。
    - **刻意重用頁面**：一張渲染圖出 2–3 題，切換成本大幅下降。
      locked batch 2 完全沒有開新圖。
-   - 剩 **41 題**（locked 5 ＋ dev 15 ＋ challenger 16）。
+   - 剩 **15 題**（dev）＋ 2 題待稽核。challenger 16 題已取消（D-021）。
    - **每一題的判斷都必須有一張圖可看。** unanswerable 題原本只給搜尋結果，
      使用者拒絕在看不到的東西上簽名 —— 那是對的，四題因此各配一張證據圖。
-   - 使用者決定：**先把 locked 做完**，dev／challenger 之後再決定是否減量。
+   - 使用者決定：**先把 locked 做完**（已完成），dev 之後再決定是否減量。
 2. **P4 收尾**（P5 之後才做）：把 P5 確定需要的 account，以
    `source_kind="extracted_table"` 載入 FY2023／FY2024 歷史數值（OpenAPI 只有當期）。
    刻意排在 P5 後面 —— 先知道要哪些 account，才不用載入整份年報的所有表格。
@@ -171,7 +188,7 @@
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
-| P5 | Gold set 標註 | 🟡 進行中 | — | **36/72**（probe 5 ＋ locked 31）。關鍵路徑，CPU |
+| P5 | Gold set 標註 | 🟡 進行中 | — | **38/53**（probe 5 ＋ **locked 33 ✅**）。剩 dev 15。關鍵路徑，CPU |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
@@ -209,7 +226,7 @@
 | # | 問題 | 決定 |
 |---|---|---|
 | Q1 | Parser candidate | **自建 rule-based layout parser**（D-002）。不引入 docling；report 必須註明「本輪未驗證 learned layout model」 |
-| Q2 | Generation ／ VLM | **`qwen3.6:27b` digest `a50eda8ed977`（ollama, Q4_K_M）文字與圖表共用同一模型**；數值走 SQL；`qwen3-vl:8b` 只做 freeze 前 chart challenger；`gpt-oss:20b` 不進 pipeline（D-003 / D-009） |
+| Q2 | Generation ／ VLM | **`qwen3.6:27b` digest `a50eda8ed977`（ollama, Q4_K_M）文字與圖表共用同一模型**；數值走 SQL；~~`qwen3-vl:8b` 只做 freeze 前 chart challenger~~ → **challenger 已取消（D-021）：DEV 文件沒有圖表，16 題無從出題；依事前寫死的 fallback 全部 route 用 27B**；`gpt-oss:20b` 不進 pipeline（D-003 / D-009 / D-021） |
 | Q3 | 公司／年度組合 | **照原表**（D-004）：DEV 2412+1301 FY2023；LOCKED 2330+2317 FY2023/FY2024 ＋ 2882 FY2024 |
 
 實測確認（2026-07-31）：`ollama show qwen3.6:27b` →
@@ -227,6 +244,8 @@ ollama 版本 `0.32.0`。
 | ~~R1~~ | ~~MOPS 年報 PDF URL 非決定性~~ | **已解決**：實測後決定不自動化，走人工放置 ＋ SHA-256（D-010）。理由是規則而非能力 |
 | R7 | 若使用者未提供 XBRL，歷史結構化數值來自我們自己的表格擷取 | RQ2 仍成立，但 report 必須把「官方結構化資料」降級為「已驗證結構化資料」（D-010） |
 | R2 | 年報 300+ 頁，VLM caption 成本高 | figure crop 數量上限 ＋ embedding cache ＋ cold/warm 分開量 |
+| **R8** | **F5／F6 的輸入幾乎全是有框表格，不是圖表** | 逐一目視：503 個 candidate 中確認的真圖表只有 **4 張**（全台積電、2 頁）；DEV 20 個幾何正例 **0 張**。兩階**保留**（只做增益歸因、不參與 gate），但 report **不得**把它們的增益說成 chart-reading 能力（D-021） |
+| **R9** | **`chart_value_trend` 只有 2 題且同一家公司** | 這是語料事實不是取樣偷懶。G2 已把 chart 移出單一類別 gate、pooled 門檻提到 15pp。report limitations 必須寫：這兩題答的是「能不能讀台積電那兩張圖」（D-020） |
 | R3 | `qwen3.6:27b` Q4_K_M 17GB ＋ KV cache ＋ 檢索模型 2.2GB ≈ 20–21GB，逼近 G10 的 22GB | `num_ctx=8192`、crop 最長邊 1024、每題 ≤3 crop；必要時檢索模型 offload CPU。**gate 不因模型放寬** |
 | R6 | Q4_K_M 量化可能影響敘述題品質 | 數值題走 SQL 不受影響；敘述題影響會如實反映在指標，不換模型補救 |
 | R4 | 我自己標註 gold 的偏誤 | 答案必須指回頁碼/bbox/row；標註前不看 pipeline 輸出 |
@@ -235,6 +254,53 @@ ollama 版本 `0.32.0`。
 ---
 
 ## Session 日誌
+
+### 2026-08-01 — Session 9（locked 33/33 完成 ＋ D-020 的連帶影響全部解掉）
+
+**做了什麼**
+
+- **`chart_value_trend` 2 題出完 → locked 33/33 ✅**
+  - `LOCK-0032` = `2330-FY2023-AR` p7「產能計劃」年成長率 9%／6%／6%
+  - `LOCK-0033` = `2330-FY2024-AR` p6「晶圓銷售計劃」7奈米及以下 58%／69%
+  - 刻意取不同文件的不同圖；兩題都排除區間值（±0.1pp 容差評不了區間）
+- **量到一件影響題目說法的事**：這兩頁的**數字標籤存在於 text layer**
+  （`15-16`、`47%`、`60-70%` 都找得到），但**年份與圖例是壞碼 CJK**。
+  所以純文字路徑拿到一堆沒有歸屬的數字 → 這兩題測的是**歸屬**，不是 OCR。
+  題目說明照這樣寫，不誇稱。
+- **D-021：把 D-020 留下的三個連帶影響量完並解掉**
+  - 逐一目視 **DEV 全部 20 個幾何正例 → 20/20 都不是圖表**
+  - **我在 D-020 寫錯的一句話**：「表格永遠不需要斜線」。
+    臺灣年報「項目＼年度」的**斜線表頭是標準版型**，是 DEV 最大誤判來源；
+    其次是紅色印章的貝茲曲線。判別子 precision 是 **4/45 ≈ 9%**，不是「找到圖表」。
+  - **chart challenger 取消**：16 題要求 DEV 文件的 chart crop，而 DEV 沒有圖表。
+    這不是事後換模型（一次比較都沒跑），結論等同事前寫死的 fallback（全部用 27B）。
+    寫進 `protocol.py`（`CHALLENGER_STATUS`）、`models.yaml`（`status: cancelled`，
+    **`outcome` 保持 null**）、`validate_gold.py`（印「cancelled」不是「not annotated yet」）。
+    加兩個測試：cancelled 不得寫進 `outcome`；challenger 檔案不得存在。
+  - **F5／F6 改名它宣稱的東西**：增益是關於「視覺區塊（本語料中絕大多數是有框表格）」，
+    **不得**說成 chart-reading 能力。兩階保留（只做增益歸因）。
+- **D-022：chart 題全部強制稽核 ＋ 只能「部分佐證」**
+  - `verify_gold_answers.py` 新增 crop 層級佐證：答案數值必須是**所引 bbox 內**的標籤
+    （multiset）。負向對照實測：bbox 換成同頁另一張圖 → `3 of 3 not labelled`；
+    換成空白 → `no text labels at all`。**判別力是真的。**
+  - 這類記錄報 `~ partial`，**永遠不是 ok** —— 歸屬只有人看圖能確認。
+  - `audit_sample` 從 script 搬到 `src/twfi/eval/audit.py` 並補測試：
+    它是 protocol（研究對自己 gold 的主張），不該留在沒測試的 script 裡。
+    強制題**排除在抽籤池外** → 新增類別**不重抽**其他類別，已完成的 8 題不作廢。
+- **D-023：cp950 讓列印 gold 的 script 中途死掉**
+  - `audit_gold.py --render` 列到 LOCK-0033 的 `≤` 就 `UnicodeEncodeError` 崩在半路 ——
+    **比輸出很醜嚴重**，因為半份清單看起來像一份較短的樣本。
+  - 新增 `src/twfi/console.py::use_utf8_output()`，7 支會列印文件／gold 的 script
+    在 `_entrypoint()` 自己呼叫（**不做 import side effect**）。
+    順帶：主控台的中文從此正常顯示。
+  - LOCK-0033 題目改用「7奈米及以下」，圖例原樣記在 notes。
+
+**現況**：locked **33/33**（chart 2 題待稽核）、probe 5、dev 0/15、challenger 取消。
+980 passed／1 skipped、coverage 97.93%、ruff ＋ mypy 全綠。
+
+**下一個要人做的事**：`audit_gold.py --set locked --render` → 看兩張 crop → `--accept`。
+
+---
 
 ### 2026-07-31 — Session 7（P4 commit ＋ 發布到 GitHub）
 

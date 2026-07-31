@@ -17,6 +17,7 @@ from typing import Annotated
 
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.eval.gold import GoldRecord, GoldSet, load_gold, set_problems
 from twfi.paths import repo_paths
 
@@ -74,6 +75,14 @@ def _report(name: GoldSet, path: Path, *, require_complete: bool) -> tuple[int, 
     typer.echo(f"=== {name} :: {path.name} ===")
 
     if not path.exists():
+        # A cancelled set is not an unfinished one. Printing "not annotated yet" for the
+        # challenger invited someone to go and finish it -- which, given that the dev
+        # filings contain no charts, could only be done by mislabelling tables or by
+        # reaching into the locked set (D-021).
+        if _is_cancelled(name):
+            typer.echo("  cancelled -- not required, and must not be built")
+            typer.echo(f"  reason: {_cancelled_reason(name)}")
+            return 0, 0
         if require_complete:
             typer.echo("  MISSING -- required before freeze")
             return 1, 0
@@ -104,6 +113,18 @@ def _report(name: GoldSet, path: Path, *, require_complete: bool) -> tuple[int, 
     return len(problems), len(records)
 
 
+def _is_cancelled(name: GoldSet) -> bool:
+    from twfi.protocol import CHALLENGER_STATUS
+
+    return name == "challenger" and CHALLENGER_STATUS == "cancelled"
+
+
+def _cancelled_reason(name: GoldSet) -> str:
+    from twfi.protocol import CHALLENGER_CANCELLED_REASON
+
+    return CHALLENGER_CANCELLED_REASON if name == "challenger" else ""
+
+
 def _counts(records: list[GoldRecord]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for record in records:
@@ -127,6 +148,7 @@ def _completeness_problems(name: GoldSet, records: list[GoldRecord]) -> list[str
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.eval.gold import GoldRecord, GoldSet, load_gold
 from twfi.eval.leakage import NEAR_DUPLICATE_THRESHOLD, leakage_problems
 from twfi.paths import repo_paths
@@ -73,6 +74,7 @@ def main() -> None:
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

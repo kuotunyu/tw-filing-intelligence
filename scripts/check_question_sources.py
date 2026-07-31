@@ -19,6 +19,7 @@ from typing import Annotated
 
 import typer
 
+from twfi.console import use_utf8_output
 from twfi.errors import ParsingError
 from twfi.eval.sources import (
     DocumentCapability,
@@ -149,6 +150,7 @@ def _statement_state(quality: DocumentQuality) -> StatementState:
 
 
 def _entrypoint() -> None:
+    use_utf8_output()
     app()
 
 

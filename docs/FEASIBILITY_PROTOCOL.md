@@ -86,8 +86,10 @@ Dev set 的兩家公司（2412、1301）不出現在 locked set 的任何題目�
 | 可否修改 | 可以，隨時重跑 | freeze 後不可 |
 | 用途 | 除錯、prompt 設計、threshold 探索 | 唯一的正式比較依據 |
 
-DEV 另有一個輔助集合：`data/evaluation/dev/chart_challenger.jsonl`（16 題 chart crop
-讀值），只用於 §2.3 的 freeze 前模型決策，**不屬於** 15 題 DEV set，也不進 locked run。
+DEV 原定另有一個輔助集合 `data/evaluation/dev/chart_challenger.jsonl`（16 題 chart crop
+讀值），用於 §2.3 的 freeze 前模型決策。
+**2026-08-01 修訂（D-021）：此集合取消，因為 DEV 兩份文件裡沒有任何圖表** ——
+20 個幾何正例逐一目視，20 / 20 是表格（主要為斜線表頭）或印章。詳見 §2.3。
 
 **所有 threshold、prompt、tolerance、chunk size、top-k 只允許在 DEV 上調整。**
 Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境錯誤」且無人看過分數的情況下，
@@ -124,6 +126,17 @@ Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境�
 pool 由 21 題縮為 **18 題**，在 10pp 下只需 1.8 題（即 2 個多對的答案）就能過關，
 而那條 gate 原本要求「超過 2 個」。15pp × 18 = 2.7 → **需要 3 個**，
 證據強度回到原水準。**門檻只能往「更難 GO」的方向動**，這一次正是如此。
+（此修訂在跑任何 evaluation 之前完成 —— 沒有任何結果影響它。）
+
+**兩題的實際內容（2026-08-01）**：
+`LOCK-0032` = `2330-FY2023-AR` p7「產能計劃」的年成長率；
+`LOCK-0033` = `2330-FY2024-AR` p6「晶圓銷售計劃」的 7 奈米及以下佔比。
+刻意取不同文件的不同圖，把相關性壓到語料允許的最低。
+兩題都排除圖上的區間值（15-16、60-70%、20-30%）：**±0.1pp 的容差無法評分一個區間**。
+
+**必須寫進 report limitations 的一句話**：
+> 這兩題來自同一家公司（台積電）的兩頁。它們能回答的是
+> 「能不能讀台積電那兩張資訊圖」，不是「能不能讀圖表」。
 
 `unanswerable` 4 題必須涵蓋三種成因，且至少各一題：
 (a) 文件中確實不存在該資訊；(b) 資訊存在但超出所選文件範圍（例如未選之年度）；
@@ -202,6 +215,16 @@ pool 由 21 題縮為 **18 題**，在 10pp 下只需 1.8 題（即 2 個多對�
   各題型至少需要一種對應證據：`chart_value_trend` 需 `chart_crop`、
   `table_cell` 需 `table_cell`、`numeric_calculation` 需 `sql_row` 或 `table_cell`。
   只給頁碼的圖表題無法用來評分 crop-level citation，而那正是 chart route 的量測目的。
+- **`chart_value_trend` 全部強制稽核，且只能取得「部分佐證」**（D-022，2026-08-01）：
+  1. 每一題都進稽核樣本（`twfi.eval.audit.ALWAYS_AUDITED`），**不抽樣**。
+     強制題**排除在抽籤池之外**，所以新增強制類別不會重抽其他類別、
+     不會作廢已完成的稽核。
+  2. `verify_gold_answers.py` 對 chart 題以**crop 層級**佐證：答案的每個數值必須是
+     **所引 bbox 內部**的文字標籤（multiset 比對，重複值需重複標籤）。
+     bbox 指到同頁另一張圖就會失敗。
+  3. 這類記錄報為 `~ partial`，**永遠不是 ok**。原因是 chart 答案 = 一組數值
+     **＋** 每個數值的年份與系列歸屬，而承載歸屬的座標軸標籤與圖例顏色
+     **正是 text layer 丟掉的東西** —— 只有人看圖才能確認。
 - `unanswerable` 題 `answer` 固定為 `null`，並提供 `refusal_reason_class`
   （`absent_from_documents` / `outside_selected_scope` / `irreconcilable_conflict`，
   對應 §1.4 的 (a)(b)(c)）。
@@ -233,6 +256,16 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
 
 - 「Candidate」在所有 gate 判斷中一律指 **F7**。
 - F1…F6 只用於**增益歸因**（哪個 factor 帶來多少改善），不參與 GO／NO-GO 門檻。
+- **F5／F6 量的不是讀圖表能力**（D-021，2026-08-01 修訂）。
+  兩階的輸入是 figure candidate（8 份可用文件共 503 個）。逐一目視的結果是
+  **確認的真圖表只有 4 張**（全部台積電，集中在 2 頁），其餘是有框表格。
+  因此：
+  > F5／F6 的增益是關於**視覺區塊（在本語料中絕大多數是有框表格）**的證據，
+  > **不得**在 report 中描述為 chart-reading 能力。
+
+  兩階**保留**（它們只做增益歸因、不參與 gate）：
+  「替有框表格生 caption、用 VLM 讀表格 crop 有沒有幫助」對這份語料
+  其實是更切題的問題。只是它必須用它真正的名字來報告。
 - 每個 factor 相對前一階只改一件事（factor-at-a-time），因此
   `Δ(Fk) = metric(Fk) − metric(Fk−1)` 可歸因於該 factor。
 
@@ -265,7 +298,29 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
   `configs/models.lock.json`，並納入 protocol lock hash。
 - **`gpt-oss:20b` 明確不進入正式 pipeline**（不做模型排行榜）。
 
-### 2.3 Chart challenger（**freeze 前**的一次性模型決策，規則事前寫死）
+### 2.3 Chart challenger（**已取消** — 素材不存在）
+
+> **2026-08-01 修訂（D-021）：challenger 取消，chart route 使用 `qwen3.6:27b`。**
+>
+> 取消的原因不是結果，而是**素材不存在**：下方第 1 條要求 16 題 **DEV 文件**的
+> chart crop 讀值題，而 DEV 兩份年報（2412 FY2023、1301 FY2023）的
+> **20 個幾何正例逐一目視後，20 / 20 都不是圖表** ——
+> 主要是「項目＼年度」的**斜線表頭**，其次是紅色印章的曲線。
+> DEV 文件裡一張圖表都沒有，這 16 題無從出題。
+>
+> 為什麼這不是事後換模型：
+> 1. **一次比較都沒跑過**，沒有任何分數被看到。
+> 2. 結論與下方第 3 條**事前就寫死的 fallback 分支完全相同**
+>    （「否則全部 route 用 `qwen3.6:27b`」），所以取消不可能對本研究有利。
+> 3. 替代方案都更糟：
+>    用 locked 的 4 張圖選模型 = **在 locked 上做模型選擇**（禁止）；
+>    用 DEV 的表格跑「chart challenger」= 把讀表格的比較當成讀圖表的決策來報告。
+>
+> `qwen3-vl:8b` 不進入 pipeline，`configs/models.lock.json` 必須記錄
+> challenger 為 `cancelled` 並附上原因，report 必須說明它為何沒有跑。
+> **freeze 之後同樣不得比較模型。**
+
+以下為原規則，保留以備查核（**不再執行**）。
 
 `qwen3-vl:8b` digest `901cae732162`（8.8B、Q4_K_M、architecture `qwen3vl`）
 只作為 chart route 的小型 challenger，用來確認「用 27B 通才同時處理文字與圖表」
@@ -440,11 +495,12 @@ Gate 由 `scripts/run_gate.py` 讀取 `results/feasibility/summary.json` 自動�
 ## 5. 執行順序（不可調換）
 
 1. 資料取得 ＋ manifest SHA-256 驗證（G1 的證據）
-2. Gold set 人工標註：DEV 15 題、LOCKED 36 題 ＋ 5 個 probe
-   ＋ DEV chart challenger 16 題
+2. Gold set 標註：DEV 15 題、LOCKED **33** 題 ＋ 5 個 probe
+   （原列的「DEV chart challenger 16 題」已取消，見 §2.3／D-021）
 3. 在 **DEV** 上開發、調參、決定所有超參數與 prompt
-4. **Chart challenger（§2.3）**：在 DEV 上比較 `qwen3.6:27b` 與 `qwen3-vl:8b`，
-   依事前規則決定 chart route 用哪個模型，結果寫入 `configs/models.lock.json`
+4. ~~**Chart challenger（§2.3）**~~ **已取消**（D-021）：DEV 文件沒有圖表，
+   16 題無從出題。chart route 依 §2.3 事前寫死的 fallback 使用 `qwen3.6:27b`，
+   `configs/models.lock.json` 記錄 challenger 為 `cancelled` 及原因
 5. `scripts/pin_models.py` → `configs/models.lock.json`（digest／revision／ollama 版本）
 6. `scripts/check_leakage.py` 通過（DEV／LOCKED 公司與文件不重疊、`annotator=human`）
 7. **`scripts/freeze_protocol.py`** → 產生 `results/feasibility/protocol_lock.json`
@@ -454,7 +510,9 @@ Gate 由 `scripts/run_gate.py` 讀取 `results/feasibility/summary.json` 自動�
 
 > 第 7 步之後才允許碰 LOCKED。第 8 步開始，任何對 `src/` 的修改都必須重跑
 > 全部 F0…F7 並在 report 記錄，不允許只重跑對自己有利的 config。
-> Chart challenger 只能在第 4 步做一次，**freeze 之後不得再比較模型**。
+> Chart challenger 原本只能在第 4 步做一次；它已取消（D-021），
+> 而**「freeze 之後不得比較模型」這條完全不變** ——
+> challenger 沒跑不構成之後補跑的理由。
 
 ---
 
