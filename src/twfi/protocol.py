@@ -34,6 +34,7 @@ __all__ = [
     "PROBE_COUNT",
     "CHALLENGER_ITEMS",
     "HARD_CATEGORIES",
+    "SINGLE_GATE_CATEGORIES",
     "POOLED_HARD_SIZE",
     "ROUTE_BY_QUESTION_TYPE",
     "FACTOR_IDS",
@@ -202,25 +203,32 @@ USABLE_DOCUMENTS: Final[tuple[DeclaredDocument, ...]] = tuple(
 
 #: Protocol 1.4. Fixed before annotation so the mix cannot be tilted toward
 #: whatever the system happens to be good at.
+#:
+#: Amended 2026-07-31, before freeze, on a measurement rather than a result (D-020):
+#: chart_value_trend drops 5 to 2 because the locked filings contain four genuine charts,
+#: all 台積電, all on two pages. Five items drawn from them would be five readings of the
+#: same two infographics -- correlated enough that one capability decides the whole
+#: category. Two items, one per distinct chart, is what the corpus actually supports.
 LOCKED_TYPE_COUNTS: Final[MappingProxyType[str, int]] = MappingProxyType(
     {
         "narrative_fact": 6,
         "table_cell": 5,
         "numeric_calculation": 5,
         "cross_period_comparison": 4,
-        "chart_value_trend": 5,
+        "chart_value_trend": 2,
         "cross_page": 4,
         "cross_document": 3,
         "unanswerable": 4,
     }
 )
 
-LOCKED_TOTAL: Final = 36
+LOCKED_TOTAL: Final = 33
 DEV_TOTAL: Final = 15
 PROBE_COUNT: Final = 5
 CHALLENGER_ITEMS: Final = 16
 
-#: Protocol 1.4 / gate G2. These are the categories the study exists to move.
+#: Protocol 1.4 / gate G2. These are the categories the study exists to move, and the
+#: pooled set G2's first condition is judged on.
 HARD_CATEGORIES: Final[frozenset[str]] = frozenset(
     {
         "numeric_calculation",
@@ -230,6 +238,15 @@ HARD_CATEGORIES: Final[frozenset[str]] = frozenset(
         "cross_document",
     }
 )
+
+#: G2's *second* condition -- at least one single category improving by the threshold --
+#: may only be judged on categories large enough for a threshold to mean something.
+#:
+#: chart_value_trend is excluded (2026-07-31, D-020). At two items one answer is fifty
+#: percentage points, so a category that small would let a single lucky reading satisfy a
+#: gate on its own. It stays in the pooled set, where it contributes evidence without
+#: being able to decide anything alone, and it is still scored and reported.
+SINGLE_GATE_CATEGORIES: Final[frozenset[str]] = HARD_CATEGORIES - {"chart_value_trend"}
 
 #: 21 items. A single hard category has only 3-5 items, where one answer is worth
 #: 20-33 percentage points, so G2 is judged on the pooled set first.
@@ -271,7 +288,14 @@ class Gates:
     """Protocol 4. Thresholds are fixed before the locked run and never relaxed."""
 
     # G2 -- both conditions must hold.
-    pooled_hard_min_gain_pp: float = 10.0
+    #
+    # Raised from 10.0 on 2026-07-31 (D-020). Reducing chart_value_trend from five items
+    # to two shrank the pooled hard set from 21 to 18, and at 10 points a gain of 1.8
+    # items would have passed -- meaning two extra correct answers could clear a gate
+    # that was written to need more than two. 15 points over 18 items needs three. The
+    # change makes GO harder rather than easier, which is the only direction a threshold
+    # may move once the data exist.
+    pooled_hard_min_gain_pp: float = 15.0
     single_hard_min_gain_pp: float = 10.0
     # G3
     max_overall_regression_pp: float = 5.0
@@ -322,6 +346,8 @@ def consistency_problems(
         )
     if not set(hard_categories).issubset(type_counts):
         problems.append("hard categories must all be question types")
+    if not SINGLE_GATE_CATEGORIES.issubset(hard_categories):
+        problems.append("single-gate categories must be a subset of the hard categories")
     overlap = set(dev_codes) & set(locked_codes)
     if overlap:
         problems.append(f"dev and locked companies overlap: {sorted(overlap)}")

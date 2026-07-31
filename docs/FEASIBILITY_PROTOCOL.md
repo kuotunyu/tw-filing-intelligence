@@ -81,7 +81,7 @@ Dev set 的兩家公司（2412、1301）不出現在 locked set 的任何題目�
 | | DEV | LOCKED |
 |---|---|---|
 | 檔案 | `data/evaluation/dev/gold.jsonl` | `data/evaluation/locked/gold.jsonl` |
-| 題數 | 15（規範 12–18） | **36**（規範 ≥30） |
+| 題數 | 15（規範 12–18） | **33**（規範 ≥30） |
 | 文件 | 2412 FY2023、1301 FY2023 | 2330 FY2023/FY2024、2317 FY2023/FY2024、2882 FY2024 |
 | 可否修改 | 可以，隨時重跑 | freeze 後不可 |
 | 用途 | 除錯、prompt 設計、threshold 探索 | 唯一的正式比較依據 |
@@ -101,11 +101,29 @@ Locked set 只跑一次正式 run（重跑只允許在「程式 crash 或環境�
 | `table_cell` | 5 | |
 | `numeric_calculation` | 5 | ✅ |
 | `cross_period_comparison` | 4 | ✅ |
-| `chart_value_trend` | 5 | ✅ |
+| `chart_value_trend` | 2 | ✅（僅計入 pooled） |
 | `cross_page` | 4 | ✅ |
 | `cross_document` | 3 | ✅ |
 | `unanswerable` | 4 | |
-| **合計** | **36** | |
+| **合計** | **33** | |
+
+**2026-07-31 修訂（D-020，freeze 前，依量測而非依結果）**：
+`chart_value_trend` 由 5 題降為 **2 題**，並**自 G2 的 hard category 移除**。
+理由是量測結果：8 份可用文件的 503 個 chart candidate 中，
+**locked 只有 4 張確認的真圖表，全部來自台積電、全部在兩頁上**
+（鴻海與國泰金 0 張；兩份財務報告書 0 張）。
+5 題全從那兩頁出，就是對同兩張資訊圖讀 5 次 —— 高度相關到「一個能力決定整組」。
+而 10 個百分點的門檻在 n=2 上無意義（一題就是 50 點）。
+
+**chart 仍留在 pooled hard set**（它仍是 hard category，且 pool 需要題數），
+但**不得用來滿足 G2 的第二個條件**（單一類別改善 ≥ 門檻）——
+否則一次幸運的讀值就能單獨通關。
+程式上以 `SINGLE_GATE_CATEGORIES` 表達（= `HARD_CATEGORIES` 減 chart）。
+
+**連帶調整 G2 的 pooled 門檻：10pp → 15pp。**
+pool 由 21 題縮為 **18 題**，在 10pp 下只需 1.8 題（即 2 個多對的答案）就能過關，
+而那條 gate 原本要求「超過 2 個」。15pp × 18 = 2.7 → **需要 3 個**，
+證據強度回到原水準。**門檻只能往「更難 GO」的方向動**，這一次正是如此。
 
 `unanswerable` 4 題必須涵蓋三種成因，且至少各一題：
 (a) 文件中確實不存在該資訊；(b) 資訊存在但超出所選文件範圍（例如未選之年度）；
@@ -372,7 +390,7 @@ Gate 由 `scripts/run_gate.py` 讀取 `results/feasibility/summary.json` 自動�
 | # | Gate | 判定條件 | 類型 |
 |---|---|---|---|
 | G1 | 資料可重現 | 所有文件與結構化資料可由 manifest ＋ 腳本重建，SHA-256 全部相符；無 CAPTCHA 破解、無私人 endpoint | **hard** |
-| G2 | Hard category 增益 | **兩個條件都要成立**：(a) F7 在**合併 hard set**（`numeric_calculation` 5 ＋ `cross_period_comparison` 4 ＋ `chart_value_trend` 5 ＋ `cross_page` 4 ＋ `cross_document` 3 = **21 題**）的 primary answer metric 相對 F0 改善 **≥ 10 個百分點**（≥ 多對 3 題）；(b) 至少一個**單一** hard category 改善 ≥ 10 個百分點 | **hard** |
+| G2 | Hard category 增益 | **兩個條件都要成立**：(a) F7 在**合併 hard set**（`numeric_calculation` 5 ＋ `cross_period_comparison` 4 ＋ `chart_value_trend` 2 ＋ `cross_page` 4 ＋ `cross_document` 3 = **18 題**）的 primary answer metric 相對 F0 改善 **≥ 15 個百分點**（≥ 多對 3 題）；(b) 至少一個**單一** hard category（`SINGLE_GATE_CATEGORIES`，**不含 chart**）改善 ≥ 10 個百分點 | **hard** |
 | G3 | 無整體退步 | F7 overall answer accuracy 不得低於 F0 超過 **5 個百分點** | **hard** |
 | G4 | Citation validity | F7 citation validity **≥ 90%** | **hard** |
 | G5 | Numeric route 正確率 | F7 在可回答的 `numeric_calculation`＋`cross_period_comparison`＋`table_cell` 且經 numeric route 處理者，正確率 **≥ 90%** | **hard** |

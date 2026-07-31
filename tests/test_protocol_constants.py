@@ -29,6 +29,7 @@ from twfi.protocol import (
     POOLED_HARD_SIZE,
     PROBE_COUNT,
     ROUTE_BY_QUESTION_TYPE,
+    SINGLE_GATE_CATEGORIES,
     USABLE_DOCUMENTS,
     consistency_problems,
     split_for_company,
@@ -44,7 +45,7 @@ def protocol_doc(repo_root: Path) -> str:
 
 
 def test_locked_counts_sum_to_the_declared_total() -> None:
-    assert sum(LOCKED_TYPE_COUNTS.values()) == LOCKED_TOTAL == 36
+    assert sum(LOCKED_TYPE_COUNTS.values()) == LOCKED_TOTAL == 33
 
 
 def test_locked_set_meets_the_minimum_size_required_by_the_brief() -> None:
@@ -56,7 +57,7 @@ def test_dev_set_is_within_the_declared_range() -> None:
 
 
 def test_pooled_hard_size_is_the_sum_of_hard_categories() -> None:
-    assert POOLED_HARD_SIZE == sum(LOCKED_TYPE_COUNTS[t] for t in HARD_CATEGORIES) == 21
+    assert POOLED_HARD_SIZE == sum(LOCKED_TYPE_COUNTS[t] for t in HARD_CATEGORIES) == 18
 
 
 def test_every_question_type_has_a_gold_route() -> None:
@@ -280,8 +281,33 @@ def test_detects_an_unknown_gold_route() -> None:
 
 def test_one_item_in_the_smallest_hard_category_exceeds_the_single_category_gate() -> None:
     """Why G2 is judged on the pooled set: small n makes a single item look huge."""
-    smallest = min(LOCKED_TYPE_COUNTS[t] for t in HARD_CATEGORIES)
+    smallest = min(LOCKED_TYPE_COUNTS[t] for t in SINGLE_GATE_CATEGORIES)
     one_item_pp = 100.0 / smallest
     assert one_item_pp > GATES.single_hard_min_gain_pp
     pooled_items_needed = GATES.pooled_hard_min_gain_pp / 100.0 * POOLED_HARD_SIZE
     assert pooled_items_needed > 2, "the pooled gate must need more than two extra answers"
+
+
+def test_the_pooled_threshold_tracks_the_pool_it_is_judged_on() -> None:
+    """This test caught a real weakening, not a stale number.
+
+    Cutting chart_value_trend from five items to two shrank the pooled hard set from 21
+    to 18, and at the old 10 points a gain of 1.8 items would have passed -- so two extra
+    correct answers could clear a gate written to need more than two. The threshold moved
+    to 15, which needs three. A threshold may only ever move in the direction that makes
+    GO harder.
+    """
+    assert GATES.pooled_hard_min_gain_pp == 15.0
+    needed = GATES.pooled_hard_min_gain_pp / 100.0 * POOLED_HARD_SIZE
+    assert 2 < needed <= 3
+
+
+def test_chart_cannot_satisfy_the_single_category_gate_alone() -> None:
+    """At two items one answer is fifty points, which no threshold can survive.
+
+    chart_value_trend stays in the pooled set, where it contributes evidence without being
+    able to decide anything by itself.
+    """
+    assert "chart_value_trend" in HARD_CATEGORIES
+    assert "chart_value_trend" not in SINGLE_GATE_CATEGORIES
+    assert 100.0 / LOCKED_TYPE_COUNTS["chart_value_trend"] == 50.0
