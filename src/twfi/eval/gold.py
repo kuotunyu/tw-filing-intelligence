@@ -432,6 +432,11 @@ def set_problems(
     questions: dict[str, str] = {}
     for record in records:
         key = " ".join(record.question.split()).casefold()
+        if not key:
+            # An unfilled template has several empty questions, and reporting them as
+            # duplicates of each other buries the one problem that matters -- that they
+            # are empty -- under noise the annotator then has to ignore.
+            continue
         if key in questions:
             problems.append(f"{record.question_id} repeats the question text of {questions[key]}")
         else:

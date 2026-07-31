@@ -573,3 +573,15 @@ def test_a_table_cell_question_is_graded_on_the_chart_route() -> None:
     """Tabular evidence resolves through the same structured path as figures."""
     assert gold_route("table_cell") == "chart"
     assert gold_route("unanswerable") == "unanswerable"
+
+
+def test_several_empty_questions_are_not_reported_as_duplicates_of_each_other() -> None:
+    """An unfilled probe template has five empty questions.
+
+    Reporting four of them as duplicates buries the problem that matters -- that they
+    are empty -- under noise the annotator has to learn to ignore.
+    """
+    blanks = [make(question_id=f"LOCK-{n:04d}", question="") for n in range(1, 6)]
+    problems = set_problems(blanks, gold_set="locked", type_counts={})
+    assert sum("question text is empty" in problem for problem in problems) == 5
+    assert not any("repeats the question text" in problem for problem in problems)

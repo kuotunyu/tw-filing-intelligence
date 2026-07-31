@@ -1,0 +1,35 @@
+// PROBE TEMPLATE -- 5 no-evidence probes for gate G8.
+//
+// Copy this file to probes.jsonl, then fill in `question` and `answer` for each line
+// by opening the cited page. `answer` is deliberately null: validate_gold.py fails on
+// "an answerable question needs a non-empty answer" until a person has read the page.
+// A placeholder string would have passed, which is why there isn't one.
+//
+// WHAT A PROBE IS. G8 runs these with retrieval forced empty. The question IS
+// answerable from the filings; the harness withholds the evidence, and the system must
+// refuse rather than answer from what it memorised in pretraining. So a probe only
+// tests anything if the model plausibly knows the figure already -- these are the
+// headline numbers of three well-known issuers, chosen to be as tempting as possible.
+//
+// WHY THE ANSWER IS STILL RECORDED. With the true answer present, error analysis
+// separates three outcomes: refused correctly, answered wrongly, and -- the worst case,
+// invisible without it -- answered *correctly* with no evidence at all.
+//
+// Lines beginning with // are skipped by load_gold(), so this commentary is safe to keep.
+//
+// Pages come from `uv run python scripts/make_worklist.py --for probe`
+// (data/evaluation/worklist/probe.jsonl carries the excerpts).
+//
+// question_type is narrative_fact throughout: it routes to `narrative`, which is where
+// an unguarded model would answer from memory, and it needs only page evidence. Change
+// it to table_cell if you would rather cite the cell -- that then requires a tolerance
+// and either a bbox or a structured_source_key.
+//
+// After filling in:  uv run python scripts/validate_gold.py --set probe
+//                    uv run python scripts/check_leakage.py
+
+{"question_id": "PROBE-0001", "question_type": "narrative_fact", "question": "", "answer": null, "answerable": true, "company": {"name": "台積電", "code": "2330"}, "period": "FY2023", "source_document": ["2330-FY2023-AR"], "page_numbers": [11, 46], "required_evidence": [{"kind": "page", "ref": "2330-FY2023-AR#p11"}], "unit": "千元", "currency": "TWD", "statement_basis": "consolidated", "answer_provenance": "human_read_pdf", "annotator": "human", "annotated_at": "2026-07-31", "annotation_notes": "營業收入. Worklist located it on pp.11 and 46."}
+{"question_id": "PROBE-0002", "question_type": "narrative_fact", "question": "", "answer": null, "answerable": true, "company": {"name": "台積電", "code": "2330"}, "period": "FY2023", "source_document": ["2330-FY2023-AR"], "page_numbers": [6, 8], "required_evidence": [{"kind": "page", "ref": "2330-FY2023-AR#p6"}], "unit": "元", "currency": "TWD", "statement_basis": "consolidated", "answer_provenance": "human_read_pdf", "annotator": "human", "annotated_at": "2026-07-31", "annotation_notes": "基本每股盈餘. The most-memorised single number about this issuer."}
+{"question_id": "PROBE-0003", "question_type": "narrative_fact", "question": "", "answer": null, "answerable": true, "company": {"name": "台積電", "code": "2330"}, "period": "FY2024", "source_document": ["2330-FY2024-FS"], "page_numbers": [55, 56], "required_evidence": [{"kind": "page", "ref": "2330-FY2024-FS#p55"}], "unit": "千元", "currency": "TWD", "statement_basis": "consolidated", "answer_provenance": "human_read_pdf", "annotator": "human", "annotated_at": "2026-07-31", "annotation_notes": "營業收入 from 附註二一 on p.55, because this document's four primary statements have no text layer (D-017). The FY2023 comparative sits beside it."}
+{"question_id": "PROBE-0004", "question_type": "narrative_fact", "question": "", "answer": null, "answerable": true, "company": {"name": "鴻海", "code": "2317"}, "period": "FY2024", "source_document": ["2317-FY2024-FS"], "page_numbers": [14, 27], "required_evidence": [{"kind": "page", "ref": "2317-FY2024-FS#p14"}], "unit": "千元", "currency": "TWD", "statement_basis": "consolidated", "answer_provenance": "human_read_pdf", "annotator": "human", "annotated_at": "2026-07-31", "annotation_notes": "營業收入. This is 鴻海's only question-sourceable document -- both annual reports have broken text layers (D-017)."}
+{"question_id": "PROBE-0005", "question_type": "narrative_fact", "question": "", "answer": null, "answerable": true, "company": {"name": "國泰金控", "code": "2882"}, "period": "FY2024", "source_document": ["2882-FY2024-FS"], "page_numbers": [12], "required_evidence": [{"kind": "page", "ref": "2882-FY2024-FS#p12"}], "unit": "千元", "currency": "TWD", "statement_basis": "consolidated", "answer_provenance": "human_read_pdf", "annotator": "human", "annotated_at": "2026-07-31", "annotation_notes": "本期淨利. A 金控 files no 營業收入 line at all (D-015), so net income is the comparable headline figure."}
