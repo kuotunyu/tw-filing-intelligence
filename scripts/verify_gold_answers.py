@@ -77,6 +77,10 @@ _SEPARATORS = re.compile(r"[,\s]")
 #: The comma is deliberately not a separator: it is the thousands separator, and splitting
 #: on it shredded every figure into 資產總額5 / 215千元 and called them all missing.
 _FIGURE_ATOM = re.compile(r"\d[\d,]{2,}(?:\.\d+)?")
+#: An answer that is nothing but one figure. Those are matched whole, because that path also
+#: distinguishes "on the cited page" from "elsewhere in the document", which G4 cares about.
+#: Anything else is composite and is checked atom by atom.
+_SINGLE_FIGURE = re.compile(r"-?\d[\d,]*(?:\.\d+)?%?")
 _CJK_ATOM = re.compile(r"[\u4e00-\u9fff]{2,}")
 #: Dropped before comparing: era names a filing states inconsistently, and words that are
 #: the annotator's connective tissue rather than anything a page must contain.
@@ -358,7 +362,12 @@ def _verify_against(record: GoldRecord, pages: dict[int, str], doc_id: str) -> t
     answer = record.answer or ""
     cited = set(record.page_numbers)
 
-    if record.question_type in {"narrative_fact", "cross_page", "cross_document"}:
+    # Branch on the *shape of the answer*, not on the question type. Typing the list of
+    # prose types was a proxy that happened to hold: locked's cross_period answers are all
+    # single derived figures, so nothing exposed the gap. Dev's are composite -- 「民國111年度
+    # 511,254,407 千元；民國112年度 530,738,356 千元」 -- and a whole-string search reported
+    # three correct answers as absent from a filing that prints every figure in them.
+    if not _SINGLE_FIGURE.fullmatch(_normalise_text(answer)):
         return _verify_prose(answer, pages, record.page_numbers, doc_id)
 
     bare = _SEPARATORS.sub("", answer)
