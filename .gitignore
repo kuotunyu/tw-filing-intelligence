@@ -71,3 +71,6 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+# The answer form is the input to fill_probes.py; probes.jsonl is the record of account,
+# and regenerating the form is one command. Keeping both would invite them to disagree.
+data/evaluation/*/probes.answers.txt
