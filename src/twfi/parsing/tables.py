@@ -24,7 +24,8 @@ Measured decisions, not preferences:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
@@ -38,6 +39,8 @@ __all__ = [
     "UnitSpec",
     "Table",
     "detect_unit",
+    "document_unit",
+    "inherit_units",
     "is_table_like",
     "link_continuations",
     "extract_tables",
@@ -57,12 +60,24 @@ _UNIT_PATTERN = re.compile(
     rf"(?P<unit>{_UNIT_WORDS})"
 )
 
-#: The trap this exists for, observed verbatim on 2882-FY2024-FS p10:
-#:   「單位：新台幣仟元，惟每股盈餘為元」
-#: One label, two units. Applying 千元 to earnings per share would be wrong by a
-#: factor of a thousand, and it would be wrong in a way that looks plausible.
+#: The trap this exists for. One label, two units: applying 千元 to earnings per share
+#: is wrong by a factor of a thousand, and wrong in a way that looks plausible.
+#:
+#: Two issuers write it two ways, and the first version of this pattern only read one::
+#:
+#:     2882-FY2024-FS p10   單位：新台幣仟元，惟每股盈餘為元
+#:     2317-FY2024-FS p14   單位：新台幣仟元(除每股盈餘為新台幣元外)
+#:
+#: The second returned no exception at all, so the spec reported itself uniform and the
+#: numeric route would have applied 千元 to 鴻海's EPS with full confidence. Matching
+#: only the phrasing the first sampled filing happened to use is how a unit check passes
+#: while being wrong.
+#:
+#: 除另予註明者外 does not match: ``what`` cannot span a comma, so there is no ``為``
+#: for it to reach.
 _UNIT_EXCEPTION = re.compile(
-    rf"惟\s*(?P<what>[^，。、）)]{{1,24}}?)\s*為\s*(?P<unit>{_UNIT_WORDS})"
+    rf"(?:惟|除)\s*(?P<what>[^，。、）)]{{1,24}}?)\s*為\s*"
+    rf"(?:{_CURRENCY_WORDS})?\s*(?P<unit>{_UNIT_WORDS})"
 )
 
 #: 「除另予註明者外」 -- "unless otherwise noted". The unit holds by default but the
@@ -131,10 +146,25 @@ class UnitSpec:
     exception: str | None = None
     #: True when the filing said 除另予註明者外, reserving the right to override.
     qualified: bool = False
+    #: Where the unit was declared. ``document`` means it was inherited from a
+    #: declaration governing the whole notes section rather than stated at the table.
+    scope: Literal["table", "document"] = "table"
+    #: The page carrying the declaration, so an answer can cite what makes it readable.
+    declared_on_page: int | None = None
 
     @property
     def is_stated(self) -> bool:
         return self.unit is not None
+
+    @property
+    def is_inherited(self) -> bool:
+        """True when nothing near the table said this; a note 39 pages back did.
+
+        Kept distinct from a table-local declaration because the two do not deserve
+        equal confidence: an inherited unit is right only if the table is really inside
+        the declaration's scope, which is an inference, not a reading.
+        """
+        return self.scope == "document"
 
     @property
     def is_uniform(self) -> bool:
@@ -153,6 +183,8 @@ class UnitSpec:
             parts.append("（除另予註明者外）")
         if self.exception:
             parts.append(f"（例外：{self.exception}）")
+        if self.is_inherited and self.declared_on_page is not None:
+            parts.append(f"（承第 {self.declared_on_page} 頁之宣告）")
         return "".join(parts)
 
 
@@ -254,6 +286,53 @@ def detect_unit(text: str) -> UnitSpec:
     return UnitSpec(unit=unit, currency=currency, exception=exception, qualified=qualified)
 
 
+def document_unit(page_texts: Sequence[str], *, marker: str = "附註") -> UnitSpec:
+    """The scale a filing declares once, for its whole notes section.
+
+    Taiwanese financial reports state the scale in the notes header and then omit it
+    from every note table that follows::
+
+        合併財務報告附註 民國113及112年度（除另予註明者外，金額為新台幣仟元）
+
+    ``2330-FY2024-FS`` declares it on page 16 and prints the FY2024 revenue table on
+    page 55, thirty-nine pages later. Looking only near the table found nothing there,
+    so 62 of that filing's 65 tables were recorded as having no stated unit and became
+    unusable -- not because the document is silent, but because the window was too
+    narrow. D-018.
+
+    The qualifier is the signal. 除另予註明者外 means "unless otherwise noted", which is
+    a claim about a whole section; a bare 單位：新台幣仟元 above a table is a claim about
+    that table. So only a qualified declaration, on a page that also names 附註, is
+    treated as governing the document.
+
+    Returns an unstated spec when no such declaration exists. Nothing is assumed.
+    """
+    for index, text in enumerate(page_texts, start=1):
+        if marker not in text or not _UNIT_QUALIFIER.search(text):
+            continue
+        spec = detect_unit(text)
+        if spec.is_stated and spec.qualified:
+            return replace(spec, scope="document", declared_on_page=index)
+    return UnitSpec()
+
+
+def inherit_units(tables: tuple[Table, ...], default: UnitSpec) -> tuple[Table, ...]:
+    """Give tables with no unit of their own the document's declaration.
+
+    Only forwards. A declaration governs what follows it, so a table printed before the
+    notes header keeps its unstated unit rather than borrowing a scale that had not been
+    announced yet.
+    """
+    if not default.is_stated or default.declared_on_page is None:
+        return tables
+    return tuple(
+        replace(table, units=default)
+        if not table.units.is_stated and table.page >= default.declared_on_page
+        else table
+        for table in tables
+    )
+
+
 def is_table_like(rows: tuple[tuple[str, ...], ...], config: TableConfig) -> bool:
     """Whether a candidate has the shape of a real table.
 
@@ -336,6 +415,7 @@ def extract_tables(
     config = config or TableConfig()
     found: list[Table] = []
     page_heights: dict[int, float] = {}
+    page_texts: list[str] = []
 
     try:
         document = pdfplumber.open(pdf_path)
@@ -351,6 +431,11 @@ def extract_tables(
             number = index + 1
             page_heights[number] = float(page.height)
             page_text = page.extract_text() or ""
+            # Keep every page's text, including pages holding no table: the declaration
+            # that governs a note table usually sits on a page of prose (D-018).
+            while len(page_texts) < number - 1:
+                page_texts.append("")
+            page_texts.append(page_text)
 
             for candidate in page.find_tables(config.plumber_settings()):
                 rows = tuple(
@@ -374,7 +459,8 @@ def extract_tables(
                     units = detect_unit(page_text)
                 found.append(Table(page=number, bbox=bbox, rows=rows, units=units))
 
-    return link_continuations(tuple(found), page_heights, config)
+    inherited = inherit_units(tuple(found), document_unit(page_texts))
+    return link_continuations(inherited, page_heights, config)
 
 
 def tables_to_blocks(tables: tuple[Table, ...]) -> tuple[Block, ...]:

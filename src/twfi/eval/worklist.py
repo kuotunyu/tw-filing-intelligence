@@ -57,6 +57,11 @@ STATEMENT_CONTEXT: Final[tuple[str, ...]] = (
 
 _WHITESPACE = re.compile(r"\s+")
 
+#: A comma-grouped figure of four digits or more: 1,234 and up. Prose mentions a
+#: revenue figure once; a statement page carries dozens, so counting them separates
+#: the two far better than the presence of the account name does.
+_FIGURE = re.compile(r"\d{1,3}(?:,\d{3})+")
+
 
 @dataclass(frozen=True, slots=True)
 class AnchorHit:
@@ -66,6 +71,8 @@ class AnchorHit:
     term: str
     excerpt: str
     context_terms: tuple[str, ...] = ()
+    #: How many comma-grouped figures the page carries. The ranking signal.
+    figure_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +117,13 @@ def page_hits(
     context: Sequence[str] = STATEMENT_CONTEXT,
     require_context: bool = True,
 ) -> list[AnchorHit]:
-    """Pages where any term appears, optionally only on pages that look like statements.
+    """Pages where any term appears, richest in figures first.
+
+    Ranking by figure count rather than by page order is the difference between sending
+    an annotator to the statement and sending them to a sentence. The first version
+    returned page order and put 2330-FY2023-AR p.11 -- prose that mentions 營業收入 --
+    ahead of p.64, which carries the 簡明綜合損益表 the figure actually lives in. The
+    annotator opened p.11 and found nothing to read.
 
     ``pages`` is 0-indexed; the returned ``page`` is 1-based, matching every page
     number in the gold schema and every PDF viewer a person will open.
@@ -134,9 +147,12 @@ def page_hits(
                     term=term,
                     excerpt=flat[start : start + EXCERPT_CHARS],
                     context_terms=present,
+                    figure_count=len(_FIGURE.findall(flat)),
                 )
             )
             break
+    # Page number breaks ties, so the order is deterministic rather than input-order.
+    hits.sort(key=lambda hit: (-hit.figure_count, hit.page))
     return hits
 
 

@@ -13,7 +13,9 @@ from twfi.parsing.tables import (
     TableConfig,
     UnitSpec,
     detect_unit,
+    document_unit,
     extract_tables,
+    inherit_units,
     is_table_like,
     link_continuations,
     tables_to_blocks,
@@ -358,3 +360,113 @@ def test_extraction_can_be_limited_to_a_page_range(tmp_path: Path) -> None:
 def test_a_page_range_beyond_the_document_stops_cleanly(tmp_path: Path) -> None:
     filing = build_filing(tmp_path / "filing.pdf")
     assert extract_tables(filing.path, pages=range(50, 60)) == ()
+
+
+# ------------------------------------------------- document-scoped units (D-018)
+
+
+def test_a_unit_declared_once_for_the_notes_governs_the_whole_section() -> None:
+    """2330-FY2024-FS declares the scale on p.16 and prints revenue on p.55.
+
+    Looking only near each table found nothing on p.55, so 62 of 65 tables were recorded
+    as having no stated unit -- not because the filing is silent, but because the window
+    was 39 pages too narrow.
+    """
+    pages = [
+        "封面",
+        "會計師查核報告",
+        "合併財務報告附註 民國113及112年度（除另予註明者外，金額為新台幣仟元）一、公司沿革",
+        "二一、營業收入 產品別 晶圓 其他",
+    ]
+    spec = document_unit(pages)
+    assert spec.unit == "千元"
+    assert spec.currency == "TWD"
+    assert spec.declared_on_page == 3
+    assert spec.is_inherited is True
+
+
+def test_a_declaration_without_the_qualifier_is_not_document_scoped() -> None:
+    """單位：新台幣仟元 above a table is a claim about that table, not the section."""
+    pages = ["合併財務報告附註 一、公司沿革", "單位：新台幣仟元 資產 負債"]
+    assert document_unit(pages).is_stated is False
+
+
+def test_a_qualifier_away_from_the_notes_is_not_document_scoped() -> None:
+    pages = ["附表一 單位：除另予註明外，為新台幣仟元 資金貸與他人"]
+    assert document_unit(pages).is_stated is False
+
+
+def test_a_filing_that_never_declares_a_scale_yields_nothing() -> None:
+    """Silence is reported as silence. Assuming 千元 is the thousand-fold error."""
+    assert document_unit(["附註 一、公司沿革", "營業收入 $2,894,307,699"]).is_stated is False
+
+
+def test_inheritance_runs_forwards_only() -> None:
+    """A table printed before the declaration was not inside its scope yet."""
+    default = UnitSpec(
+        unit="千元", currency="TWD", qualified=True, scope="document", declared_on_page=16
+    )
+    before = Table(page=9, bbox=BBox(0, 0, 10, 10), rows=(("a", "1"), ("b", "2")))
+    after = Table(page=55, bbox=BBox(0, 0, 10, 10), rows=(("a", "1"), ("b", "2")))
+    kept, given = inherit_units((before, after), default)
+    assert kept.unit is None
+    assert given.unit == "千元"
+    assert given.units.declared_on_page == 16
+
+
+def test_a_local_declaration_is_never_overwritten() -> None:
+    """What the page says beats what a note 39 pages back said."""
+    default = UnitSpec(unit="千元", qualified=True, scope="document", declared_on_page=1)
+    local = Table(
+        page=50,
+        bbox=BBox(0, 0, 10, 10),
+        rows=(("a", "1"), ("b", "2")),
+        units=UnitSpec(unit="百萬元", currency="TWD"),
+    )
+    (result,) = inherit_units((local,), default)
+    assert result.unit == "百萬元"
+    assert result.units.is_inherited is False
+
+
+def test_nothing_is_inherited_from_an_unstated_default() -> None:
+    table = Table(page=5, bbox=BBox(0, 0, 10, 10), rows=(("a", "1"), ("b", "2")))
+    (result,) = inherit_units((table,), UnitSpec())
+    assert result.unit is None
+
+
+def test_an_inherited_unit_says_where_it_came_from() -> None:
+    """So an answer can cite the page that makes its figure interpretable."""
+    spec = UnitSpec(
+        unit="千元", currency="TWD", qualified=True, scope="document", declared_on_page=16
+    )
+    assert "承第 16 頁之宣告" in spec.describe()
+
+
+# --------------------------------------- the exception, written two ways
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "單位：新台幣仟元，惟每股盈餘為元",  # 2882-FY2024-FS p10
+        "單位：新台幣仟元(除每股盈餘為新台幣元外)",  # 2317-FY2024-FS p14
+    ],
+)
+def test_both_spellings_of_the_eps_exception_are_read(declaration: str) -> None:
+    """The first version read only the 惟 form.
+
+    On the other, it reported no exception and therefore a uniform spec, so the numeric
+    route would have applied 千元 to earnings per share with full confidence -- wrong by
+    a factor of a thousand, and wrong in a way that looks right.
+    """
+    spec = detect_unit(declaration)
+    assert spec.unit == "千元"
+    assert spec.exception == "每股盈餘為元"
+    assert spec.is_uniform is False
+
+
+def test_the_document_scope_qualifier_is_not_read_as_an_exception() -> None:
+    """除另予註明者外 begins with 除 but names no substitute unit."""
+    spec = detect_unit("（除另予註明者外，金額為新台幣仟元）")
+    assert spec.exception is None
+    assert spec.qualified is True

@@ -137,3 +137,30 @@ def test_a_suggested_stem_is_a_question_not_an_answer() -> None:
     stem = PROBE_TOPICS[0].question_stem("台積電", "FY2024")
     assert stem.endswith("？")
     assert not any(character.isdigit() for character in stem.replace("FY2024", ""))
+
+
+def test_pages_are_ranked_by_figure_count_not_page_order() -> None:
+    """The regression that sent an annotator to a page with nothing to read.
+
+    2330-FY2023-AR p.11 mentions 營業收入 in prose; p.64 carries the statement. Page
+    order put the prose first, so the rendered image showed a paragraph and the figure
+    was nowhere on it.
+    """
+    pages = [
+        "本公司營業收入主要來自晶圓代工業務，較去年成長。",  # p1: prose
+        "無關內容",
+        "營業收入淨額 2,161,735,841 1,428,204 營業成本 986,625 322,120 營業毛利 1,175,110",
+    ]
+    hits = page_hits(pages, ("營業收入",), require_context=False)
+    assert [hit.page for hit in hits] == [3, 1], "the statement page outranks the sentence"
+    assert hits[0].figure_count > hits[1].figure_count
+
+
+def test_ties_break_on_page_number_so_the_order_is_stable() -> None:
+    pages = ["營業收入 1,111 2,222", "無關", "營業收入 3,333 4,444"]
+    assert [hit.page for hit in page_hits(pages, ("營業收入",), require_context=False)] == [1, 3]
+
+
+def test_a_page_with_no_grouped_figures_counts_zero() -> None:
+    (hit,) = page_hits(["營業收入為新台幣二兆元"], ("營業收入",), require_context=False)
+    assert hit.figure_count == 0
