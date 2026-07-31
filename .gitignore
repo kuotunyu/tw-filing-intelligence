@@ -40,6 +40,11 @@ data/duckdb/
 !data/manifests/**
 !data/evaluation/**
 
+# Annotation worklists are the exception: regenerable from make_worklist.py, and they
+# carry short excerpts of the filings so an annotator can recognise a page. Small, but
+# still filing text, and this repository does not redistribute filing content.
+data/evaluation/worklist/
+
 # ---- models ----
 models/
 *.safetensors
