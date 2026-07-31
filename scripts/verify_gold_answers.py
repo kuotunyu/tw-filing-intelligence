@@ -47,6 +47,16 @@ _WHITESPACE = re.compile(r"\s+")
 #: sides are also compared without separators, so 1,465,427,753 matches 1465427753.
 _SEPARATORS = re.compile(r"[,\s]")
 
+#: A prose answer is checked item by item, not as one string. Demanding a verbatim quote
+#: fails on things that are plainly right: the page writes
+#: 「…日本熊本縣以及德國德勒斯登」 while the answer joins the list with 、, and it writes
+#: 「114 年 1 月 1 日」 where the answer says 民國114年1月1日. Those are the same facts.
+_LIST_SEPARATORS = re.compile(r"[、,，;；]|以及|及(?![期權])|和(?!解)")
+#: Dropped before comparing, because a filing states the era name inconsistently.
+_ERA_PREFIX = re.compile(r"^(?:中華民國|民國)")
+#: Ignored as parts: quote marks and brackets the filing puts round names.
+_DECORATION = re.compile(r"[「」『』（）()\[\]《》\s]")
+
 
 @app.command()
 def main(
@@ -132,13 +142,17 @@ def _verify(
         return "cited", f"derived; {len(record.derived_from)} operand(s) on the cited page"
 
     answer = record.answer or ""
+    cited = set(record.page_numbers)
+
+    if record.question_type in {"narrative_fact", "cross_page", "cross_document"}:
+        return _verify_prose(answer, pages, record.page_numbers, doc_id)
+
     bare = _SEPARATORS.sub("", answer)
     found = sorted(
         page
         for page, text in pages.items()
         if answer in text or (bare and bare in _SEPARATORS.sub("", text))
     )
-    cited = set(record.page_numbers)
 
     if set(found) & cited:
         return "cited", f"on cited page(s) {sorted(set(found) & cited)}"
@@ -147,6 +161,43 @@ def _verify(
     if all(not pages.get(page, "").strip() for page in cited):
         return "unverifiable", f"cited page(s) {sorted(cited)} have no text layer"
     return "absent", f"does not appear anywhere in {doc_id}"
+
+
+def _parts(answer: str) -> list[str]:
+    """The substantive items of a prose answer, stripped of decoration."""
+    found = []
+    for chunk in _LIST_SEPARATORS.split(answer):
+        cleaned = _ERA_PREFIX.sub("", _DECORATION.sub("", chunk))
+        if len(cleaned) >= 2:
+            found.append(cleaned)
+    return found
+
+
+def _verify_prose(
+    answer: str, pages: dict[int, str], cited: tuple[int, ...], doc_id: str
+) -> tuple[str, str]:
+    """Every item of a prose answer must appear on some cited page.
+
+    Item by item rather than verbatim, because a correct answer is not a quotation: the
+    filing writes lists with 以及 and wraps names in 「」, and an annotator writes them
+    with 、 and without. Requiring the joined string flagged three answers that were right.
+    """
+    parts = _parts(answer)
+    if not parts:
+        return "unverifiable", "no substantive text to check"
+    text = "".join(pages.get(page, "") for page in cited)
+    if not text.strip():
+        return "unverifiable", f"cited page(s) {sorted(cited)} have no text layer"
+    missing = [part for part in parts if part not in text]
+    if missing:
+        elsewhere = "".join(pages.values())
+        where = (
+            " (but present elsewhere in the filing)"
+            if all(part in elsewhere for part in missing)
+            else f" (absent from {doc_id} entirely)"
+        )
+        return "absent", f"{len(missing)} of {len(parts)} item(s) missing: {missing}{where}"
+    return "cited", f"all {len(parts)} item(s) on cited page(s) {sorted(cited)}"
 
 
 def _appears(value: str, pages: dict[int, str], cited: tuple[int, ...]) -> bool:

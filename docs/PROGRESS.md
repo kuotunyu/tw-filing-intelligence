@@ -7,7 +7,9 @@
 
 ## 目前狀態
 
-- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：23/72 已標註**（probe 5 ／ **locked 18/36** ／ dev 0 ／ challenger 0）。
+- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：29/72 已標註**（probe 5 ／ **locked 24/36** ／ dev 0 ／ challenger 0）。
+  **標註方式已於 2026-07-31 修訂（D-019）**：模型起草 ＋ 固定種子人工抽樣稽核。
+  目前 locked 組成：human 19／model_drafted 5／audited 0。**報告必須印出這組數字。**
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
   commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
   **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
@@ -160,7 +162,7 @@
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
-| P5 | Gold set 標註 | 🟡 進行中 | — | **23/72**（probe 5 ＋ locked 18）。關鍵路徑，CPU |
+| P5 | Gold set 標註 | 🟡 進行中 | — | **29/72**（probe 5 ＋ locked 24）。關鍵路徑，CPU |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
