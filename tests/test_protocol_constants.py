@@ -211,7 +211,7 @@ def test_probe_and_challenger_counts_appear_in_the_protocol(protocol_doc: str) -
 
 
 def test_gate_values_match_the_pre_registered_numbers() -> None:
-    assert GATES.pooled_hard_min_gain_pp == 10.0
+    assert GATES.pooled_hard_min_gain_pp == 15.0  # raised with the pool, D-020
     assert GATES.single_hard_min_gain_pp == 10.0
     assert GATES.max_overall_regression_pp == 5.0
     assert GATES.min_citation_validity == 0.90

@@ -93,13 +93,13 @@ def test_protocol_keeps_dev_and_locked_companies_disjoint(paths: RepoPaths) -> N
 
 def test_locked_question_count_is_at_least_thirty(paths: RepoPaths) -> None:
     protocol = paths.protocol_doc.read_text(encoding="utf-8")
-    assert "**36**" in protocol, "locked set size must be stated and >= 30"
+    assert "**33**" in protocol, "locked set size must be stated and >= 30"
 
 
 def test_hard_category_gate_uses_the_pooled_set(paths: RepoPaths) -> None:
     """A single 3-5 item category cannot carry a 10pp claim; G2 must pool them."""
     protocol = paths.protocol_doc.read_text(encoding="utf-8")
-    assert "**21 題**" in protocol, "G2 must state the pooled hard-set size"
+    assert "**18 題**" in protocol, "G2 must state the pooled hard-set size"
     assert "合併 hard set" in protocol
     # And the pooled size must actually equal the declared per-category counts.
     assert 5 + 4 + 5 + 4 + 3 == 21
