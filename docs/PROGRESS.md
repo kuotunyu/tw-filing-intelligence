@@ -10,7 +10,10 @@
 - **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：36/72 已標註**（probe 5 ／ **locked 31/36** ／ dev 0 ／ challenger 0）。
   **標註方式已於 2026-07-31 修訂（D-019）**：模型起草 ＋ 固定種子人工抽樣稽核。
   目前 locked 組成：fully_human 19／question_model_chosen 7／answer_model_drafted 5／
-  needs_audit 12／audited 0。**報告必須印出這組數字。**
+  needs_audit 12／**audited 8（稽核率 67%）**／trustworthy 27。
+  **報告必須印出這組數字。**
+  稽核結果（2026-07-31）：種子抽出的 8 題**全部通過**，使用者逐一對照渲染頁確認。
+  未通過的處理原則是**整類重做**，不是只改那一題。
   只剩 `chart_value_trend` 5 題 —— 建議人工，因為「LLM 讀圖表」去考「LLM 讀圖表」
   是這裡最接近循環的組合。
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
