@@ -463,14 +463,23 @@ def _kind_for(qtype: str) -> frozenset[str]:
 
 
 def test_a_complete_locked_set_validates() -> None:
-    assert set_problems(_locked_set(), gold_set="locked") == []
+    assert (
+        set_problems(_locked_set(), gold_set="locked", type_counts=dict(LOCKED_TYPE_COUNTS)) == []
+    )
+
+
+def test_a_partial_set_is_progress_not_failure() -> None:
+    """Annotation is incremental; five of thirty-six must not read as thirty-one errors."""
+    five = [r for r in _locked_set() if r.question_type == "table_cell"]
+    assert len(five) == 5
+    assert set_problems(five, gold_set="locked") == []
 
 
 def test_the_locked_set_must_match_the_pre_registered_distribution() -> None:
     """The mix is fixed before annotation so it cannot tilt toward what the system does well."""
     records = _locked_set()
     short = [r for r in records if r.question_type != "narrative_fact"]
-    problems = set_problems(short, gold_set="locked")
+    problems = set_problems(short, gold_set="locked", type_counts=dict(LOCKED_TYPE_COUNTS))
     assert any("needs 6 narrative_fact questions, has 0" in problem for problem in problems)
 
 
@@ -480,7 +489,7 @@ def test_the_locked_unanswerable_questions_must_cover_every_cause() -> None:
         for r in _locked_set()
         if r.question_type != "unanswerable" or r.refusal_reason_class == "absent_from_documents"
     ]
-    problems = set_problems(records, gold_set="locked")
+    problems = set_problems(records, gold_set="locked", type_counts=dict(LOCKED_TYPE_COUNTS))
     assert any("must cover every cause" in problem for problem in problems)
 
 

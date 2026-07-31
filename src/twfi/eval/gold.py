@@ -31,7 +31,6 @@ from typing import Any, Final, Literal, get_args
 
 from twfi.numeric.amounts import UNIT_SCALES, canonical_unit
 from twfi.protocol import (
-    LOCKED_TYPE_COUNTS,
     ROUTE_BY_QUESTION_TYPE,
     USABLE_DOCUMENTS,
     QuestionType,
@@ -416,8 +415,9 @@ def set_problems(
 ) -> list[str]:
     """Return every violation across a whole set, including its composition.
 
-    ``type_counts`` defaults to the pre-registered locked distribution when validating
-    the locked set, and is otherwise unconstrained -- dev exists to be adjusted.
+    ``type_counts`` is checked only when given. Pass ``LOCKED_TYPE_COUNTS`` once the
+    locked set claims to be finished; while it is being annotated, a partial set is
+    progress rather than a pile of failures.
     """
     problems: list[str] = []
 
@@ -442,18 +442,23 @@ def set_problems(
         else:
             questions[key] = record.question_id
 
-    expected = type_counts if type_counts is not None else _expected_counts(gold_set)
-    if expected is not None:
+    # Composition is a property of a *finished* set, so it is checked only when the
+    # caller asks. Annotation is incremental: five of the locked set's thirty-six
+    # questions is progress, and reporting it as thirty-one failures would bury the
+    # record-level problems that actually need fixing.
+    if type_counts is not None:
         actual = {qtype: 0 for qtype in get_args(QuestionType)}
         for record in records:
             actual[record.question_type] += 1
-        for qtype, want in sorted(expected.items()):
+        for qtype, want in sorted(type_counts.items()):
             if actual.get(qtype, 0) != want:
                 problems.append(
                     f"{gold_set} set needs {want} {qtype} questions, has {actual.get(qtype, 0)}"
                 )
 
-    if gold_set == "locked":
+    # Also completeness, for the same reason: a set part-way through annotation has no
+    # unanswerable questions yet, and demanding all three causes of nothing is noise.
+    if gold_set == "locked" and type_counts is not None:
         classes = {r.refusal_reason_class for r in records if r.question_type == "unanswerable"}
         missing = sorted(set(get_args(RefusalReasonClass)) - classes)
         if missing:
@@ -461,10 +466,6 @@ def set_problems(
                 f"locked unanswerable questions must cover every cause; missing {missing}"
             )
     return problems
-
-
-def _expected_counts(gold_set: GoldSet) -> Mapping[str, int] | None:
-    return dict(LOCKED_TYPE_COUNTS) if gold_set == "locked" else None
 
 
 # ------------------------------------------------------------------------- parsing

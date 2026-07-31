@@ -86,7 +86,10 @@ def _report(name: GoldSet, path: Path, *, require_complete: bool) -> tuple[int, 
         typer.echo(f"  UNPARSEABLE: {exc}")
         return 1, 0
 
-    problems = set_problems(records, gold_set=name)
+    from twfi.protocol import LOCKED_TYPE_COUNTS
+
+    counts = dict(LOCKED_TYPE_COUNTS) if (require_complete and name == "locked") else None
+    problems = set_problems(records, gold_set=name, type_counts=counts)
     if require_complete:
         problems.extend(_completeness_problems(name, records))
 

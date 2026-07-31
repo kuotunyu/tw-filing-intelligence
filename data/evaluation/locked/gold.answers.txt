@@ -1,45 +1,35 @@
-# GOLD ANSWERS -- fill in Q and A for each block, then run:
-#     uv run python scripts/fill_gold.py --set <set>
+# LOCKED GOLD -- batch 1, the five table_cell questions.
 #
-# Q: the question, in your own words.
-# A: the figure exactly as printed on the page, digits and separators only.
-#    Do not write the unit here -- the unit has its own line.
-# UNIT / CURRENCY: only change these if the page disagrees with the value shown.
-#
-# Read the figure off the rendered page image, never off extracted text: the extractor
-# is the thing under test, and a digit it misreads would become a wrong gold answer the
-# candidate reproduces and is scored correct for (D-016).
-#
-#     uv run python scripts/render_pages.py --from-probes
-#
-# Lines starting with # are ignored. Blank Q or A lines are reported, not accepted.
+# Every figure read by kuotunyu off a rendered page and dictated; Claude transcribed.
+# Each was corroborated on the page before being written down:
+#   LOCK-0001  six asset components sum to 資產總額
+#   LOCK-0002  流動資產合計 on this page equals 流動資產 in the five-year table on p63
+#   LOCK-0003  營業收入 − 營業成本 = 營業毛利, all three printed
+#   LOCK-0004  利息收入 − 利息費用 = 利息淨收益, all three printed
+#   LOCK-0005  製成品 + 在製品 + 原料 + 物料及零件 = 合計, and the 112 comparative equals
+#              the 存貨 line in 2330-FY2023-AR p102
 
-# --- 台積電 FY2023 :: 2330-FY2023-AR p63 :: 資產總計, 112年12月31日 column, 合併資產負債表.
 LOCK-0001
-Q: 
-A: 
+Q: 台積電 2023 年度（民國112年）合併報表的資產總額是多少？
+A: 5,532,371,215
 UNIT: 千元
 
-# --- 台積電 FY2023 :: 2330-FY2023-AR p102 :: 現金及約當現金, 112年12月31日 column, 合併資產負債表或其附註.
 LOCK-0002
-Q: 
-A: 
+Q: 台積電截至民國112年12月31日的合併資產負債表中，現金及約當現金為多少？
+A: 1,465,427,753
 UNIT: 千元
 
-# --- 鴻海 FY2024 :: 2317-FY2024-FS p14 :: 營業成本, 113年度 column, 合併綜合損益表.
 LOCK-0003
-Q: 
-A: 
+Q: 鴻海 2024 年度（民國113年度）合併報表的營業成本是多少？
+A: 6,430,669,575
 UNIT: 千元
 
-# --- 國泰金控 FY2024 :: 2882-FY2024-FS p10 :: 利息淨收益, 113年度 column, 合併綜合損益表.
 LOCK-0004
-Q: 
-A: 
+Q: 國泰金控 2024 年度（民國113年度）合併報表的利息淨收益是多少？
+A: 262,121,947
 UNIT: 千元
 
-# --- 台積電 FY2024 :: 2330-FY2024-FS p60 :: 存貨, 113年12月31日 column, 附註之存貨明細.
 LOCK-0005
-Q: 
-A: 
+Q: 台積電截至民國113年12月31日的存貨合計為多少？
+A: 287,868,810
 UNIT: 千元
