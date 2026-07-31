@@ -129,3 +129,25 @@ exclude_also = [
     "raise NotImplementedError",
     "@overload",
 ]
+
+# ---------------------------------------------------------------- uv: CUDA wheels
+# Without this, `uv sync --extra models` installs torch from PyPI, which on Windows is
+# the CPU-only build: `torch.cuda.is_available()` returns False and nothing in this study
+# can use the RTX 4090 at all. The extra declared "torch>=2.3" and silently got a wheel
+# that cannot do the one job it was added for.
+#
+# `explicit = true` keeps every other dependency on PyPI. Only the packages named in
+# [tool.uv.sources] come from the PyTorch index, so this does not redirect the whole
+# dependency tree at a single-vendor mirror.
+#
+# cu128 rather than the newest: the driver here reports CUDA 13.1 and NVIDIA drivers are
+# backward compatible with older runtimes, so an older wheel is the safer choice. Pinning
+# it in the project rather than passing --index-url by hand is deliberate -- the point of
+# the lockfile is that the environment is reproducible from the repository.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

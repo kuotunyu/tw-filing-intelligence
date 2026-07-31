@@ -48,9 +48,14 @@ app = typer.Typer(add_completion=False, help=__doc__)
 OLLAMA_URL = "http://127.0.0.1:11434"
 GENERATION_MODEL = "qwen3.6:27b"
 EMBEDDING_MODEL = "BAAI/bge-m3"
+RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
-#: Chunks both parsers produce over the eight usable filings (results/runs/parse_stats.json).
-CORPUS_CHUNKS = 18_931
+#: Chunks both parsers produce over the eight **usable** filings, measured by actually
+#: building the index: 4,063 baseline + 9,890 candidate. parse_stats.json reports 18,931,
+#: but that sums all ten declared documents including the two unusable 2317 annual reports,
+#: which are never indexed. Using the larger figure overstated the projected build time by
+#: a third.
+CORPUS_CHUNKS = 13_953
 
 #: Another process holding more than this much is someone else's training run. Protocol
 #: rule 8: yield rather than compete.
@@ -325,7 +330,11 @@ def _measure_embedding(paths: Any, sample: int) -> dict[str, Any]:
     """Time bge-m3 over real dev chunks. Only called with --embed."""
     try:
         import torch
-        from transformers import AutoModel, AutoTokenizer
+        from transformers import (
+            AutoModel,
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
     except ImportError as exc:
         return {"skipped": f"models extra not installed: {exc}"}
 
@@ -362,20 +371,54 @@ def _measure_embedding(paths: Any, sample: int) -> dict[str, Any]:
             ).to("cuda")
             model(**encoded)
     elapsed = time.perf_counter() - started
-    used, _free = _vram_mib()
+    embedding_only = _vram_mib()[0]
 
-    del model
+    # The reranker is loaded *without* releasing the embedder, and while ollama still holds
+    # the generation model. That simultaneous figure is what G10's 22 GB applies to, and it
+    # is the number R3 could only estimate. Loading them one at a time and taking the max
+    # would have reported a peak the pipeline never actually reaches -- flattering and wrong.
+    typer.echo(f"loading {RERANKER_MODEL} alongside it …")
+    reranker = (
+        AutoModelForSequenceClassification.from_pretrained(
+            RERANKER_MODEL, torch_dtype=torch.float16
+        )
+        .to("cuda")
+        .eval()
+    )
+    reranker_tokenizer = AutoTokenizer.from_pretrained(RERANKER_MODEL)
+    pairs = [(texts[0][:400], text[:400]) for text in texts[:16]]
+    rerank_started = time.perf_counter()
+    with torch.inference_mode():
+        encoded = reranker_tokenizer(
+            [left for left, _ in pairs],
+            [right for _, right in pairs],
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+        ).to("cuda")
+        reranker(**encoded)
+    rerank_seconds = time.perf_counter() - rerank_started
+    all_resident = _vram_mib()[0]
+
+    del model, reranker
     torch.cuda.empty_cache()
 
     per_second = len(texts) / elapsed if elapsed else 0.0
-    typer.echo(f"  {len(texts)} chunks in {elapsed:.1f}s = {per_second:.0f}/s (card {used} MiB)")
+    typer.echo(f"  {len(texts)} chunks in {elapsed:.1f}s = {per_second:.0f}/s")
+    typer.echo(f"  embedder resident: {embedding_only} MiB")
+    typer.echo(f"  all three resident: {all_resident} MiB ({all_resident / 1024:.2f} GiB)")
     return {
         "model": EMBEDDING_MODEL,
+        "reranker": RERANKER_MODEL,
         "chunks": len(texts),
         "seconds": round(elapsed, 2),
         "chunks_per_second": round(per_second, 1),
+        "rerank_seconds_16_pairs": round(rerank_seconds, 3),
         "batch_size": batch,
-        "vram_resident_mib": used,
+        "vram_with_embedder_mib": embedding_only,
+        "vram_resident_mib": all_resident,
+        "vram_all_three_gb": round(all_resident / 1024, 2),
         "corpus_chunks_total": CORPUS_CHUNKS,
         "projected_full_index_minutes": (
             round(CORPUS_CHUNKS / per_second / 60, 1) if per_second else None
