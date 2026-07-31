@@ -789,6 +789,46 @@
 
 ---
 
+## D-025 G10 的三個數字改為實測（VRAM 19.0 GiB、generation 12.3s）
+
+- **背景**：G10 的三條限制（retrieval p95 ≤ 3s、generation p95 ≤ 60s、VRAM ≤ 22GB）
+  是依硬體訂的，但**被拿來對照的那一側全是估計值**。R3 的「20–21GB」是把模型大小
+  在紙上相加得來的。若估錯，架構就得改 —— 而 freeze 之後改不了。
+
+- **量測**（`scripts/measure_resources.py --gpu`，寫入 `results/runs/resource_budget.json`）：
+
+  | 項目 | 實測 | G10 限制 | 餘裕 |
+  |---|---|---|---|
+  | VRAM（generation model 駐留，含桌面 1.7 GiB） | **19.00 GiB** | 22 GB | **+3.00 GB** |
+  | generation，真實負載（3,557 tok 入／512 tok 出） | **12.3–13.3 s** | 60 s | 4.5× |
+  | generation，短 prompt（≤84 tok 出） | 0.7–2.4 s | — | 這是**下限，不是工作負載** |
+  | cold start（載入 17 GB 權重） | 12.5–13.3 s | — | |
+
+- **兩種 prompt 都量、都存檔，是刻意的**：只報短 prompt 的 0.7 秒，會讓 G10 看起來
+  被一個本研究從不執行的負載解決掉。腳本因此固定量兩種並各自標籤。
+
+- **檢索模型尚未實測**：bge-m3 ＋ reranker（fp16 約 2.2 GB）需要安裝 optional
+  `models` extra（torch，2–3 GB 下載）。2.2 < 3.0 但只剩約 0.8 GB，
+  **R3 的 offload CPU 備案可能真的會用到**。這一項仍是估計，如實標示。
+
+- **順帶修掉一個我自己寫錯的 guard**：第一版用「整張卡 VRAM 總量 > 門檻就拒跑」，
+  結果**被自己上一輪留在 ollama 裡的模型擋住** —— 暖快取不是競爭。
+  改成看 **compute process 清單**：ollama 是我們的，其他名字才算別人的工作。
+  一個分不出這兩者的守門員，不是擋掉正常工作、就是放過它該擋的東西。
+
+- **只用 dev 文件與合成 prompt**：freeze 前拿 locked 題目量 latency，
+  等於提前跑 locked set（協議 1.3 禁止）。延遲與文字講哪家公司無關，沒必要花 locked 資料。
+
+- **對排程的影響（把先前的猜測改小）**：
+  33 題 × 8 個 factor = 264 次生成 × 12.5s ≈ **55 分鐘**；
+  cold ＋ warm 兩輪（協議 5 步驟 8）約 **110 分鐘**；
+  加上檢索、rerank 與 chart crop，整條 ladder 估 **2–2.5 小時**。
+  我先前口頭說的「3–4 小時」偏保守，此處以實測取代。
+
+- **狀態**：ACCEPTED (2026-08-01)
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
