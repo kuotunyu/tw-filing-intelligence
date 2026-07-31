@@ -176,22 +176,45 @@ def _render(sample: list[GoldRecord]) -> None:
     import pymupdf
 
     for record in sample:
-        doc_id = record.source_document[0]
-        acquired = lock.get(doc_id)
-        if acquired is None or not acquired.local_path(paths.root).is_file():
-            typer.echo(f"  {record.question_id}: {doc_id} not acquired")
-            continue
-        try:
-            with pymupdf.open(acquired.local_path(paths.root)) as document:  # type: ignore[no-untyped-call]
-                for page in record.page_numbers:
-                    if not 1 <= page <= document.page_count:
-                        continue
-                    pixmap = document.load_page(page - 1).get_pixmap(dpi=200)
-                    out = target / f"AUDIT-{record.question_id}__{doc_id}__p{page}.png"
-                    pixmap.save(out)
-                    typer.echo(f"  rendered {out.name}")
-        except (ParsingError, RuntimeError) as exc:  # pragma: no cover - corrupt PDF
-            typer.echo(f"  {record.question_id}: cannot render: {exc}")
+        for doc_id, wanted in _pages_by_document(record).items():
+            acquired = lock.get(doc_id)
+            if acquired is None or not acquired.local_path(paths.root).is_file():
+                typer.echo(f"  {record.question_id}: {doc_id} not acquired")
+                continue
+            try:
+                with pymupdf.open(acquired.local_path(paths.root)) as document:  # type: ignore[no-untyped-call]
+                    for page in wanted:
+                        if not 1 <= page <= document.page_count:
+                            continue
+                        pixmap = document.load_page(page - 1).get_pixmap(dpi=200)
+                        out = target / f"AUDIT-{record.question_id}__{doc_id}__p{page}.png"
+                        pixmap.save(out)
+                        typer.echo(f"  rendered {out.name}")
+            except (ParsingError, RuntimeError) as exc:  # pragma: no cover - corrupt PDF
+                typer.echo(f"  {record.question_id}: cannot render: {exc}")
+
+
+def _pages_by_document(record: GoldRecord) -> dict[str, list[int]]:
+    """Which pages belong to which filing.
+
+    ``page_numbers`` is a flat list, so a cross_document record's pages carry no hint of
+    which of its two filings each came from. Assuming the first one rendered
+    2330-FY2023-AR p.55 for a page that lives in 2330-FY2024-FS -- the same
+    only-the-first-document mistake the corroboration check had.
+
+    The information is already in the record: every ``required_evidence`` ref is written
+    ``<doc_id>#p<page>``. Falling back to the flat list only when a record has a single
+    filing, where there is nothing to get wrong.
+    """
+    found: dict[str, list[int]] = {}
+    for item in record.required_evidence:
+        doc_id, _, tail = item.ref.partition("#p")
+        page = tail.split("/")[0]
+        if doc_id in record.source_document and page.isdigit():
+            found.setdefault(doc_id, []).append(int(page))
+    if found:
+        return {doc: sorted(set(pages)) for doc, pages in found.items()}
+    return {record.source_document[0]: list(record.page_numbers)}
 
 
 def _report_composition(path: Path) -> None:
