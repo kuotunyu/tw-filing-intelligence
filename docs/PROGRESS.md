@@ -12,14 +12,14 @@
   分母由 72 降為 53：locked 36→33（D-020）、challenger 16→0（D-021）。
   **標註方式已於 2026-07-31 修訂（D-019）**：模型起草 ＋ 固定種子人工抽樣稽核。
   目前 locked 組成：fully_human 19／question_model_chosen 9／answer_model_drafted 7／
-  needs_audit 14／**audited 8（稽核率 57%）**／trustworthy 27。
+  needs_audit 14／**audited 10（稽核率 71%）**／trustworthy 29。
   **報告必須印出這組數字。**
-  稽核結果（2026-07-31）：種子抽出的 8 題**全部通過**，使用者逐一對照渲染頁確認。
+  稽核結果：種子抽出的 8 題（2026-07-31）＋ 強制的 chart 2 題（2026-08-01）
+  **全部通過**，使用者逐一對照渲染頁／裁切圖確認。
   未通過的處理原則是**整類重做**，不是只改那一題。
-  **待稽核：LOCK-0032／LOCK-0033（chart 兩題，強制進稽核，D-022）** ——
-  跑 `audit_gold.py --set locked --render`，看 `AUDIT-LOCK-003*__*__crop1.png` 兩張圖。
   抽籤池刻意**排除強制題**，所以新增 chart 類別**沒有**重抽其他類別，
   原本那 8 題依然是那 8 題。
+  剩下 4 題 needs_audit 不在樣本內 —— 這是抽樣設計（8 抽自 12），不是待辦。
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
   commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
   **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
@@ -124,20 +124,17 @@
 
 ## 下一步（照順序）
 
-0. **馬上可做（15 分鐘，使用者）**：稽核 chart 兩題。
-   ```
-   uv run python scripts/audit_gold.py --set locked --render
-   ```
-   看 `results/runs/pages/AUDIT-LOCK-0032__2330-FY2023-AR__p7__crop1.png`
-   與 `AUDIT-LOCK-0033__2330-FY2024-AR__p6__crop1.png` 兩張裁切圖，
-   對照題目與答案（0032：產能計劃的年成長率 9%／6%／6%；
-   0033：晶圓銷售計劃 7 奈米及以下 58%／69%），然後
-   ```
-   uv run python scripts/audit_gold.py --set locked --accept LOCK-0032 LOCK-0033
-   ```
+0. ✅ **chart 兩題稽核完成（2026-08-01）**：LOCK-0032／LOCK-0033 兩題使用者對照
+   裁切圖確認無誤。**locked 稽核率 71%。**
    為什麼這兩題非人看不可：**數值可以自動查**（`verify_gold_answers.py` 會確認它們
    落在所引 bbox 內，指錯圖就會失敗），但**「哪個數字屬於哪一年、哪個系列」查不到** ——
    承載那件事的是座標軸標籤與圖例顏色，正是 text layer 丟掉的東西（D-022）。
+
+   ⚠️ **`--accept` 要一個 id 一個 flag**：
+   `--accept LOCK-0032 --accept LOCK-0033`。
+   原本 docstring 寫成 `--accept LOCK-0021 LOCK-0024`，typer 會報
+   `unexpected extra argument` —— 使用者照著跑就失敗。已修正，
+   並讓 script 直接把待稽核的 id 印成可貼的完整指令。
 
 1. **P5（關鍵路徑）**：gold 標註（locked **33 ✅** ＋ dev 15 ＋ probes 5 ✅
    ＋ ~~challenger 16~~ **取消**）。**純 CPU，不需要 GPU。**
@@ -295,10 +292,18 @@ ollama 版本 `0.32.0`。
     順帶：主控台的中文從此正常顯示。
   - LOCK-0033 題目改用「7奈米及以下」，圖例原樣記在 notes。
 
-**現況**：locked **33/33**（chart 2 題待稽核）、probe 5、dev 0/15、challenger 取消。
+- **chart 兩題稽核完成**，locked 稽核率 **71%**（10/14）、trustworthy 29/33。
+- **順手抓到的 CLI bug**：`--accept` 是 typer 的 repeatable option，
+  但我自己的 docstring 寫成 `--accept LOCK-0021 LOCK-0024` ——
+  使用者照著跑得到 `unexpected extra argument`。
+  **usage 例子錯了就等於工具壞了**，因為那是動手前唯一會讀的東西。
+  已修正，並讓 script 直接把待稽核 id 印成完整可貼指令、附上圖片目錄與
+  「有 bbox 的記錄要看 `__crop<n>.png`」。
+
+**現況**：locked **33/33 ✅ 稽核完成**、probe 5、dev 0/15、challenger 取消。
 980 passed／1 skipped、coverage 97.93%、ruff ＋ mypy 全綠。
 
-**下一個要人做的事**：`audit_gold.py --set locked --render` → 看兩張 crop → `--accept`。
+**下一步**：dev 15 題，或 P4 收尾（載入 FY2023／FY2024 歷史數值）。
 
 ---
 

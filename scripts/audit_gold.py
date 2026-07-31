@@ -2,8 +2,12 @@
 
     uv run python scripts/audit_gold.py --set locked            # show the sample
     uv run python scripts/audit_gold.py --set locked --render   # and render its pages
-    uv run python scripts/audit_gold.py --set locked --accept LOCK-0021 LOCK-0024
+    uv run python scripts/audit_gold.py --set locked --accept LOCK-0021 --accept LOCK-0024
     uv run python scripts/audit_gold.py --set locked --reject LOCK-0022
+
+`--accept` and `--reject` repeat per id. This line used to be written
+`--accept LOCK-0021 LOCK-0024`, which typer rejects as an extra argument -- and the
+usage text is what anyone reads before running it, so a wrong example is a broken tool.
 
 Gold may be drafted by a model reading rendered page images (D-019). The risk that
 introduces is not bad transcription -- a machine is better at digits than a person, as
@@ -100,8 +104,16 @@ def main(
         _render(sample)
 
     typer.echo("For each: open the page, check the answer is right and the question is one")
-    typer.echo("a reader would actually ask. Then:")
-    typer.echo(f"  uv run python scripts/audit_gold.py --set {gold_set} --accept <ids...>")
+    typer.echo("a reader would actually ask. Then, one --accept per id:")
+    # Spelled out with the ids actually pending, because the placeholder version of this
+    # line read as though several ids could follow one --accept, and they cannot.
+    pending = [record.question_id for record in sample if not record.audited]
+    flags = " ".join(f"--accept {qid}" for qid in pending) or "--accept <id> --accept <id>"
+    typer.echo(f"  uv run python scripts/audit_gold.py --set {gold_set} {flags}")
+    if render:
+        typer.echo("")
+        typer.echo(f"  images: {(paths.runs / 'pages').relative_to(paths.root)}")
+        typer.echo("  a record citing a bbox also gets a __crop<n>.png -- read that one")
     _report_composition(path)
 
 
