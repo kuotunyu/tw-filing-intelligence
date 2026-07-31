@@ -7,7 +7,7 @@
 
 ## 目前狀態
 
-- **Phase**：**P0–P4 全部 🟢 完成。下一步是 P5（gold 標註，關鍵路徑）。**
+- **Phase**：P0–P4 🟢 完成。**P5 🟡 進行中：14/72 已標註**（probe 5 ／ locked 9 ／ dev 0 ／ challenger 0）。
 - **發布狀態**：已 push 到 `https://github.com/kuotunyu/tw-filing-intelligence`（public）。
   commit 作者一律 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
   **不得加 `Co-authored-by:` trailer**（見 `CLAUDE.md` 規則 9）。
@@ -104,7 +104,7 @@
   numeric route 必須**報錯或拒答，不能拿別的欄位硬湊**。
 - **Phase**：P0（Repo scaffold ＋ 規劃文件）— 🟢 **完成**
 - **Protocol 狀態**：`1.0.0-draft`，**尚未 freeze**（可以修改）
-- **Locked set 狀態**：尚未建立
+- **Locked set 狀態**：標註中，9/36
 - **Toolchain 狀態**：`uv sync --extra dev` OK（Python 3.13.13）、
   `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy src` strict 乾淨（28 個 source file）、
   `pytest` **804 passed / 1 skipped**、coverage **97.83%**（gate 85%）
@@ -126,7 +126,7 @@
      檔案：`data/evaluation/locked/probes.jsonl`、`gold.jsonl`。
      注意 probe **不是** unanswerable：G8 強制清空檢索，所以好的 probe 是
      **模型很可能記得答案**的題目。
-   - **標註流程已定型**，剩下 67 題照這個走：
+   - **標註流程已定型**，剩下 58 題照這個走：
      `make_worklist.py` 定位 → `render_pages.py` 渲染成圖 →
      人**看圖**讀數字（不看抽取文字）→ `fill_probes.py` 填表單（不碰 JSON）→
      `validate_gold.py` ＋ `check_leakage.py`。
@@ -156,7 +156,7 @@
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
-| P5 | Gold set 標註 | ⚪ 未開始 | — | **關鍵路徑**，CPU |
+| P5 | Gold set 標註 | 🟡 進行中 | — | **14/72**（probe 5 ＋ locked 9）。關鍵路徑，CPU |
 | P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
