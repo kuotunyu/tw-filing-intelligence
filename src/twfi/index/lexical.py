@@ -291,6 +291,9 @@ class Bm25Manifest:
     documents: tuple[str, ...] = ()
     notes: str = ""
     chunk_ids: tuple[str, ...] = field(default_factory=tuple)
+    #: SHA-256 of the exact chunk text this index was built from. See
+    #: :func:`twfi.index.embeddings.chunk_text_digest` for why the row count is not enough.
+    chunk_text_sha256: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -300,6 +303,7 @@ class Bm25Manifest:
             "config": asdict(self.config),
             "built_at": self.built_at,
             "documents": list(self.documents),
+            "chunk_text_sha256": self.chunk_text_sha256,
             "notes": self.notes,
         }
         # As in the embedding manifest: the full chunk id list is the expensive part of this

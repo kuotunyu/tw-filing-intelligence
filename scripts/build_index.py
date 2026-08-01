@@ -38,6 +38,7 @@ from twfi.errors import ParsingError
 from twfi.index.embeddings import (
     EmbeddingConfig,
     EmbeddingManifest,
+    chunk_text_digest,
     embed_texts,
     save_vectors,
     utc_now,
@@ -102,7 +103,8 @@ def main(
             if done % (batch_size * 40) == 0 or done == total:
                 typer.echo(f"  {which}: {done:,}/{total:,}")
 
-        vectors, revision = embed_texts([row["text"] for row in rows], config, progress=report)
+        texts = [str(row["text"]) for row in rows]
+        vectors, revision = embed_texts(texts, config, progress=report)
         manifest = EmbeddingManifest(
             parser=BASELINE_PARSER if which == "baseline" else LAYOUT_PARSER,
             rows=vectors.shape[0],
@@ -112,6 +114,9 @@ def main(
             documents=tuple(sorted({str(row["doc_id"]) for row in rows})),
             model_revision=revision,
             chunk_ids=tuple(str(row["chunk_id"]) for row in rows),
+            # The content check. A chunker fix can change chunk text while leaving the count
+            # and every id untouched, and then a stale index passes every other guard.
+            chunk_text_sha256=chunk_text_digest(texts),
             notes="dense only; BM25 is computed separately on CPU",
         )
         directory = paths.root / "data" / "index" / which

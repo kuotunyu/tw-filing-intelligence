@@ -25,7 +25,7 @@ from typing import Annotated
 import typer
 
 from twfi.console import use_utf8_output
-from twfi.index.embeddings import VECTOR_MANIFEST, utc_now
+from twfi.index.embeddings import VECTOR_MANIFEST, chunk_text_digest, utc_now
 from twfi.index.lexical import Bm25Config, Bm25Index, Bm25Manifest, save_index
 from twfi.io.jsonl import read_lines
 from twfi.parsing.baseline import PARSER_NAME as BASELINE_PARSER
@@ -70,6 +70,7 @@ def main(
             built_at=utc_now(),
             documents=tuple(sorted({str(row.get("doc_id", "")) for row in rows})),
             chunk_ids=tuple(str(row.get("chunk_id", "")) for row in rows),
+            chunk_text_sha256=chunk_text_digest(texts),
             notes="lexical half; dense vectors live beside this",
         )
         postings_path, manifest_path = save_index(directory, index, manifest)

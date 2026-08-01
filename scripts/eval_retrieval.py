@@ -46,7 +46,7 @@ import typer
 from twfi.console import use_utf8_output
 from twfi.eval.gates import wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
-from twfi.index.embeddings import load_vectors
+from twfi.index.embeddings import chunk_text_digest, load_vectors
 from twfi.index.lexical import load_index
 from twfi.index.retrieve import Hit, Retriever, characters_of, recall_at_budget, recall_at_k
 from twfi.io.jsonl import read_lines
@@ -317,9 +317,16 @@ def _chunk_id_drift(
     results for text that no longer exists. Both manifests record the first few chunk ids for
     exactly this comparison, so it costs nothing to make.
 
+    The row counts and the chunk ids are both necessary and both insufficient. Correcting the
+    merged-chunk heading line rewrote 1,515 of 4,796 candidate chunks while changing neither the
+    count nor a single id, so an index built before that fix passed every earlier check here and
+    would have returned numbers computed from text that no longer existed. Only the content
+    digest catches it, which is why an index that does not carry one is refused outright.
+
     Returns an empty string when everything agrees, so the caller can treat it as a message.
     """
     head = [str(chunk.get("chunk_id", "")) for chunk in chunks[:5]]
+    digest = chunk_text_digest([str(chunk.get("text", "")) for chunk in chunks])
     for name, manifest in (("lexical", lexical_manifest), ("dense", vector_manifest)):
         recorded = [str(value) for value in manifest.get("chunk_ids_head") or []]
         if not recorded:
@@ -333,6 +340,19 @@ def _chunk_id_drift(
             return (
                 f"the {name} index was built from different chunks: it records {recorded[0]!r} "
                 f"first, this corpus starts with {head[0]!r}; rebuild rather than search it"
+            )
+        claimed = manifest.get("chunk_text_sha256")
+        if not claimed:
+            return (
+                f"the {name} manifest records no chunk_text_sha256, so it cannot be shown to "
+                "have been built from this chunk *text* -- a chunker fix can change the text "
+                "while leaving the count and the ids alone; rebuild it"
+            )
+        if str(claimed) != digest:
+            return (
+                f"the {name} index was built from different chunk text: it records "
+                f"{str(claimed)[:12]}… and this corpus hashes to {digest[:12]}…; the counts and "
+                "ids match, so this is a content change -- rebuild rather than search it"
             )
     return ""
 

@@ -18,6 +18,7 @@ from twfi.index.embeddings import (
     EmbeddingConfig,
     EmbeddingManifest,
     batches,
+    chunk_text_digest,
     load_vectors,
     save_vectors,
     utc_now,
@@ -184,3 +185,47 @@ def test_built_at_is_utc_to_the_second() -> None:
     stamp = utc_now()
     assert stamp.endswith("+00:00")
     assert "." not in stamp, "microseconds add noise without adding information"
+
+
+# ----------------------------------------------------- the content digest
+
+
+def test_the_digest_changes_when_chunk_text_changes_but_ids_do_not() -> None:
+    """The failure every cheaper check missed.
+
+    Correcting the merged-chunk heading line rewrote 1,515 of 4,796 candidate chunks while
+    changing neither the chunk count nor a single chunk id, so a stale index passed the row-count
+    check and the chunk-id check and would have returned numbers computed from text that no
+    longer existed.
+    """
+    before = ["壹 > 一" + chr(10) + "內容", "二" + chr(10) + "其他"]
+    after = ["壹" + chr(10) + "內容", "二" + chr(10) + "其他"]
+    assert len(before) == len(after), "the count is unchanged, which is the point"
+    assert chunk_text_digest(before) != chunk_text_digest(after)
+
+
+def test_the_digest_is_order_sensitive() -> None:
+    """Vectors are addressed by row position, so a reordered corpus is a different index."""
+    assert chunk_text_digest(["a", "b"]) != chunk_text_digest(["b", "a"])
+
+
+def test_the_digest_is_unambiguous_about_boundaries() -> None:
+    """Length-prefixed, so concatenation cannot make two different corpora hash alike."""
+    assert chunk_text_digest(["ab", "c"]) != chunk_text_digest(["a", "bc"])
+
+
+def test_the_digest_is_stable_for_the_same_input() -> None:
+    texts = ["存貨", "287,868,810"]
+    assert chunk_text_digest(texts) == chunk_text_digest(list(texts))
+
+
+def test_an_empty_corpus_has_a_digest_rather_than_an_error() -> None:
+    assert len(chunk_text_digest([])) == 64
+
+
+def test_the_digest_travels_in_the_manifest(tmp_path: Path) -> None:
+    directory = tmp_path / "idx"
+    digest = chunk_text_digest(["one", "two"])
+    save_vectors(directory, vectors(rows=2), manifest(rows=2, chunk_text_sha256=digest))
+    _loaded, payload = load_vectors(directory)
+    assert payload["chunk_text_sha256"] == digest

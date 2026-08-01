@@ -24,6 +24,7 @@ that actually runs a model needs the optional ``models`` extra.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass, field
@@ -38,6 +39,7 @@ __all__ = [
     "EmbeddingConfig",
     "EmbeddingManifest",
     "batches",
+    "chunk_text_digest",
     "embed_texts",
     "load_vectors",
     "save_vectors",
@@ -89,6 +91,9 @@ class EmbeddingManifest:
     model_revision: str | None = None
     notes: str = ""
     chunk_ids: tuple[str, ...] = field(default_factory=tuple)
+    #: SHA-256 of the exact chunk *text* these vectors were computed from. See
+    #: :func:`chunk_text_digest` for why a row count and a few ids are not enough.
+    chunk_text_sha256: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload = {
@@ -99,6 +104,7 @@ class EmbeddingManifest:
             "built_at": self.built_at,
             "documents": list(self.documents),
             "model_revision": self.model_revision,
+            "chunk_text_sha256": self.chunk_text_sha256,
             "notes": self.notes,
         }
         # Chunk ids are the expensive part of this file and only the first few are needed to
@@ -106,6 +112,30 @@ class EmbeddingManifest:
         if self.chunk_ids:
             payload["chunk_ids_head"] = list(self.chunk_ids[:5])
         return payload
+
+
+def chunk_text_digest(texts: Sequence[str]) -> str:
+    """SHA-256 over the chunk texts an index was built from, in order.
+
+    Both index halves record this, and it exists because the cheaper checks do not catch the
+    failure that actually happened. A chunker fix can change chunk *text* while leaving the chunk
+    *count* and every chunk *id* untouched -- exactly what correcting the merged-chunk heading
+    line did, rewriting 1,515 of 4,796 candidate chunks -- and a stale index then passes a row
+    count, passes a chunk-id comparison, and returns confident numbers computed from text that no
+    longer exists. Only the content answers that.
+
+    Ordered rather than a set: the vectors are addressed by row position, so two chunk sets with
+    the same texts in a different order are different indexes.
+    """
+    digest = hashlib.sha256()
+    for text in texts:
+        # Length-prefixed so that concatenation cannot be ambiguous: ["ab", "c"] and ["a", "bc"]
+        # must not hash alike.
+        encoded = text.encode("utf-8")
+        digest.update(str(len(encoded)).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(encoded)
+    return digest.hexdigest()
 
 
 def batches(items: Sequence[str], size: int) -> Iterator[Sequence[str]]:
