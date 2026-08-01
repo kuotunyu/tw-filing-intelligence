@@ -1084,6 +1084,29 @@
   3. **baseline hybrid 在 depth ≥ 50 穩定超過 lexical**，depth=100 時 13/15＠10、14/15＠20。
   4. **candidate hybrid 不隨 depth 改善**，而 candidate 的 `lexical@20`（12/15）與它最好的表現相當。
 
+- **已做成可重跑的 script**（`scripts/eval_retrieval.py` → `results/runs/retrieval_dev.json`），
+  所以上面的數字可以被重新導出而不是被相信。它同時**自帶單調性檢查**：
+  同一個候選池下 recall 不可能隨 k 下降，若出現就是取回深度又被綁回 `top_k` 了，
+  script 會回報並以 exit 1 結束。
+
+- **加入 r@5 之後的完整表（depth=100）**：
+
+  | parser | mode | r@5 | r@10 | r@20 |
+  |---|---|---|---|---|
+  | baseline | lexical | 6/15 | 10/15 | 12/15 |
+  | baseline | dense | 5/15 | 6/15 | 9/15 |
+  | baseline | **hybrid** | **11/15** | **13/15** | **14/15** |
+  | candidate | lexical | 6/15 | 6/15 | 12/15 |
+  | candidate | dense | 6/15 | 6/15 | 7/15 |
+  | candidate | hybrid | 8/15 | 8/15 | 8/15 |
+
+  1. **baseline hybrid 在 k=5 就贏過 baseline lexical 在 k=10**（11 vs 10）。
+     這不只是分數高低 —— 它代表**塞進生成的 chunk 更少而證據更好**，
+     對 `num_ctx=8192` 的預算是實質差別，也直接影響 G10 的 generation latency。
+  2. **candidate hybrid 在 k=5／10／20 完全不變（都是 8/15）**。
+     固定池 100 之下這很反常：代表融合把同樣 8 個命中頁全擠在前 5，
+     而第 5 到第 20 名之間一個新的都沒有。**原因未查，列為待辦。**
+
 - **選 depth 的方式，以及為什麼不用 argmax**：
   n=15，而上表是 4 個 depth × 2 個 parser 的比較 ——
   **拿最大值當「最佳」就是在對 15 個樣本過度擬合**。
