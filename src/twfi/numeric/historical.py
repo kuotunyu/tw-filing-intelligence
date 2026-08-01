@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Literal
 
+from twfi.numeric.rows import read_page, resolve_page
 from twfi.numeric.store import Basis, IndustrySchema, LineItem, Statement
 from twfi.parsing.normalise import normalise
 from twfi.parsing.tables import Table
@@ -48,6 +49,7 @@ __all__ = [
     "statement_of",
     "to_decimal",
     "find_in_tables",
+    "find_in_text",
     "schema_of",
     "Outcome",
     "outcome_of",
@@ -331,6 +333,84 @@ def find_in_tables(
         None,
         problem=f"no table on {target.doc_id} p{target.page} has a row matching "
         f"{target.account!r} with a numeric cell",
+    )
+
+
+def find_in_text(
+    target: Target,
+    page_text: str,
+    *,
+    unit_default: str | None = None,
+    currency_default: str | None = None,
+) -> Loaded:
+    """Look for one target in the page's *line stream* instead of its grid.
+
+    The fallback for the structures :func:`find_in_tables` cannot see: notes with no ruling
+    lines, labels and figures on separate lines, and several notes merged into one table object.
+    :mod:`twfi.numeric.rows` explains how a page is read; this function is the part that turns a
+    resolved cell into a :class:`LineItem` and records which route found it.
+
+    The route travels in ``source_ref``. A ``breakdown_total`` figure was not printed on a row
+    bearing the account's name -- it is the unlabelled total closing the breakdown that name
+    heads -- and a reader checking the store against the filing needs to know that is what they
+    are looking for.
+    """
+    statement = statement_of(target.account)
+    if statement is None:
+        return Loaded(target, None, problem=f"no statement known for account {target.account!r}")
+    period = period_of_column(target.column_label)
+    if period is None:
+        return Loaded(
+            target,
+            None,
+            problem=(
+                f"column {target.column_label!r} names no single fiscal year, so this key "
+                "spans columns and there is no one cell to load"
+            ),
+        )
+
+    tables = read_page(normalise(page_text))
+    if not tables:
+        return Loaded(
+            target,
+            None,
+            problem=f"{target.doc_id} p{target.page} has no period header, so no column on it "
+            "can be identified",
+        )
+    resolved = resolve_page(tables, target.row_label, target.column_label)
+    if resolved is not None:
+        cell, route = resolved
+        value = to_decimal(cell)
+        if value is None:
+            return Loaded(
+                target,
+                None,
+                problem=f"{target.doc_id} p{target.page} row {target.row_label!r} resolved to "
+                f"{cell!r}, which is not a number",
+            )
+        return Loaded(
+            target,
+            LineItem(
+                company_code=target.company_code,
+                period=period,
+                statement=statement,
+                basis=target.basis,
+                industry_schema=schema_of(target.company_code),
+                account=target.account,
+                value=value,
+                unit=unit_default,
+                currency=currency_default,
+                source_kind="extracted_text_row",
+                source_ref=f"{target.doc_id}|p{target.page}|{target.row_label}"
+                f"|{target.column_label}|{route}",
+            ),
+            cell_text=cell,
+        )
+    return Loaded(
+        target,
+        None,
+        problem=f"no text row on {target.doc_id} p{target.page} matches {target.account!r} "
+        f"under a column identifiable as {target.column_label!r}",
     )
 
 

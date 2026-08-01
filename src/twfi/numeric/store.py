@@ -36,7 +36,13 @@ __all__ = [
 ]
 
 IndustrySchema = Literal["general", "financial_holding"]
-SourceKind = Literal["xbrl", "openapi_current", "extracted_table"]
+#: ``extracted_text_row`` is kept apart from ``extracted_table`` because the two are different
+#: claims about the page. A table cell was located by grid geometry; a text row was located by
+#: reading the page's line stream and deciding which lines belong to one line item
+#: (:mod:`twfi.numeric.rows`). The second recovers figures the first cannot see on filings whose
+#: notes carry no ruling lines, and it rests on more inference -- so "how much of the store came
+#: from where" has to be answerable, and ``source_kind`` is in the primary key so both survive.
+SourceKind = Literal["xbrl", "openapi_current", "extracted_table", "extracted_text_row"]
 Statement = Literal["income", "balance", "ratio", "monthly_revenue"]
 Basis = Literal["consolidated", "parent_only"]
 

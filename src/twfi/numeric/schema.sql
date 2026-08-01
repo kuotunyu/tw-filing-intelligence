@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS fin_line_item (
     unit_is_uniform  BOOLEAN NOT NULL DEFAULT TRUE,
     unit_note        TEXT,
     source_kind      TEXT NOT NULL,      -- xbrl | openapi_current | extracted_table
+                                         --   | extracted_text_row  (line stream, not grid)
     source_url       TEXT,
     source_ref       TEXT NOT NULL,      -- dataset id, or p102:r3:c1 for a table cell
     PRIMARY KEY (company_code, period, statement, basis, account, source_kind)
