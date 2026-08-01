@@ -7,6 +7,14 @@ its financial statements in a different file would otherwise look like a retriev
 failure or a numeric-route failure, and the study would draw the wrong conclusion
 from it.
 
+Two different questions are asked about the text layer, and both are needed:
+
+* ``readable`` is whether pages produced characters at all.
+* ``garbled`` is whether those characters are the right ones. A page can be fully readable and
+  entirely mojibake, and the readable ratio cannot tell -- `2412-FY2023-AR` and `1301-FY2023-AR`
+  both measure 95-96% readable while 18% and 15% of their characters decode to the wrong script
+  (:mod:`twfi.parsing.garbled`). Reporting only the first would say those two filings are fine.
+
 Writes results/runs/document_quality.json. CPU only, no network.
 """
 
@@ -19,6 +27,8 @@ import typer
 
 from twfi.console import use_utf8_output
 from twfi.io.manifest import load_acquisition_lock, load_document_manifest
+from twfi.parsing.garbled import DocumentDefects, document_defects
+from twfi.parsing.normalise import normalise
 from twfi.parsing.quality import assess_pages
 from twfi.paths import repo_paths
 
@@ -40,27 +50,40 @@ def main() -> None:
     lock = load_acquisition_lock(paths.acquisition_lock)
 
     assessments = []
+    defects: dict[str, DocumentDefects] = {}
     for record in manifest.documents:
         target = record.local_path(paths.root)
         if lock.get(record.doc_id) is None or not target.is_file():
             typer.echo(f"skip {record.doc_id}: not acquired")
             continue
-        assessments.append(assess_pages(record.doc_id, _page_texts(str(target))))
+        texts = _page_texts(str(target))
+        assessments.append(assess_pages(record.doc_id, texts))
+        # Normalised first, as every other consumer of this text does: NFC recovers the
+        # compatibility ideographs that 1301-FY2023-AR uses for 年 and 度 (D-024), and counting
+        # them as off-core would report a sound page as broken.
+        defects[record.doc_id] = document_defects(
+            record.doc_id, [(number, normalise(text)) for number, text in enumerate(texts, 1)]
+        )
 
     if not assessments:
         typer.echo("nothing acquired yet")
         raise typer.Exit(code=1)
 
-    header = f"{'doc_id':<18}{'pages':>6}{'chars/pg':>10}{'readable':>10}{'stmts':>7}  verdict"
+    header = (
+        f"{'doc_id':<18}{'pages':>6}{'chars/pg':>10}{'readable':>10}"
+        f"{'garbled':>9}{'pages!':>8}{'stmts':>7}  verdict"
+    )
     typer.echo("")
     typer.echo(header)
     typer.echo("-" * (len(header) + 22))
     for item in assessments:
         found = sum(1 for page in item.statement_pages.values() if page is not None)
         mark = "ok " if item.is_usable else "!! "
+        broken = defects[item.doc_id]
         typer.echo(
             f"{item.doc_id:<18}{item.pages:>6}{item.chars_per_page:>10.0f}"
-            f"{item.readable_ratio:>9.0%}{found:>7}  {mark}{item.verdict}"
+            f"{item.readable_ratio:>9.0%}{broken.rate:>8.1%}{broken.garbled_share:>8.0%}"
+            f"{found:>7}  {mark}{item.verdict}"
         )
 
     problems = [item for item in assessments if not item.is_usable]
@@ -70,10 +93,43 @@ def main() -> None:
         for reason in item.reasons:
             typer.echo(f"  - {reason}")
 
+    loud = [item for item in defects.values() if item.garbled_pages]
+    if loud:
+        typer.echo("")
+        typer.echo("text layers that decoded to the wrong characters:")
+        for broken in sorted(loud, key=lambda entry: -entry.garbled_share):
+            listed = broken.garbled_pages[:8]
+            pages = ", ".join(str(page.page) for page in listed)
+            more = "" if len(broken.garbled_pages) <= 8 else f", +{len(broken.garbled_pages) - 8}"
+            typer.echo(
+                f"  {broken.doc_id}: {len(broken.garbled_pages)}/{len(broken.judged_pages)} "
+                f"pages ({broken.garbled_share:.0%}), {broken.rate:.1%} of characters, "
+                f"mode {'/'.join(broken.modes) or 'none'}"
+            )
+            typer.echo(f"    pages: {pages}{more}")
+
     target_path = paths.runs / "document_quality.json"
     target_path.write_text(
         json.dumps(
-            {"documents": [item.to_json() for item in assessments]},
+            {
+                "documents": [item.to_json() for item in assessments],
+                "text_layer_defects": {
+                    doc_id: {
+                        "off_core_rate": round(item.rate, 5),
+                        "garbled_pages": len(item.garbled_pages),
+                        "judged_pages": len(item.judged_pages),
+                        "garbled_share": round(item.garbled_share, 4),
+                        "modes": list(item.modes),
+                        "worst_pages": [
+                            {"page": page.page, "rate": round(page.rate, 4), "mode": page.mode}
+                            for page in sorted(item.garbled_pages, key=lambda entry: -entry.rate)[
+                                :10
+                            ]
+                        ],
+                    }
+                    for doc_id, item in sorted(defects.items())
+                },
+            },
             ensure_ascii=False,
             indent=2,
             sort_keys=True,

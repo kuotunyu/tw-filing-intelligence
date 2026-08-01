@@ -54,6 +54,7 @@ from twfi.errors import ParsingError
 from twfi.eval.gold import GoldRecord, GoldSet, load_gold
 from twfi.io.manifest import load_acquisition_lock
 from twfi.parsing.baseline import parse_baseline
+from twfi.parsing.garbled import page_defects
 from twfi.parsing.normalise import normalise
 from twfi.paths import repo_paths
 
@@ -179,7 +180,33 @@ def _verify(
             return "unverifiable", problem
         for page, text in loaded.items():
             merged[page] = merged.get(page, "") + text
+    broken = _garbled_citation(record, merged)
+    if broken:
+        return "unverifiable", broken
     return _verify_against(record, merged, ", ".join(record.source_document))
+
+
+def _garbled_citation(record: GoldRecord, pages: dict[int, str]) -> str:
+    """Whether this record cites a page whose text layer decoded to the wrong characters.
+
+    Worth checking rather than assuming, because two of the eight filings have 43% and 48% of
+    their pages broken (:mod:`twfi.parsing.garbled`) and both are in the development set. As
+    measured today no gold record cites such a page -- annotation was done from rendered images,
+    where mojibake is visible and unusable -- but nothing in the pipeline *enforced* that, and a
+    later edit could cite one. Returned as ``unverifiable`` rather than ``wrong``: the answer may
+    be perfectly correct and simply not checkable from a text layer this damaged.
+    """
+    for page in record.page_numbers:
+        text = pages.get(page)
+        if text is None:
+            continue
+        defects = page_defects(page, _normalise_text(text))
+        if defects.garbled:
+            return (
+                f"cited page {page} is {defects.rate:.0%} off-script ({defects.mode}); its text "
+                "layer cannot support a text check, so verify against the rendered page"
+            )
+    return ""
 
 
 def _verify_crop(record: GoldRecord, lock: object, root: Path) -> tuple[str, str]:
