@@ -17,6 +17,7 @@ from twfi.numeric.historical import (
     Loaded,
     Target,
     find_in_tables,
+    find_in_text,
     outcome_of,
     parse_row_key,
     period_of_column,
@@ -316,3 +317,77 @@ def test_the_right_column_is_still_found_when_others_hold_numbers() -> None:
     result = find_in_tables(target(), [table(rows)])
     assert result.item is not None
     assert result.item.value == Decimal("530738356")
+
+
+# --------------------------------------------------- the text-stream route (D-032)
+
+#: A page as PyMuPDF emits it: one cell per line, so a label and its figures are on
+#: separate lines and no grid can tell which belong together.
+TEXT_PAGE = """
+單位：新台幣仟元
+112年度
+111年度
+資產總計
+530,738,356
+511,254,407
+負債總計
+183,378,211
+153,569,544
+"""
+
+
+def test_the_text_route_loads_a_cell_the_grid_cannot_see() -> None:
+    loaded = find_in_text(target(), TEXT_PAGE, unit_default="千元", currency_default="TWD")
+    assert loaded.item is not None
+    assert loaded.item.value == Decimal("530738356")
+    assert loaded.agrees_with_gold is True
+    assert loaded.item.source_kind == "extracted_text_row"
+
+
+def test_the_text_route_records_which_route_found_the_figure() -> None:
+    """A breakdown total was not printed on a row bearing the account name, and a reader
+    checking the store against the filing has to know that is what they are looking for."""
+    loaded = find_in_text(target(), TEXT_PAGE)
+    assert loaded.item is not None
+    assert loaded.item.source_ref.endswith("|row")
+
+
+def test_the_text_route_still_loads_a_figure_that_disagrees_with_gold() -> None:
+    """The same property as the grid route: agreement is reported, never required."""
+    loaded = find_in_text(target(gold_answer="999,999,999"), TEXT_PAGE)
+    assert loaded.item is not None
+    assert loaded.item.value == Decimal("530738356")
+    assert loaded.agrees_with_gold is False
+    assert outcome_of(loaded) == "disagrees"
+
+
+def test_the_text_route_refuses_a_column_spanning_two_periods() -> None:
+    loaded = find_in_text(target(column_label="111年度及112年度"), TEXT_PAGE)
+    assert loaded.item is None
+    assert "no single fiscal year" in loaded.problem
+
+
+def test_the_text_route_refuses_an_account_it_cannot_place_on_a_statement() -> None:
+    loaded = find_in_text(target(row_label="資產總計增減", column_label="112年度"), TEXT_PAGE)
+    assert loaded.item is None
+    assert "no statement known" in loaded.problem
+
+
+def test_the_text_route_refuses_a_page_with_no_period_header() -> None:
+    """Without column labels nothing says which period a figure belongs to."""
+    loaded = find_in_text(target(), "資產總計\n530,738,356\n511,254,407\n")
+    assert loaded.item is None
+    assert "no period header" in loaded.problem
+
+
+def test_the_text_route_refuses_a_row_it_cannot_find() -> None:
+    loaded = find_in_text(target(row_label="存貨"), TEXT_PAGE)
+    assert loaded.item is None
+    assert "no text row" in loaded.problem
+
+
+def test_the_text_route_reports_missing_rather_than_a_wrong_period() -> None:
+    """A column this page does not carry must not fall back to one it does."""
+    loaded = find_in_text(target(column_label="108年度"), TEXT_PAGE)
+    assert loaded.item is None
+    assert outcome_of(loaded) == "missing"
