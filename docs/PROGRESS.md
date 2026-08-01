@@ -198,8 +198,8 @@
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
-| P5 | Gold set 標註 | 🟡 進行中 | — | **38/53**（probe 5 ＋ **locked 33 ✅**）。剩 dev 15。關鍵路徑，CPU |
-| P6 | Retrieval ＋ rerank | ⚪ 未開始 | — | GPU |
+| P5 | Gold set 標註 | 🟢 完成 | 2026-08-01 | **53/53**：locked 33（稽核 71%）＋ dev 15（稽核 53%）＋ probe 5 |
+| P6 | Retrieval ＋ rerank | 🟡 進行中 | — | dense index 已建（4,063＋9,890 向量）；BM25／RRF／dense search 已寫並自審；**尚未接成 end-to-end 檢索** |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
 | P9 | Eval harness ＋ metrics | ⚪ 未開始 | — | 部分 GPU |
@@ -267,6 +267,74 @@ ollama 版本 `0.32.0`。
 ---
 
 ## Session 日誌
+
+### 2026-08-01 — Session 11（表格抽取器的失效、P6 檢索層、撞上 token 上限）
+
+**最重要的發現：表格抽取器在 dev 文件上，15 個已知數字一個都取不出來。**
+
+- 起因：要寫 P4 loader，先看抽取器在 `1301-FY2023-AR` p188（我親手讀過的 13×5 比較表）
+  上抽到什麼 → **0 個表格**。
+- 根因：那頁的表格用 **101 個 `rect` 畫，只有 1 條 `line`**，
+  而 `TableConfig` 兩軸都用 `text` strategy，**它完全不看 rect**。
+- **原本「用 text 不用 lines」的決定是在兩份 locked 文件上量的**，
+  對 locked 成立、對 dev 完全不成立。**一個在單一 split 上量出的設定，被當成整個語料的性質。**
+
+**我在這條上犯的兩個錯，都記在 D-027**：
+
+1. 第一次量「哪個 strategy 偵測到更多表格」（text 298 / lines 175）——
+   **那是在數過濾器有沒有通過，不是格子對不對**，與 D-020 同一個代理指標錯誤。
+2. 改用「gold 已知數字能否被抽回」是對的標準，但第一次把 **locked ＋ dev 混在一起**（48 個 figure）。
+   **拿 locked 答案決定抽取器設定 = 在 locked 上調參**（協議 §1.3 禁止）。
+   發現後把 `compare_table_strategies.py --set` 預設改成 dev，並把這件事寫進 docstring。
+
+**修正並已換預設（`strategy="union"`，跑兩種取聯集）**，依據建立在 dev，理由**與 split 無關**：
+沒有任一 strategy 支配另一個，所以「兩個都跑」不需要知道哪個 split 偏好哪一種；
+只用 `lines` 就是對 dev 過度擬合（held-out locked：text 27/48 vs lines 10/48 正好證實）。
+
+| 文件 | 表格數 | chart 誤判候選 | 
+|---|---|---|
+| 1301-FY2023-AR | 180 → 223（+24%） | 104 → 67 |
+| 2412-FY2023-AR | 195 → 253（+30%） | 111 → 64 |
+| 2330-FY2023-AR | 193 → 260（+35%） | 33 → **7** |
+| 2330-FY2024-AR | 55 → 90（+64%） | 40 → **9** |
+
+**關鍵檢查通過**：D-020 確認的 4 張真圖表（2330-FY2023-AR p7、2330-FY2024-AR p6）
+在聯集下仍是候選 → LOCK-0032／0033 沒有失去來源。
+端到端：舊預設 `text` 取回 **0/9**，新預設 `union` 取回 **5/9**。
+
+**P6 檢索層（BM25 ＋ dense ＋ RRF）＋ G9 的 results verifier 已落地**
+
+用 workflow 開 3 個 agent 平行寫（互不相干的新檔案），我負責整合。
+**但 workflow 的第二階段（三個對抗式審查 agent）全部被 session token 上限殺掉。**
+
+於是**我自己做了那個審查** —— 不是逐行讀 1,500 行，而是探測這個 repo 真正踩過的失效模式：
+
+- BM25：`U+F98E U+FA01` 與 `年度` tokenise 結果相同（D-024 的活案例）；
+  `530,738,356` 保持完整；同分照 doc index 排序、兩次 build 分數一致
+- dense：0 列矩陣／維度不合／`top_k<=0`／全零 query／矩陣含 NaN／1-D 矩陣**全部拒絕**並指出原因
+- fusion：`rankings=[]` 拒絕，但 `[[],[]]` 回 `[]`（前者是接線錯誤、後者是結果）
+- results（G9）：**summary 沒有 raw artifacts → 16 個問題**（刪掉 artifacts 不能讓 G9 通過）；
+  虛報 2/2 而實際 1/2 → 抓到並指出兩個數字；空 summary ＋ 空 artifacts → 8 個問題，不是「一切正常」
+
+**我原以為的兩個問題查下去都不成立**（`read_record` 接受矛盾記錄，但 `verify` 在聚合層抓到；
+看似重複的報告其實是同一筆記錄的兩個不同問題）。
+
+**已 commit 並 push**：`420e8d1` `16c0c52` `e189e19` `c9b1ed4` `968385b`。
+1230 passed／1 skipped、coverage 96.61%、ruff ＋ mypy 全綠（66 檔）。
+
+**未完成（token 上限中斷，不是做完了）**：
+1. **P4 loader** —— 現在解鎖了。設計已定：用 gold 的 `structured_source_key.row_key`
+   （格式 `doc|p頁|列標籤|欄標籤`）當載入目標，找出該格載入 DuckDB。
+   **關鍵約束：不得以「與 gold 相符」作為載入條件** ——
+   若只載入對得上的值，F4 就會因為建構方式而 100% 正確，那是作弊。
+   抽取器給什麼就載什麼，不符只能**報告**成資料品質發現。
+   **另一個必須寫進 report 的限制**：numeric store 只涵蓋 gold 有問到的 account，
+   **覆蓋率不是結果**。
+2. `make_report.py`
+3. 可信的壞字偵測器（我退掉的那個，需要先設計「合法字元」白名單）
+4. `pin_models`
+
+---
 
 ### 2026-08-01 — Session 10（夜間：一個更正、一個真 bug、dev 15 題、gate 判定器）
 
