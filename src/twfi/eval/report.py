@@ -52,6 +52,12 @@ REQUIRED_LIMITATIONS: Final[tuple[tuple[str, str], ...]] = (
     ("numeric_coverage", "Why the numeric store holds what it holds"),
     ("structured_source", "Why this says verified rather than official structured data"),
     ("parser_generality", "What was not tested: learned layout models"),
+    # Added 2026-08-01 from measurement, before the freeze -- the only time it could be added.
+    # Both development-set filings have damaged text layers (17.9% and 15.4% of characters
+    # decoding to the wrong script, 48% and 43% of pages), so every threshold and setting chosen
+    # on dev was chosen on damaged documents. Protocol "文字層誠實性" states what the report must
+    # say; this entry is what stops the report being written without saying it.
+    ("text_layer", "That both development-set filings have damaged text layers"),
 )
 
 
