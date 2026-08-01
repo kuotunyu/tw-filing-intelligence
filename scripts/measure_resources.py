@@ -10,7 +10,7 @@ Three numbers in this study were assumptions, and one of them could invalidate t
   change, and it is much cheaper to learn now than after the protocol is frozen.
 * **Generation latency at the frozen decoding parameters.** G10 requires 60 s or less.
   Nothing had measured it.
-* **Embedding throughput** over the 18,931 chunks both parsers produce. Needs ``--embed``,
+* **Embedding throughput** over the 8,859 chunks both parsers produce. Needs ``--embed``,
   because torch lives in the optional ``models`` extra that is deliberately not installed --
   the default environment stays CPU-only and offline so the tests cannot drift onto a GPU.
 
@@ -51,11 +51,16 @@ EMBEDDING_MODEL = "BAAI/bge-m3"
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 #: Chunks both parsers produce over the eight **usable** filings, measured by actually
-#: building the index: 4,063 baseline + 9,890 candidate. parse_stats.json reports 18,931,
+#: building the index: 4,063 baseline + 4,796 candidate. parse_stats.json reports 18,931,
 #: but that sums all ten declared documents including the two unusable 2317 annual reports,
 #: which are never indexed. Using the larger figure overstated the projected build time by
-#: a third.
-CORPUS_CHUNKS = 13_953
+#: more than double.
+#:
+#: Was 13_953, from a candidate index of 9,890 chunks. The heading-detection fix (D-031)
+#: halved the candidate chunking to 4,796, so any projection made against the old figure
+#: overstated the build by 58%. Re-measure rather than scale: `results/runs/resource_budget.json`
+#: still carries the old projection until `--embed` is run again.
+CORPUS_CHUNKS = 8_859
 
 #: Another process holding more than this much is someone else's training run. Protocol
 #: rule 8: yield rather than compete.

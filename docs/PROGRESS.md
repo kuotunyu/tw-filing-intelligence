@@ -223,7 +223,7 @@
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟡 有實質限制 | 2026-08-01 | OpenAPI 253 筆已載入；歷史值 loader 已寫，但 **20 個 gold 指名 cell 只載入 2 個**（D-028，財報頁表格結構壞掉） |
 | P5 | Gold set 標註 | 🟢 完成 | 2026-08-01 | **53/53**：locked 33（稽核 71%）＋ dev 15（稽核 53%）＋ probe 5 |
-| P6 | Retrieval ＋ rerank | 🟡 進行中 | — | **端到端可跑（全 CPU）**：dense 4,063＋9,890 向量、BM25 兩個索引、RRF 融合。首次 recall 量測見 D-029。**rerank 尚未接** |
+| P6 | Retrieval ＋ rerank | 🟡 進行中 | — | **端到端可跑（全 CPU）**：dense 4,063＋4,796 向量、BM25 兩個索引、RRF 融合。首次 recall 量測見 D-029。**rerank 尚未接** |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
 | P9 | Eval harness ＋ metrics | 🟡 部分 | — | `run_gate`／`verify_results`／`make_report` 已寫並測試；**`run_eval` 未寫** |

@@ -3,7 +3,7 @@
 The matrix comes from :mod:`twfi.index.embeddings`, which L2-normalises every row at build
 time (:attr:`~twfi.index.embeddings.EmbeddingConfig.normalise`). Cosine similarity between
 normalised vectors *is* their dot product, so nothing here normalises the matrix: doing it
-per query would allocate a second copy of the whole array -- 9,890 x 1024 float32 is ~40 MB
+per query would allocate a second copy of the whole array -- 4,796 x 1024 float32 is ~20 MB
 for the candidate parser -- on every one of the 53 questions on every rung of F0-F7, in order
 to arrive at the array it already had.
 

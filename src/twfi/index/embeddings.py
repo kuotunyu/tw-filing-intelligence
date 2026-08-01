@@ -13,7 +13,7 @@ unknown cannot support a claim:
   bad retrieval, which is exactly what F2 is trying to measure.
 
 Both parsers get their own index. F0's fixed windows and F1-F7's layout-aware chunks are
-different corpora -- 4,063 chunks against 9,890 over the eight usable filings -- and
+different corpora -- 4,063 chunks against 4,796 over the eight usable filings -- and
 pooling them would let the baseline retrieve from the candidate's chunking.
 
 The torch import is deliberately inside :func:`embed_texts`. Everything else here is pure
