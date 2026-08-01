@@ -217,10 +217,31 @@ def main(
         int(report["generation"].get("vram_resident_mib", 0)),
         int(report.get("embedding", {}).get("vram_resident_mib", 0) or 0),
     )
+    # Two figures, because comparing the wrong one against G10 double-counts the desktop.
+    #
+    # Protocol 3.6's budget note says the 22 GB limit is "RTX 4090 24GB 扣除桌面佔用" -- the
+    # desktop's share is *already* subtracted to arrive at 22. So the quantity G10 judges is this
+    # system's own footprint, not total card occupancy. Measuring the latter against 22 charged
+    # the desktop twice and reported +0.26 GB of headroom where there was +1.9 GB.
+    #
+    # Subtracting the at-rest reading is imperfect -- desktop usage drifts while a run proceeds,
+    # and the CUDA context this process creates is legitimately ours -- so both numbers are
+    # written down and the one the gate reads is named.
+    at_rest_mib = int(report["vram_at_rest_mib"])
+    own = max(0, peak - at_rest_mib)
     report["vram_peak_observed_mib"] = peak
     report["vram_peak_observed_gb"] = round(peak / 1024, 2)
+    report["vram_own_footprint_mib"] = own
+    report["vram_own_footprint_gb"] = round(own / 1024, 2)
     report["g10_vram_limit_gb"] = 22.0
-    report["vram_headroom_gb"] = round(22.0 - peak / 1024, 2)
+    report["g10_measures"] = "vram_own_footprint_gb"
+    report["g10_limit_note"] = (
+        "The 22 GB limit already excludes desktop usage (protocol 3.6), so the gate is judged on "
+        "this process's own footprint. vram_peak_observed_gb is total card occupancy including "
+        f"the {at_rest_mib} MiB of unrelated processes present during this run."
+    )
+    report["vram_headroom_gb"] = round(22.0 - own / 1024, 2)
+    report["vram_headroom_total_card_gb"] = round(22.0 - peak / 1024, 2)
 
     destination = paths.runs / "resource_budget.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -230,7 +251,11 @@ def main(
 
     typer.echo("")
     typer.echo(f"highest card usage observed: {peak} MiB ({peak / 1024:.2f} GiB)")
-    typer.echo(f"G10 limit 22 GB -> headroom {report['vram_headroom_gb']:+.2f} GB")
+    typer.echo(f"  of which unrelated processes at rest: {at_rest_mib} MiB")
+    typer.echo(f"  this system's own footprint: {own} MiB ({own / 1024:.2f} GiB)")
+    typer.echo(
+        f"G10 limit 22 GB (already net of desktop) -> headroom {report['vram_headroom_gb']:+.2f} GB"
+    )
     if not embed:
         typer.echo("")
         typer.echo("Note: this is the generation model alone. The retrieval models add to it,")
