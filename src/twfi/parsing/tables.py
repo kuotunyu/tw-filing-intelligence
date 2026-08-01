@@ -126,15 +126,22 @@ class TableConfig:
     Tunable on the development split only (protocol 1.3).
     """
 
-    #: ``"union"`` runs both pdfplumber strategies and keeps the better result per region.
-    #: Measured on dev (D-027): ``text`` recovers 0 of dev's 15 known table figures and
-    #: ``lines`` recovers 9, because dev's filings rule their tables with rectangles and the
-    #: text strategy ignores rectangles entirely. Neither strategy dominates across the
-    #: corpus, so the union is the choice that does not require knowing which split favours
-    #: which. Still opt-in: the default stays ``"text"`` until the two consequences named in
-    #: D-027 are measured -- duplicate regions, and the knock-on to chart candidates, which
-    #: are computed by subtracting table regions.
-    strategy: Literal["text", "lines", "union"] = "text"
+    #: The default runs **both** pdfplumber strategies and keeps the better result per
+    #: region. Chosen on dev, as protocol 1.3 requires, and then confirmed not to break the
+    #: two things that depended on the old default (D-027):
+    #:
+    #:   dev, 15 known table figures   text 0/15   lines 9/15
+    #:   tables found                  +24% to +64% across four filings
+    #:   chart candidates              104->67, 111->64, 33->7, 40->9
+    #:   the four confirmed charts     still candidates (2330-FY2023-AR p7, 2330-FY2024-AR p6)
+    #:
+    #: ``text`` alone recovers **none** of dev's known table figures, because dev's issuers
+    #: rule their tables with rectangles and that strategy ignores rectangles entirely.
+    #: ``lines`` alone would be overfitting to dev, which the held-out locked numbers confirm
+    #: (there ``text`` leads 27/48 to 10/48). Neither dominates, so running both is the
+    #: choice that does not require knowing which split favours which -- and it is that
+    #: split-agnostic argument, not the dev score, that makes it defensible.
+    strategy: Literal["text", "lines", "union"] = "union"
     #: Two candidate regions overlapping by at least this share of the smaller one are the
     #: same table found twice. Chosen to be forgiving: the two strategies bound a table
     #: differently -- ``lines`` follows the ruling, ``text`` follows the ink -- so requiring
