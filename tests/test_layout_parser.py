@@ -558,3 +558,35 @@ def test_missing_size_and_flags_default_safely() -> None:
     assert span is not None
     assert span.size == 0.0
     assert span.bold is False
+
+
+# ------------------------------ a decimal is not a heading number (D-031)
+
+
+@pytest.mark.parametrize("text", ["0.00", "0.0005%", "1.5", "12.34", "0.00中央化工", "3.14159"])
+def test_a_decimal_is_not_heading_numbering(text: str) -> None:
+    r"""The bug: `^(\d{1,2})[.、]` matched the 0. of 0.00, so every decimal in every table
+    became a level-1 heading.
+
+    Measured before the fix: 1,083 distinct top-level sections in 1301-FY2023-AR named things
+    like 0.0036,204,112, against the ten a filing actually has. The tabular guard could not
+    catch it -- 0.00 is a single figure, and one figure is permitted in a heading.
+    """
+    assert detect_numbering_level(text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "level"),
+    [
+        ("1. 產品方面", 1),
+        ("2、公司概況", 1),
+        ("10.結論", 1),
+        ("1.2 明細", 2),
+        ("一、營運概況", 2),
+        ("壹、公司簡介", 1),
+        ("（一）財務狀況", 3),
+    ],
+)
+def test_real_headings_still_detected_after_the_decimal_fix(text: str, level: int) -> None:
+    """The lookahead must reject decimals without rejecting numbered headings."""
+    assert detect_numbering_level(text) == level

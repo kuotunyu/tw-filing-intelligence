@@ -36,6 +36,20 @@ class StructureChunkConfig:
     min_chars: int = 200
     include_heading_prefix: bool = True
     heading_separator: str = " > "
+    #: Whether an undersized chunk may fold into a *sibling* section, not only into its own.
+    #:
+    #: Measured on the corpus: 2,833 of 2,839 chunks under 50 characters were blocked from
+    #: merging by one condition -- the preceding chunk's section path differed. That is
+    #: structural, not incidental: :func:`chunk_structure_aware` flushes on every section
+    #: change, so consecutive output chunks almost never share a section, and the reflow could
+    #: only ever reach chunks that a length limit had split. It fired 79 to 293 times per
+    #: filing while leaving 29% of chunks under 50 characters.
+    #:
+    #: Siblings rather than "any neighbour", because rule 1 -- do not merge across sections --
+    #: exists to stop unrelated content being welded together, and 「柒、一」 with 「柒、二」 is not
+    #: that. 「柒」 with 「捌」 would be. A merged chunk's section path becomes the shared parent,
+    #: so its provenance says what it actually spans.
+    merge_siblings: bool = True
 
     def __post_init__(self) -> None:
         if self.max_chars <= 0:
@@ -129,11 +143,18 @@ def chunk_structure_aware(
 def _merge_undersized(
     document: ParsedDocument, chunks: list[Chunk], config: StructureChunkConfig
 ) -> list[Chunk]:
-    """Fold a too-small chunk into its neighbour when they share a section.
+    """Fold a too-small chunk into its neighbour when the two sections may be joined.
 
-    Short chunks are a real problem for lexical retrieval -- a two-sentence chunk
-    has too little signal to rank -- but merging across sections would undo rule 1,
-    so this only merges within a section and never touches atomic blocks.
+    Short chunks are a real problem for lexical retrieval -- a two-sentence chunk has too
+    little signal to rank -- and this corpus is full of them: 29% of candidate chunks were
+    under 50 characters. The first version only merged chunks with an *identical* section
+    path, which sounded like rule 1 and was not: `chunk_structure_aware` flushes on every
+    section change, so consecutive chunks almost never share a path, and 2,833 of those 2,839
+    tiny chunks were blocked by exactly that condition. The reflow could only ever reach
+    chunks a length limit had split.
+
+    So the condition is now "may these sections be joined" rather than "are they the same",
+    and :func:`_mergeable_sections` decides it. Atomic blocks are still never touched.
     """
     if config.min_chars == 0:
         return chunks
@@ -146,9 +167,14 @@ def _merge_undersized(
             and not atomic
             and chunk.char_count < config.min_chars
             and not set(merged[-1].kinds) & _ATOMIC_KINDS
-            and merged[-1].section_path == chunk.section_path
+            and _mergeable_sections(merged[-1].section_path, chunk.section_path, config) is not None
         ):
             previous = merged.pop()
+            # The merged chunk's section path is what the two have in common, so a chunk
+            # spanning 「柒、一」 and 「柒、二」 reports 「柒」 rather than claiming to be
+            # one of them.
+            shared = _mergeable_sections(previous.section_path, chunk.section_path, config)
+            assert shared is not None
             body = chunk.text
             if config.include_heading_prefix and chunk.section_path:
                 prefix = config.heading_separator.join(chunk.section_path) + "\n"
@@ -159,7 +185,7 @@ def _merge_undersized(
                     doc_id=previous.doc_id,
                     text=f"{previous.text}\n{body}".strip(),
                     refs=_dedupe_refs(previous.refs + chunk.refs),
-                    section_path=previous.section_path,
+                    section_path=shared,
                     kinds=tuple(dict.fromkeys(previous.kinds + chunk.kinds)),
                     parser=previous.parser,
                 )
@@ -179,6 +205,30 @@ def _merge_undersized(
         )
         for index, chunk in enumerate(merged)
     ]
+
+
+def _mergeable_sections(
+    left: tuple[str, ...], right: tuple[str, ...], config: StructureChunkConfig
+) -> tuple[str, ...] | None:
+    """The section path a merged chunk should carry, or ``None`` if they must not merge.
+
+    Identical paths merge and keep the path. With ``merge_siblings``, two paths sharing a
+    parent merge and take the parent -- so the result never claims to be a section it only
+    partly covers. Anything else refuses: 「柒」 and 「捌」 are different subjects and welding them
+    together is what rule 1 exists to prevent.
+
+    A pair of empty paths counts as identical rather than as siblings, so content outside any
+    heading still consolidates.
+    """
+    if left == right:
+        return left
+    if not config.merge_siblings:
+        return None
+    # Siblings: same parent, both actually inside a section. Two top-level sections have the
+    # empty tuple as their parent, and merging those would be merging 「柒」 into 「捌」.
+    if len(left) == len(right) >= 2 and left[:-1] == right[:-1]:
+        return left[:-1]
+    return None
 
 
 def _dedupe_refs(refs: tuple[PageRef, ...]) -> tuple[PageRef, ...]:

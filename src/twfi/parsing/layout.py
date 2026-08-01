@@ -72,7 +72,18 @@ _NUMBERING_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
 #: (``1 現金及約當現金 1,234``), which produced 23,677 "headings" in a 707-page report.
 #: A dotted form may be followed by a space because ``1.2 明細`` is unambiguous.
 _DOTTED_NUMBER = re.compile(r"^(\d{1,2}(?:\.\d{1,2})+)[.、\s]")
-_SINGLE_NUMBER = re.compile(r"^(\d{1,2})[.、]")
+#: A single-level number, and the negative lookahead is the whole point of it.
+#:
+#: Without ``(?!\d)`` this matched the ``0.`` of ``0.00``, so **every decimal in every table
+#: became a level-1 heading**. Measured before the fix: 1301-FY2023-AR had 1,083 distinct
+#: top-level sections named things like ``0.0005%`` and ``0.0036,204,112``, and 2330-FY2023-AR
+#: had 627. A filing has on the order of ten. The existing tabular guard did not catch it
+#: because ``0.00`` is a single figure and one figure is allowed in a heading.
+#:
+#: The damage was not only fragmentation. F1's claim is that its chunks carry a section path,
+#: and a path reading ``0.0036,204,112`` makes that claim hollow -- 6,515 sections, 83% of them
+#: holding one chunk, and 29% of chunks under 50 characters all follow from this one pattern.
+_SINGLE_NUMBER = re.compile(r"^(\d{1,2})[.、](?!\d)")
 
 #: A line ending in sentence punctuation is prose, not a heading.
 _SENTENCE_END = ("。", "；", ".", ";", "，", ",", "、")
