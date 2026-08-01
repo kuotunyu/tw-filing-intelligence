@@ -26,6 +26,7 @@ new run against this one.
 from __future__ import annotations
 
 import json
+import re
 import statistics
 import time
 from typing import TYPE_CHECKING, Annotated, Any
@@ -34,9 +35,9 @@ import numpy as np
 import typer
 
 from twfi.answer.generate import Generation, GenerationConfig, generate
-from twfi.answer.prompt import build_prompt, parse_answer
+from twfi.answer.prompt import DEFAULT_VARIANT, PROMPT_VARIANTS, build_prompt, parse_answer
 from twfi.console import use_utf8_output
-from twfi.eval.answers import refusal_rates, score_answer
+from twfi.eval.answers import normalise_text, refusal_rates, score_answer
 from twfi.eval.gates import wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
 from twfi.index.embeddings import load_vectors
@@ -111,6 +112,34 @@ def _retrievers(paths: Any, embed: Callable[[str], np.ndarray], depth: int) -> d
     return built
 
 
+#: Figures in a gold answer, long enough not to be a year or a note reference.
+_GOLD_FIGURE = re.compile(r"-?\d[\d,]*\.?\d*")
+
+
+def _answer_reached_the_prompt(record: GoldRecord, prompt: str) -> bool | None:
+    """Whether every figure the gold answer states appears in the prompt the model saw.
+
+    A diagnostic, not a protocol metric -- it must never be used as a gate. It exists because
+    page-level Recall@5 is not a proxy for "the model had the evidence": a page splits into
+    several chunks, and the one that reaches the prompt need not be the one holding the figure.
+    Reading Recall@5 that way is how D-040 concluded the bottleneck was over-refusal when six of
+    its eight wrong refusals were the model correctly declining a prompt that did not contain the
+    answer (D-041).
+
+    ``None`` for a question with no figure in its gold answer -- a narrative or refusal question,
+    where string presence says nothing.
+    """
+    if not record.answer:
+        return None
+    wanted = [
+        normalise_text(figure) for figure in _GOLD_FIGURE.findall(record.answer) if len(figure) >= 3
+    ]
+    if not wanted:
+        return None
+    seen = normalise_text(prompt)
+    return all(figure in seen for figure in wanted)
+
+
 @app.command()
 def main(
     gold_set: Annotated[
@@ -120,6 +149,9 @@ def main(
     depth: Annotated[int, typer.Option(help="Candidates each side fetches before fusion.")] = 100,
     rerank_device: Annotated[str, typer.Option(help="cuda or cpu, for F3.")] = "cuda",
     limit: Annotated[int, typer.Option(help="Questions to run (0 = all).")] = 0,
+    prompt_variant: Annotated[
+        str, typer.Option("--prompt", help="Instruction wording variant.")
+    ] = DEFAULT_VARIANT,
 ) -> None:
     """Run each requested rung over the gold set and score every answer."""
     paths = repo_paths()
@@ -129,6 +161,9 @@ def main(
             "run happens after scripts/freeze_protocol.py, and this script does not write "
             "results/feasibility/ in any case."
         )
+        raise typer.Exit(code=2)
+    if prompt_variant not in PROMPT_VARIANTS:
+        typer.echo(f"unknown --prompt {prompt_variant!r}; have {sorted(PROMPT_VARIANTS)}")
         raise typer.Exit(code=2)
     wanted = [name.upper() for name in (factor or list(LADDER))]
     unknown = [name for name in wanted if name not in LADDER]
@@ -175,7 +210,8 @@ def main(
             retrieval_seconds = time.perf_counter() - retrieval_started
             passages = shortlist[:TOP_K_RERANK]
 
-            completion: Generation = generate(build_prompt(record.question, passages), config)
+            prompt = build_prompt(record.question, passages, variant=prompt_variant)
+            completion: Generation = generate(prompt, config)
             draft = parse_answer(completion.text)
             score = score_answer(
                 draft.answer,
@@ -198,6 +234,7 @@ def main(
                     "predicted_unit": draft.unit,
                     "predicted_period": draft.period,
                     "cited": list(draft.cited),
+                    "answer_in_prompt": _answer_reached_the_prompt(record, prompt),
                     "cited_pages": [
                         {"doc_id": hit.doc_id, "pages": list(hit.pages)}
                         for hit in draft.cited_hits(passages)
@@ -263,6 +300,7 @@ def main(
         "fetch_depth": depth,
         "top_k_retrieve": TOP_K_RETRIEVE,
         "top_k_rerank": TOP_K_RERANK,
+        "prompt_variant": prompt_variant,
         "generation_model": config.model,
         "decoding": config.options,
         "gold_sha256": sha256_text_file(source),
@@ -274,12 +312,13 @@ def main(
             "freeze."
         ),
     }
-    destination = paths.runs / f"ladder_{gold_set}.json"
+    suffix = "" if prompt_variant == DEFAULT_VARIANT else f"_{prompt_variant}"
+    destination = paths.runs / f"ladder_{gold_set}{suffix}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    dump_lines(paths.runs / f"ladder_{gold_set}_rows.jsonl", rows)
+    dump_lines(paths.runs / f"ladder_{gold_set}{suffix}_rows.jsonl", rows)
     typer.echo("")
     typer.echo(f"wrote: {destination.relative_to(paths.root)}")
     typer.echo(f"wrote: {(paths.runs / f'ladder_{gold_set}_rows.jsonl').relative_to(paths.root)}")

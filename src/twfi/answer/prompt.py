@@ -25,7 +25,14 @@ from dataclasses import dataclass
 
 from twfi.index.retrieve import Hit
 
-__all__ = ["ANSWER_CONTRACT", "AnswerDraft", "build_prompt", "parse_answer"]
+__all__ = [
+    "ANSWER_CONTRACT",
+    "DEFAULT_VARIANT",
+    "PROMPT_VARIANTS",
+    "AnswerDraft",
+    "build_prompt",
+    "parse_answer",
+]
 
 #: The four lines the model is asked for. Chinese, because the corpus and the questions are.
 ANSWER_CONTRACT = """請只輸出下列四行，不要有其他文字：
@@ -74,7 +81,39 @@ def _clean(value: str) -> str | None:
     return None if not stripped or stripped.casefold() in _ABSENT else stripped
 
 
-def build_prompt(question: str, hits: Sequence[Hit]) -> str:
+#: Instruction variants, tunable on dev (protocol 1.3). Prompt wording is a free parameter and
+#: the first measured run showed it is a *large* one: the system refused 8-13 of 15 dev questions
+#: when only 2 should be refused, including questions whose answer was printed verbatim in a
+#: retrieved passage (D-040).
+#:
+#: The suspicion these variants test is that 「不得推測」 is being read as forbidding the reading
+#: of a value out of a table. They differ only in how the boundary between reading and inferring
+#: is described; none of them adds a reasoning step, because protocol 2.2 fixes ``think=false``
+#: and states the design must not depend on chain-of-thought.
+#:
+#: **Choose between them on refusal precision, not on overall correctness.** Overall correctness
+#: rewards answering everything, which is the opposite failure and just as wrong.
+PROMPT_VARIANTS: dict[str, str] = {
+    "strict": (
+        "只能根據下列段落回答，不得使用段落以外的知識，也不得推測。\n"
+        "若段落不足以回答，請在答案欄寫「無法回答」。"
+    ),
+    "permissive": (
+        "只能根據下列段落回答，不得使用段落以外的知識。\n"
+        "段落中的表格數字與敘述就是答案來源，直接讀出對應的值即可 —— 這不算推測。\n"
+        "只有在段落中確實找不到所需資訊時，才在答案欄寫「無法回答」。"
+    ),
+    "verbatim": (
+        "只能根據下列段落回答，不得使用段落以外的知識。\n"
+        "段落中的表格數字與敘述就是答案來源，直接讀出對應的值即可 —— 這不算推測。\n"
+        "答案通常會逐字出現在某一個段落裡，請先找出它。\n"
+        "只有在段落中確實找不到所需資訊時，才在答案欄寫「無法回答」。"
+    ),
+}
+DEFAULT_VARIANT = "strict"
+
+
+def build_prompt(question: str, hits: Sequence[Hit], *, variant: str = DEFAULT_VARIANT) -> str:
     """One prompt, from a question and whatever evidence this rung retrieved.
 
     Passages are numbered so citations can point at them, and each carries its document and page
@@ -82,6 +121,8 @@ def build_prompt(question: str, hits: Sequence[Hit]) -> str:
     which the layout chunker already prefixed -- so the model sees the section a passage came
     from without this having to know how chunking works.
     """
+    if variant not in PROMPT_VARIANTS:
+        raise ValueError(f"unknown prompt variant {variant!r}; have {sorted(PROMPT_VARIANTS)}")
     if not hits:
         evidence = "（沒有檢索到任何段落）"
     else:
@@ -91,9 +132,8 @@ def build_prompt(question: str, hits: Sequence[Hit]) -> str:
             for index, hit in enumerate(hits, start=1)
         )
     return (
-        "你是臺灣上市公司公開文件的查詢助理。"
-        "只能根據下列段落回答，不得使用段落以外的知識，也不得推測。\n"
-        "若段落不足以回答，請在答案欄寫「無法回答」。\n\n"
+        "你是臺灣上市公司公開文件的查詢助理。\n"
+        f"{PROMPT_VARIANTS[variant]}\n\n"
         f"===== 段落 =====\n{evidence}\n\n"
         f"===== 問題 =====\n{question}\n\n"
         f"===== 輸出格式 =====\n{ANSWER_CONTRACT}\n"
