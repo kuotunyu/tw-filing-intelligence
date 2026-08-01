@@ -29,6 +29,7 @@ import json
 import re
 import statistics
 import time
+from dataclasses import replace
 from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
@@ -46,6 +47,8 @@ from twfi.index.rerank import load_cross_encoder, rerank_hits
 from twfi.index.retrieve import Retriever, covered_targets, hit_rank, reciprocal_rank
 from twfi.io.hashing import sha256_text_file
 from twfi.io.jsonl import dump_lines, read_lines
+from twfi.numeric.route import answer_numerically
+from twfi.numeric.store import NumericStore
 from twfi.paths import repo_paths
 from twfi.protocol import COVERAGE_AT, MRR_AT, RECALL_AT, TOP_K_RERANK, TOP_K_RETRIEVE
 
@@ -61,11 +64,17 @@ LADDER: dict[str, dict[str, Any]] = {
     "F1": {"parser": "candidate", "mode": "lexical", "rerank": False, "what": "+ layout parsing"},
     "F2": {"parser": "candidate", "mode": "hybrid", "rerank": False, "what": "+ hybrid retrieval"},
     "F3": {"parser": "candidate", "mode": "hybrid", "rerank": True, "what": "+ reranking"},
+    "F4": {
+        "parser": "candidate",
+        "mode": "hybrid",
+        "rerank": True,
+        "numeric": True,
+        "what": "+ numeric route",
+    },
 }
 
 #: Named so the output can say what is missing instead of implying the ladder is complete.
 NOT_IMPLEMENTED: dict[str, str] = {
-    "F4": "numeric route (SQL over the DuckDB store)",
     "F5": "chart caption indexing",
     "F6": "original-crop chart answering",
     "F7": "typed bounded routing",
@@ -188,6 +197,15 @@ def main(
         typer.echo(f"loading the cross-encoder on {rerank_device} …")
         score_pairs, _ = load_cross_encoder(device=rerank_device)
 
+    store = None
+    if any(LADDER[name].get("numeric") for name in wanted):
+        database = paths.duckdb / "numeric.duckdb"
+        if not database.is_file():
+            typer.echo(f"{database} does not exist; run load_historical.py --set dev first")
+            raise typer.Exit(code=2)
+        store = NumericStore(database)
+        typer.echo(f"numeric store: {store.count():,} figure(s)")
+
     config = GenerationConfig()
     rows: list[dict[str, Any]] = []
     summary: list[dict[str, Any]] = []
@@ -211,8 +229,28 @@ def main(
             passages = shortlist[:TOP_K_RERANK]
 
             prompt = build_prompt(record.question, passages, variant=prompt_variant)
-            completion: Generation = generate(prompt, config)
-            draft = parse_answer(completion.text)
+            # F4 tries the deterministic route first, on *every* question rather than on a
+            # hand-picked set: its parser needs a company, a period and a known account, so a
+            # narrative question refuses on its own. Choosing which types get the SQL path
+            # would be choosing where it wins.
+            numeric = (
+                answer_numerically(record.question, store)
+                if rung.get("numeric") and store is not None
+                else None
+            )
+            if numeric is not None and numeric.ok:
+                completion = Generation(
+                    text=numeric.as_text(),
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    seconds=0.0,
+                    model="deterministic-sql",
+                )
+                draft = parse_answer(numeric.as_text())
+                draft = replace(draft, unit=numeric.unit, period=numeric.period)
+            else:
+                completion = generate(prompt, config)
+                draft = parse_answer(completion.text)
             score = score_answer(
                 draft.answer,
                 record,
@@ -235,6 +273,7 @@ def main(
                     "predicted_period": draft.period,
                     "cited": list(draft.cited),
                     "answer_in_prompt": _answer_reached_the_prompt(record, prompt),
+                    "numeric_route": numeric.to_json() if numeric is not None else None,
                     "cited_pages": [
                         {"doc_id": hit.doc_id, "pages": list(hit.pages)}
                         for hit in draft.cited_hits(passages)

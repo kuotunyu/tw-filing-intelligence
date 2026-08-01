@@ -460,7 +460,9 @@ D-024 的範圍比原本記的大。
    **第一次端到端結果：答對 3–5/15，而瓶頸是「過度拒答」不是檢索** ——
    dev 只有 2 題該拒答，系統拒答 8–13 題。下一步是調 prompt，
    判準要用 refusal precision（目前 15–25%），不是 overall correct。
-10. **F4–F7 需要的模組**：`twfi/numeric` 的 SQL route 接線、`twfi/chart/`（不存在）、
+10. ✅ **F4 numeric route 已完成（D-042）** —— ladder 上最大的一次增益（F3 4/15 → F4 7/15），
+    但覆蓋率不是發現：store 裡只有 gold 指名的 4 格 FY2023 數值。
+11. **F5–F7 需要的模組**：`twfi/numeric` 的 SQL route 接線、`twfi/chart/`（不存在）、
     `twfi/router/`（不存在）。這是 ⑤A 完成定義第 5 條「baseline 與 candidate 都完整執行」
     尚未滿足的部分。
 9. **`2317-FY2024-FS` p14 的代碼欄損益表版型**（D-032 剩下的那 1 個未取到目標）。

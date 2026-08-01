@@ -2012,6 +2012,52 @@
 
 ---
 
+## D-042 F4 numeric route：ladder 上最大的一次增益，而且原因是機制性的
+
+- **F4 = F3 ＋ deterministic SQL**。任何問題都先試 numeric route，parse 不出來就退回生成。
+  **對所有題型一視同仁**，不挑哪些題型走 SQL —— 挑就是在挑它贏在哪。
+
+  | rung | 內容 | 答對 | EM | mean F1 | 生成 p50 |
+  |---|---|---|---|---|---|
+  | F0 | baseline parser | 3/15 | 1 | 0.122 | 2.1 s |
+  | F1 | ＋ layout parsing | 5/15 | 1 | 0.219 | 2.2 s |
+  | F2 | ＋ hybrid retrieval | 3/15 | 1 | 0.100 | 2.7 s |
+  | F3 | ＋ reranking | 4/15 | 1 | 0.165 | 3.1 s |
+  | **F4** | **＋ numeric route** | **7/15** | **4** | **0.365** | **1.3 s** |
+
+  **F4 vs F3 是 3+/0−**（DEV-0001、0002、0013 由錯轉對，零退步），
+  但 3 個一面倒 discordant 的最小可能 p 就是 **0.250**，所以**仍然不顯著**（D-037 的下限）。
+  生成延遲下降是因為 4 題**完全不經過生成**。
+
+- **這是 RQ2 的第一個實證**：同樣的數字，走 deterministic SQL 拿得到，走「丟進 embedding
+  讓模型讀回來」拿不到。而且答案帶 formula 與 operands（protocol 2.4），
+  「34.55」變成「183,378,211 / 530,738,356 × 100」，是可以被檢查的主張而不是要人相信的數字。
+
+- **⚠️ 但覆蓋率不是這裡的發現。** store 裡的 FY2023 數值**只有 gold 指名的那 4 格**
+  （`historical.py` 自己的 docstring 早就寫明：「the numeric route had the figure it needed
+  must never be reported as a coverage finding. It was arranged.」）。
+  F4 能誠實宣稱的是「**在拿得到數字的前提下**，deterministic 路徑比生成路徑可靠」，
+  不是「numeric route 覆蓋率高」。
+
+- **question 是從題目文字 parse 的，不是從 gold record。**
+  gold 的 `structured_source_key` 直接寫著是哪一列 —— 讀它就是拿答案回答問題，
+  route 會看起來完美而什麼都沒量到。所以公司／期間／科目全部從題目文字還原，
+  parse 不出來就拒答。
+
+- **抓到並修掉一個「看起來最可信的錯誤」**：
+  DEV-0008 問「資產總計是多少，**同年度的現金流量比率是多少**？」，
+  route 走 lookup 回了 530,738,356 —— **它問的那一半是對的，作為答案是錯的**。
+  精確、有出處、只答了一半，是這裡最糟的失敗形狀。
+  已加 `_MULTI_FIGURE` 守門（「分別」或兩個「是多少」→ 拒答，交回生成路徑）。
+  修正後 F4 仍是 7/15（DEV-0008 本來就沒算對），但少了一個會誤導人的答案。
+
+- **仍未做**：F5／F6（chart caption ＋ crop answering）、F7（typed routing）。
+  `twfi/chart/` 與 `twfi/router/` 仍不存在，`run_eval` 的輸出與產物照樣列出這三階沒跑。
+
+- **狀態**：ACCEPTED (2026-08-02)。16 個測試；`results/feasibility/` 依然沒寫。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
