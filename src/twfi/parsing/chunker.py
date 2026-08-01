@@ -175,15 +175,23 @@ def _merge_undersized(
             # one of them.
             shared = _mergeable_sections(previous.section_path, chunk.section_path, config)
             assert shared is not None
-            body = chunk.text
-            if config.include_heading_prefix and chunk.section_path:
-                prefix = config.heading_separator.join(chunk.section_path) + "\n"
-                body = body.removeprefix(prefix)
+            # Both sides lose their own heading line before the shared one is written back, so
+            # the text a merged chunk carries names the section the chunk claims to be in. The
+            # first version stripped only the absorbed chunk's prefix and left the *previous*
+            # chunk's deeper path at the head of the text while declaring the shallower shared
+            # path -- 1,515 of 4,796 candidate chunks (31.6%) shipped a heading line their own
+            # section_path contradicted, with the declared paths totalling 42,334 characters
+            # against 74,616 embedded. G4 scores citations against section_path, so a chunk
+            # whose text names a different section than it reports is a provenance defect, not
+            # a formatting one.
+            body = f"{_body_of(previous, config)}\n{_body_of(chunk, config)}".strip()
+            if config.include_heading_prefix and shared:
+                body = f"{config.heading_separator.join(shared)}\n{body}"
             merged.append(
                 Chunk(
                     chunk_id=previous.chunk_id,
                     doc_id=previous.doc_id,
-                    text=f"{previous.text}\n{body}".strip(),
+                    text=body,
                     refs=_dedupe_refs(previous.refs + chunk.refs),
                     section_path=shared,
                     kinds=tuple(dict.fromkeys(previous.kinds + chunk.kinds)),
@@ -205,6 +213,21 @@ def _merge_undersized(
         )
         for index, chunk in enumerate(merged)
     ]
+
+
+def _body_of(chunk: Chunk, config: StructureChunkConfig) -> str:
+    """A chunk's text without the heading line :func:`_build` prepended.
+
+    Used on both sides of a merge so the shared path can be written back once. Note this is a
+    string removal and it is exact only because the invariant holds: a chunk's text begins with
+    its own ``section_path``. :func:`_merge_undersized` is what maintains that invariant, and
+    breaking it is what made an external string-strip of the shipped `chunks.jsonl` silently
+    under-remove on a third of the corpus.
+    """
+    if not config.include_heading_prefix or not chunk.section_path:
+        return chunk.text
+    prefix = config.heading_separator.join(chunk.section_path) + "\n"
+    return chunk.text.removeprefix(prefix)
 
 
 def _mergeable_sections(

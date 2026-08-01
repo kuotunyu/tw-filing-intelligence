@@ -314,3 +314,48 @@ def test_end_to_end_produces_more_focused_chunks_than_fixed_windows(tmp_path: Pa
 
     assert all(chunk.section_path == () for chunk in fixed)
     assert all(chunk.section_path != () for chunk in structured)
+
+
+def test_a_merged_chunk_text_names_the_section_it_reports() -> None:
+    """The invariant a merged chunk broke: text must begin with its own section_path.
+
+    _merge_undersized used to strip only the absorbed chunk's heading line, leaving the previous
+    chunk's deeper path at the head of the text while declaring the shallower shared path. On the
+    real corpus that shipped 1,515 of 4,796 chunks (31.6%) whose heading line contradicted their
+    own section_path -- and G4 scores citations against section_path, so the two disagreeing is a
+    provenance defect.
+    """
+    config = StructureChunkConfig(min_chars=200, merge_siblings=True)
+    document = document_of(
+        block("壹", kind="heading", section=("壹",), order=0),
+        block("一", kind="heading", section=("壹", "一"), order=1),
+        block("短" * 20, section=("壹", "一"), order=2, y=120),
+        block("二", kind="heading", section=("壹", "二"), order=3, y=140),
+        block("也短" * 15, section=("壹", "二"), order=4, y=160),
+    )
+    chunks = chunk_structure_aware(document, config)
+    assert chunks, "the fixture must produce at least one chunk"
+    for chunk in chunks:
+        if not chunk.section_path:
+            continue
+        head = config.heading_separator.join(chunk.section_path) + "\n"
+        assert chunk.text.startswith(head), (
+            f"chunk declares {chunk.section_path} but its text starts {chunk.text[:60]!r}"
+        )
+
+
+def test_a_merged_chunk_carries_no_second_heading_line() -> None:
+    """Neither side's own path may survive inside the merged body."""
+    config = StructureChunkConfig(min_chars=200, merge_siblings=True)
+    document = document_of(
+        block("壹", kind="heading", section=("壹",), order=0),
+        block("一", kind="heading", section=("壹", "一"), order=1),
+        block("短" * 20, section=("壹", "一"), order=2, y=120),
+        block("二", kind="heading", section=("壹", "二"), order=3, y=140),
+        block("也短" * 15, section=("壹", "二"), order=4, y=160),
+    )
+    merged = [c for c in chunk_structure_aware(document, config) if len(c.section_path) == 1]
+    assert merged, "the fixture must actually merge two siblings into their parent"
+    for chunk in merged:
+        deeper = [line for line in chunk.text.splitlines()[1:] if config.heading_separator in line]
+        assert not deeper, f"a deeper heading line survived the merge: {deeper}"
