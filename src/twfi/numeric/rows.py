@@ -140,6 +140,17 @@ def _table_width(rows: list[Row], periods: int) -> int:
     Only the first ``periods`` columns are addressable as periods -- ROC filings print the period
     columns before the derived ones. A derived quantity is computed from the period cells by the
     numeric route rather than read out of a column, so nothing here needs to name 差異％.
+
+    **Where that assumption could fail, stated rather than guarded against.** A statement laid
+    out 金額／％／金額／％ *interleaves* the derived columns with the periods, putting the second
+    period at index 2 rather than 1. It does not arise in this corpus: those ％ columns print as
+    bare integers (`6`, `10`), which :data:`FIGURE` does not accept, so such rows come out two
+    figures wide and the question never arises. A filing writing them as `6.25` would break it.
+    Detecting that needs the header's column *roles*, and the header arrives one character per
+    line (`代 / 碼 / 資 / 產 / 金 / 額 / ％`) -- reconstructing it is a separate piece of work, and
+    guessing at it here would be the kind of speculative machinery that produced the 88 for 存貨.
+    Until then a wrong figure of this shape would surface as a gold disagreement, which is
+    reported, not as a silent load.
     """
     if periods <= 0:
         return 0
