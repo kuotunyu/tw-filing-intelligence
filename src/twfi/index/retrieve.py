@@ -65,21 +65,22 @@ class Retriever:
     vectors: np.ndarray | None = None
     embed_query: Callable[[str], np.ndarray] | None = None
     rrf: RrfConfig = field(default_factory=RrfConfig)
-    #: How many each side fetches before fusion, as a multiple of the requested ``top_k``.
+    #: How many candidates each side fetches before fusion, as an absolute count.
     #:
-    #: At 1 the fused list is cut back to the same length both sides supplied, so fusion has
-    #: almost nothing to reorder -- a document only one side found can never reach the final
-    #: list. Raising it fixed exactly that on the baseline parser: hybrid recall@10 went from
-    #: 7/15 to 13/15 at a multiplier of 10, overtaking lexical. On the candidate parser it went
-    #: the other way, 10/15 down to 8/15 (D-029).
+    #: ``None`` means "whatever ``top_k`` is", which is the degenerate setting: the fused list
+    #: is then cut back to the length both sides already supplied, so a document only one side
+    #: found can never reach the answer and fusion has nothing to recover. Measured on dev,
+    #: raising it took baseline hybrid recall@10 from 7/15 to 13/15, past lexical's 10/15; on
+    #: the candidate parser it moved the other way, 10/15 to 8/15 (D-029).
     #:
-    #: **Known defect, kept visible rather than quietly patched:** tying the depth to ``top_k``
-    #: means recall at two different ``top_k`` values comes from two different configurations,
-    #: which is why a measured recall@20 came out *below* the same retriever's recall@10 -- an
-    #: impossibility for one retriever at two cutoffs. It should be an absolute ``fetch_depth``.
-    #: Not changed yet because changing it invalidates the numbers above, and they are the
-    #: evidence for why the parameter matters at all.
-    fetch_multiplier: int = 1
+    #: Absolute rather than a multiple of ``top_k``, and that is a correction. The first version
+    #: scaled with ``top_k``, so recall at two cutoffs came from two different candidate pools --
+    #: which is how a measured recall@20 landed *below* the same retriever's recall@10, an
+    #: impossibility for one retriever at two cutoffs of one pool. Tuning a knob that makes k
+    #: values incomparable would have selected something meaningless.
+    #:
+    #: Tunable on dev only (protocol 1.3).
+    fetch_depth: int | None = None
 
     def __post_init__(self) -> None:
         if self.vectors is not None and len(self.vectors) != len(self.chunks):
@@ -130,10 +131,10 @@ class Retriever:
             return [self._hit(index, score) for index, score in self._dense(query, top_k)]
 
         assert self.bm25 is not None
-        # Each side fetches more than the caller asked for, so that a document only one side
-        # found can still reach the fused top_k. With a multiplier of 1 the fused list is cut
-        # back to what each side already supplied and fusion has nothing to recover.
-        deep = top_k * max(1, self.fetch_multiplier)
+        # Each side fetches at least top_k, and usually more, so a document only one side found
+        # can still reach the fused answer. The pool does not depend on top_k, which is what
+        # makes recall at two cutoffs comparable.
+        deep = max(top_k, self.fetch_depth or top_k)
         lexical_ranking = [index for index, _ in self.bm25.search(query, deep)]
         dense_ranking = [index for index, _ in self._dense(query, deep)]
         fused = reciprocal_rank_fusion([lexical_ranking, dense_ranking], self.rrf, top_k=top_k)

@@ -186,16 +186,16 @@ def test_a_wider_fetch_lets_fusion_recover_a_one_sided_hit() -> None:
         bm25=Bm25Index.build([row["text"] for row in chunks]),
         vectors=vectors,
         embed_query=embed_first,
-        fetch_multiplier=1,
+        fetch_depth=3,
     )
     wide = Retriever(
         chunks=chunks,
         bm25=Bm25Index.build([row["text"] for row in chunks]),
         vectors=vectors,
         embed_query=embed_first,
-        fetch_multiplier=10,
+        fetch_depth=40,
     )
-    assert wide.fetch_multiplier > narrow.fetch_multiplier
+    assert (wide.fetch_depth or 0) > (narrow.fetch_depth or 0)
     # Both must return at most what was asked for, whatever they fetched underneath.
     assert len(narrow.search("現金", 3, mode="hybrid")) <= 3
     assert len(wide.search("現金", 3, mode="hybrid")) <= 3
@@ -208,18 +208,18 @@ def test_the_multiplier_never_returns_more_than_top_k() -> None:
         bm25=Bm25Index.build([row["text"] for row in CHUNKS]),
         vectors=VECTORS,
         embed_query=embed_first,
-        fetch_multiplier=10,
+        fetch_depth=40,
     )
     assert len(retriever.search("資產總計", 1, mode="hybrid")) == 1
 
 
-def test_a_zero_or_negative_multiplier_degrades_to_one_rather_than_breaking() -> None:
-    """max(1, ...) on purpose: a nonsense depth must not silently return nothing."""
+def test_a_depth_below_top_k_still_returns_results() -> None:
+    """max(top_k, depth) on purpose: a nonsense depth must not silently return nothing."""
     retriever = Retriever(
         chunks=CHUNKS,
         bm25=Bm25Index.build([row["text"] for row in CHUNKS]),
         vectors=VECTORS,
         embed_query=embed_first,
-        fetch_multiplier=0,
+        fetch_depth=0,
     )
     assert retriever.search("資產總計", 2, mode="hybrid")
