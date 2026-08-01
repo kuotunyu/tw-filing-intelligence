@@ -1320,6 +1320,16 @@
   **GPU 可用時要做：`build_index.py --gpu` 重建，然後重跑 BM25 與 `eval_retrieval.py`。**
   **D-029／D-030 的所有 recall 數字都對應舊切塊，重建後必須重量。**
 
+  **⚠️ 更正（D-034，2026-08-01）：上面這段有兩個錯。**
+  1. 「`load_vectors(expect_rows=)` 會擋下不一致，所以不會靜靜地用錯 index」**是假的**，
+     因為 `eval_retrieval.py` 當時是 `np.load(...)` **直接讀檔、繞過 `load_vectors`** ——
+     也就是說那道保險在**唯一會量 recall 的那條路上不存在**。過期的 index 在那裡不會 raise，
+     它會為已經不存在的 chunk 交出看起來很有信心的數字。已改為走 `load_vectors`。
+  2. 「重建需要 GPU」**也是錯的**。embedding 在 CPU 上跑得動：bge-m3 在 24 執行緒上
+     每個 baseline chunk 825 ms、candidate chunk 601 ms，整個 corpus 約 2.6 小時。
+     慢，但這代表這個被標成 🔴 GPU 阻塞的項目**從來就不是 GPU 阻塞**。
+     `build_index.py` 現在需要 `--device cuda|cpu`（沒有預設值）。
+
 - **狀態**：ACCEPTED (2026-08-01)。修正已進；index 重建與 recall 重量待 GPU。
 
 ---
@@ -1410,6 +1420,111 @@
 
 - **狀態**：ACCEPTED (2026-08-01)。dev 4/4、locked（held-out）4/5，零不符。
   2317 p14 的代碼欄版型列為已知限制。
+
+---
+
+## D-033 壞字偵測器（第二版）：用普查寫白名單，並發現 dev 兩份文件都壞
+
+- **為什麼有第二版**：第一版被我退掉，因為它用「看起來可疑的 codepoint 區間」黑名單，
+  而那份黑名單在 U+2C00–2E7F 有個洞 —— **正好是我自己舉例那個字所在的位置** ——
+  於是它把一份有大量壞頁的文件評為 0% 壞。
+  **黑名單必須對「所有可能出現的區間」都判斷正確；白名單只需要對「實際出現的」正確。**
+
+- **所以白名單是普查出來的，不是判斷出來的**：把 8 份可用文件全部 2,161,561 個
+  非空白字元按 Unicode 區塊點過一遍。核心區間之外的佔比：
+
+  | 文件 | 非核心佔比 | 形態 |
+  |---|---|---|
+  | 2412-FY2023-AR | **17.91%** | indic／cyrillic／thai／hebrew／greek 散佈 |
+  | 1301-FY2023-AR | **15.45%** | latin-ext ＋ latin-1 ＋ 3.6% C0 控制字元 |
+  | 2882-FY2024-AR | 0.29% | 幾乎全是 private-use，可能是 logo 字型 |
+  | 2330-FY2024-AR | 0.10% | |
+  | 2330-FY2023-AR | 0.05% | |
+  | 2317-FY2024-FS／2330-FY2024-FS／2882-FY2024-FS | 0.00% | |
+
+  兩份 15–18%，六份 ≤0.29% —— **五十倍的差距，門檻不是調出來的**。
+  逐頁也分得開：乾淨的六份最差頁在 0.23%–2.73%，壞的兩份 p90 約 51%。
+  **門檻取 5%**，落在中間。
+
+- **「整塊放行 Latin」量過並否決**：放行 U+00C0–U+024F 會讓 1301 從 17.32% 掉到
+  **8.09%** —— 因為它的壞碼正好集中在那個區間（Ǵ Ƕ Ȑ ȑ …）。
+  文件層級還過得了門檻，但**逐頁會有大量頁掉到門檻下**，那正是第一版的假陰性。
+  改成**逐字列舉**：乾淨六份在這些區塊只用了 14 種字元（®é×§öó°÷íÖ±Δäø，共 272 次），
+  壞的兩份用了 **574 種**、每種數百次（`±` 合法出現 2 次、當亂碼出現 707 次）。
+  逐字白名單讓壞的維持 15%／18%，乾淨的降到 0.00%–0.29%。
+  **殘餘風險是便宜的那一種**：某份文件合法用了清單外的 ñ 或 €，只會讓那頁多一兩個字元，
+  單獨不可能越過 5%，而被標記的頁會被人看。少一個**區間**才會藏起整頁壞掉的內容。
+
+- **形態分開報，不併成一個旗標**：兩份壞的文件**壞法不同** ——
+  一份散佈在無關文字系統（CMap 把 glyph 對到錯的 codepoint），
+  一份是 Latin-1 區間加控制字元（位元流用錯編碼解讀）。補救方式不同，併成一個會丟掉有用的一半。
+
+- **獨立驗證（這才讓它不只是自說自話）**：偵測器判 2317-FY2024-AR 100% 頁壞、
+  2317-FY2023-AR 73% 頁壞 —— 而 `readable_ratio` 這個**完全不同的指標**獨立地把這兩份
+  判為 `unusable_text_layer` 與 `partially_unusable_text_layer`。兩者一致。
+  然後它抓出 2412 與 1301，而那個指標給它們 **95%／96% readable** ——
+  因為它問的是「頁面有沒有產出字元」，不是「字元對不對」。
+
+- **⚠️ 兩份新抓出來的文件就是 dev。**
+  `2412-FY2023-AR` 與 `1301-FY2023-AR` 是 development set 的全部內容，
+  也就是說**本研究所有的調參決策，都建立在這兩份文字層有 43%／48% 頁面損壞的文件上**。
+  這是「dev 上的數字能代表什麼」的一項事實，不是可以修掉的缺陷 ——
+  必須寫進 report 的限制，與 D-024 一併。
+
+- **gold 沒有引用到任何一頁壞頁**：dev／locked／probe 三個集合共引用 71 頁，
+  **亂碼頁 0 頁**。標註是看渲染圖做的，亂碼在圖上看得見也用不了，所以這件事大概從來沒真的有風險 ——
+  但**沒有任何一處在強制它**，之後改一題就可能引到。
+  `verify_gold_answers.py` 現在會把這種引用報成 `unverifiable` 而不是 `wrong`：
+  答案可能完全正確，只是那個文字層壞到無法用來核對。
+
+- **狀態**：ACCEPTED (2026-08-01)。`twfi/parsing/garbled.py` ＋ 14 個測試；
+  `check_document_quality.py` 同時輸出 `readable` 與 `garbled` 兩個欄位。
+
+---
+
+## D-034 兩個索引半邊共用一個 manifest 檔名，而 BM25 贏了；重建也不需要 GPU
+
+- **怎麼發現的**：想確認「index 是否真的過期」時，比對 `chunks.jsonl` 與
+  `vectors.npy` 的列數（4,063／9,890，兩邊相符），接著去讀 `manifest.json` 想核對
+  `chunk_ids` —— 發現那個檔案裡寫的是 `k1` 與 `b`，
+  `notes` 是「lexical half; dense vectors live beside this」。**那是 BM25 的 manifest。**
+
+- **原因**：`save_vectors()` 與 `save_index()` **都寫 `data/index/<parser>/manifest.json`**。
+  BM25 在向量之後建，所以它**覆蓋掉了 embedding 的 manifest** ——
+  連帶把 model revision、dimension、以及能用來否決過期索引的 `chunk_ids` 一起消滅。
+  每一個已建好的索引都是這個狀態。
+
+- **修法**：兩邊各寫自己的檔名（`vectors.manifest.json` ／ `postings.manifest.json`）。
+  `load_vectors` 另外認得舊形狀（自己的 manifest 不在、但有一個裸的 `manifest.json`），
+  直接說「這個索引早於 manifest 分家，provenance 已被覆蓋，請重建」，
+  而不是報一個一般性的檔案不存在。
+
+- **更嚴重的另一半**：`eval_retrieval.py` 是 `np.load(directory / "vectors.npy")`
+  **直接讀檔**。所以我在 D-031 與 PROGRESS 寫的那句安心話 ——
+  「`load_vectors(expect_rows=)` 會擋下不一致」—— **在唯一量 recall 的那條路上是假的**。
+  已改走 `load_vectors` 並在任何不符時 exit 2。
+
+- **列數相符不等於同一批 chunk**：兩種切塊方式可能產出相同數量。
+  兩邊 manifest 本來就各記了 `chunk_ids_head`，所以比對成本是零。
+  `eval_retrieval.py` 現在會比，並且**在 manifest 沒有記 chunk id 時直接拒絕**
+  ——「沒檢查過」不能報成「檢查通過」。
+
+- **`build_index.py --device`（必填，無預設）**：量過 CPU 吞吐後發現 embedding 不需要卡。
+  `cuda` 要刻意（CLAUDE.md 規則 8：別的專案可能正在用），
+  `cpu` 也要刻意（那個速度下誤選會看起來像卡住）。
+  CPU 上 dtype 預設 float32 —— 半精度在 CPU 是模擬的，只會更慢不會更省 ——
+  而且那正好與 `eval_retrieval.py` 已經在 CPU 上用 float32 產生的 query 一致。
+
+- **BM25 之前沒有建置腳本**：`postings.json` 與它的 manifest 就躺在 `data/index/*/`，
+  而 repository 裡**沒有任何程式呼叫 `save_index`** ——
+  它們是某個已經消失的 session 裡用臨時指令建的。
+  **無法重新推導的產物不能支撐任何主張**，而 BM25 是 F0／F1 檢索的全部、F2 融合的一半，
+  是兩個半邊裡最不能來歷不明的那一個。已補 `scripts/build_bm25.py`，
+  它**讀 `chunks.jsonl` 而不重新切塊** —— RRF 是在共用的文件編號上依 rank 融合，
+  在這裡重新切塊會讓兩個半邊悄悄對不上，而融合仍然會回傳結果。
+
+- **狀態**：ACCEPTED (2026-08-01)。修正已進；CPU 重建進行中，完成後重跑
+  `build_bm25.py` 與 `eval_retrieval.py`，D-029／D-030 的 recall 數字重量。
 
 ---
 
