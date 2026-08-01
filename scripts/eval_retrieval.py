@@ -160,6 +160,10 @@ def main(
         if drift:
             typer.echo(f"{parser}: {drift}")
             raise typer.Exit(code=2)
+        wrong_model = _model_mismatch(paths, vector_manifest)
+        if wrong_model:
+            typer.echo(f"{parser}: {wrong_model}")
+            raise typer.Exit(code=2)
         retriever = Retriever(
             chunks=chunks, bm25=bm25, vectors=vectors, embed_query=embed, fetch_depth=depth
         )
@@ -376,6 +380,41 @@ def _monotonicity_problems(rows: list[dict[str, Any]], *, key: str = "k") -> lis
                     f"{key}={later[key]} gave {later['correct']}"
                 )
     return problems
+
+
+def _model_mismatch(paths: Any, vector_manifest: dict[str, Any]) -> str:
+    """Whether the vectors were built by a model other than the pinned one.
+
+    G1 asks that results be reconstructible from raw artifacts, and a recall number produced by
+    an unrecorded or unpinned embedder is not: the same corpus under a different bge-m3 revision
+    is a different index. The manifest records the revision the build resolved and
+    `configs/models.lock.json` records the one the study pinned, so the comparison is available
+    -- and it only became available today, because while both index halves wrote `manifest.json`
+    the lexical build overwrote the revision before anyone could read it (D-034).
+
+    Returns an empty string when they agree, so the caller can treat it as a message. A manifest
+    recording no revision is refused rather than passed: "not checked" is not "checked and fine".
+    """
+    built = vector_manifest.get("model_revision")
+    if not built:
+        return (
+            "the vector manifest records no model revision, so which embedder produced these "
+            "vectors cannot be established; rebuild the index"
+        )
+    try:
+        pinned = json.loads(paths.models_lock_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"cannot read {paths.models_lock_json.name} to check the model pin: {exc}"
+    role = (pinned.get("roles") or {}).get("embedding") or {}
+    expected = role.get("revision_observed")
+    if not expected:
+        return "configs/models.lock.json pins no embedding revision; run pin_models.py"
+    if str(built) != str(expected):
+        return (
+            f"the vectors were built by bge-m3 revision {built} but the study pins "
+            f"{expected}; the same corpus under a different revision is a different index"
+        )
+    return ""
 
 
 def _chunks_within(hits: Sequence[Hit], budget: int) -> int:
