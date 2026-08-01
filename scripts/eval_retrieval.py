@@ -59,9 +59,10 @@ import typer
 from twfi.console import use_utf8_output
 from twfi.eval.gates import mcnemar_exact, wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
-from twfi.index.embeddings import chunk_text_digest, load_vectors
+from twfi.index.embeddings import chunk_text_digest, load_vectors, utc_now
 from twfi.index.lexical import load_index
 from twfi.index.retrieve import Hit, Retriever, characters_of, recall_at_budget, recall_at_k
+from twfi.io.hashing import sha256_text_file
 from twfi.io.jsonl import read_lines
 from twfi.paths import repo_paths
 
@@ -148,6 +149,12 @@ def main(
     embed = _cpu_embedder()
     rows: list[dict[str, Any]] = []
     budget_rows: list[dict[str, Any]] = []
+    provenance: dict[str, Any] = {
+        "measured_at": utc_now(),
+        "gold_sha256": sha256_text_file(source),
+        "question_ids": [record.question_id for record in records],
+        "indexes": {},
+    }
     header = f"{'parser':<10} {'mode':<8} " + " ".join(f"{'r@' + str(c):>12}" for c in cutoffs)
     typer.echo("")
     typer.echo(header)
@@ -177,6 +184,16 @@ def main(
         if wrong_model:
             typer.echo(f"{parser}: {wrong_model}")
             raise typer.Exit(code=2)
+        provenance["indexes"][parser] = {
+            "chunks": len(chunks),
+            "chunk_text_sha256": vector_manifest.get("chunk_text_sha256"),
+            "vectors_built_at": vector_manifest.get("built_at"),
+            "postings_built_at": lexical_manifest.get("built_at"),
+            "model_revision": vector_manifest.get("model_revision"),
+            "embed_device": (vector_manifest.get("config") or {}).get("device"),
+            "embed_dtype": (vector_manifest.get("config") or {}).get("dtype"),
+            "tokeniser": lexical_manifest.get("tokeniser"),
+        }
         retriever = Retriever(
             chunks=chunks, bm25=bm25, vectors=vectors, embed_query=embed, fetch_depth=depth
         )
@@ -309,9 +326,27 @@ def main(
         "cutoffs": cutoffs,
         "budgets_chars": budgets,
         "questions": len(records),
+        # What produced these numbers. The artifact carried none of this and is gitignored, so a
+        # reader had no way to tell which index or which gold set a figure came from, and no way
+        # to tell two runs apart. G1 asks that results be reconstructible; a table of rates with
+        # no provenance is not.
+        "provenance": provenance,
+        # How many *distinct* evidence targets the questions actually cover. Recorded because the
+        # rates read as n independent trials and are not: dev's 15 questions cover four distinct
+        # (document, pageset) targets, one chunk carries eight of them, so a two-question
+        # difference can be one chunk changing rank (protocol "DEV 集合的聚集性").
+        "distinct_targets": len(
+            {(record.source_document[0], record.page_numbers) for record in records}
+        ),
         "rows": rows,
         "budget_rows": budget_rows,
         "monotonicity_problems": monotone,
+        "significance": {
+            f"r@{middle_cutoff}": _significance_report(rows, key="k", cutoff=middle_cutoff),
+            f"{middle_budget}chars": _significance_report(
+                budget_rows, key="budget_chars", cutoff=middle_budget
+            ),
+        },
         "note": (
             "Page-level recall. Every rate carries n and a Wilson 95% interval; with a set this "
             "small the intervals overlap and a difference of two or three questions settles "
