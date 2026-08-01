@@ -16,7 +16,7 @@ reader will see them:
   because loading every table in 2,895 pages is out of scope. "The numeric route had the
   figure it needed" is not a finding about coverage.
 
-Writes `results/runs/historical_load.json` and, unless `--dry-run`, the DuckDB file. Exits
+Writes `results/runs/historical_load_<set>.json` and, unless `--dry-run`, the DuckDB file. Exits
 non-zero if any figure disagrees with gold -- that is a data-quality finding that should stop
 a pipeline rather than scroll past.
 """
@@ -213,7 +213,10 @@ def main(
             "make F4 correct by construction."
         ),
     }
-    destination = paths.runs / "historical_load.json"
+    # Per set, because one filename for both meant a locked run silently replaced the dev run's
+    # artifact -- and dev is the one a tuning decision may rest on, so it is the one that has to
+    # still be there afterwards.
+    destination = paths.runs / f"historical_load_{gold_set}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
