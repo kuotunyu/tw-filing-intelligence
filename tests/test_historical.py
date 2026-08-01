@@ -268,3 +268,51 @@ def test_a_unit_exception_marks_the_figure_non_uniform() -> None:
 
 def test_a_loaded_with_no_item_reports_no_agreement() -> None:
     assert Loaded(target(), None).agrees_with_gold is None
+
+
+# ------------------------------------- the column must be identified, never guessed
+
+
+def test_an_unidentifiable_column_is_refused_rather_than_guessed() -> None:
+    """The bug this pins: 存貨 loaded as 88 -- a note reference -- against gold 287,868,810.
+
+    The first version fell back to "the first parseable number in the matching row" when it
+    could not identify the period column. A figure taken from a column nobody identified is
+    worse than no figure, because it is wrong in a way that looks like data. The gold
+    comparison caught it; the loader should not have needed catching.
+    """
+    rows = (
+        ("項目", "附註", "金額"),
+        ("存貨", "88", "287,868,810"),
+    )
+    result = find_in_tables(
+        target(row_label="存貨", column_label="113年12月31日", gold_answer="287,868,810"),
+        [table(rows)],
+    )
+    assert result.item is None, "an unidentified column must yield nothing, not the first number"
+    assert "refusing to guess" in result.problem
+    assert outcome_of(result) == "missing"
+
+
+def test_a_missing_row_and_an_unidentified_column_report_differently() -> None:
+    """Different work follows: one is a table not seen, the other a header not understood."""
+    rows = (("項目", "附註"), ("存貨", "88"))
+    no_column = find_in_tables(
+        target(row_label="存貨", column_label="113年12月31日"), [table(rows)]
+    )
+    # 存貨 is a known account and BALANCE does not carry it, so this reaches the row search
+    # rather than stopping at the statement map -- which an unknown label would.
+    no_row = find_in_tables(target(row_label="存貨", column_label="112年度"), [table(BALANCE)])
+    assert "no header identifiable" in no_column.problem
+    assert "no table on" in no_row.problem
+
+
+def test_the_right_column_is_still_found_when_others_hold_numbers() -> None:
+    """The refusal must not be so strict that a normal statement stops loading."""
+    rows = (
+        ("項目", "附註", "112 年度", "111 年度"),
+        ("資產總計", "十二", "530,738,356", "511,254,407"),
+    )
+    result = find_in_tables(target(), [table(rows)])
+    assert result.item is not None
+    assert result.item.value == Decimal("530738356")

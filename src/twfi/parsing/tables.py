@@ -449,9 +449,14 @@ def link_continuations(
 
 
 def extract_tables(
-    pdf_path: Path, config: TableConfig | None = None, *, pages: range | None = None
+    pdf_path: Path, config: TableConfig | None = None, *, pages: Sequence[int] | None = None
 ) -> tuple[Table, ...]:
     """Extract every accepted table from a PDF, with units and continuations resolved.
+
+    ``pages`` is any sequence of 0-based page indices, not only a ``range``. It was annotated
+    as ``range`` and the body merely iterates it, so a list already worked -- but the callers
+    that need this most cite scattered pages (gold points at 41, 55 and 63 of one filing) and
+    a range cannot express that without extracting everything in between.
 
     Raises:
         ParsingError: If the file cannot be opened as a PDF.

@@ -270,6 +270,7 @@ def find_in_tables(
         )
 
     wanted_row = re.sub(r"\s+", "", normalise(target.account))
+    unmatched_column = False
     for table in tables:
         if table.page != target.page or not table.rows:
             continue
@@ -281,12 +282,18 @@ def find_in_tables(
             label = re.sub(r"\s+", "", normalise(row[0]))
             if not label or wanted_row not in label:
                 continue
-            index = column if column is not None and column < len(row) else None
-            candidates = [row[index]] if index is not None else [cell for cell in row[1:] if cell]
-            for cell in candidates:
-                value = to_decimal(cell)
-                if value is None:
-                    continue
+            # The column must be identified. The first version fell back to "the first
+            # parseable number in the matching row", and on 2330-FY2024-FS p41 that loaded 88
+            # -- a note reference -- as 存貨, against a gold answer of 287,868,810. A figure
+            # taken from a column nobody identified is worse than no figure: it is wrong in a
+            # way that looks like data. The gold comparison caught it, which is what that
+            # comparison is for, but the loader should not have needed catching.
+            if column is None or column >= len(row):
+                unmatched_column = True
+                continue
+            cell = row[column]
+            value = to_decimal(cell)
+            if value is not None:
                 return Loaded(
                     target,
                     LineItem(
@@ -307,6 +314,18 @@ def find_in_tables(
                     ),
                     cell_text=cell,
                 )
+    if unmatched_column:
+        # Distinguished from "no such row" because they call for different work: this one
+        # found the account and could not identify the period column, which is a header the
+        # matcher does not understand rather than a table it cannot see.
+        return Loaded(
+            target,
+            None,
+            problem=(
+                f"{target.doc_id} p{target.page} has a row for {target.account!r} but no header "
+                f"identifiable as {target.column_label!r}; refusing to guess which column"
+            ),
+        )
     return Loaded(
         target,
         None,
