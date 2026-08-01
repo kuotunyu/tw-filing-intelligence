@@ -166,6 +166,30 @@ def test_a_breakdown_heading_with_no_total_resolves_to_nothing() -> None:
     assert resolve_page(tables, "存貨", "113年12月31日") is None
 
 
+def test_a_prose_paragraph_mentioning_the_account_is_not_its_heading() -> None:
+    """Containment matching makes a sentence about 存貨 contain 存貨, with no figures of its own.
+
+    Without a length bound it would qualify as the heading of whatever table follows and hand
+    back that table's total -- a figure that is wrong and looks like data.
+    """
+    page = (
+        """
+113年度
+112年度
+本公司與存貨相關之營業成本中，包含將存貨成本沖減至淨變現價值而認列之存貨損失。
+"""
+        + WITH_TOTAL
+    )
+    tables = read_page(page)
+    assert len(tables) == 2
+    assert resolve_page(tables, "存貨", "113年12月31日") is None
+
+
+def test_a_numbered_note_heading_is_still_within_the_bound() -> None:
+    tables = read_page(HEADING_THEN_BREAKDOWN.replace("十二、存貨", "十二、存貨（附註）"))
+    assert resolve_page(tables, "存貨", "113年12月31日") == ("55,555,555", "breakdown_total")
+
+
 def test_an_unidentifiable_column_refuses_rather_than_guessing() -> None:
     table = read_page(SIMPLE)[0]
     assert resolve_row(table, "製成品", "108年12月31日") is None

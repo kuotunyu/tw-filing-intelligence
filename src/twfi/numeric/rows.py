@@ -262,6 +262,12 @@ def column_index(periods: tuple[str, ...], column_label: str) -> int | None:
 #: real line item in these filings (「存貨」, 「股本」).
 _MIN_CONTAINED = 2
 
+#: How many characters longer than the account name a *heading* may be. 「十二、存貨」 is three
+#: longer than 存貨 and 「存貨（附註十二）」 six; the prose paragraph on `2330-FY2024-FS` p41 that
+#: mentions 存貨 is over forty. Eight admits the numbering and note references filings put around
+#: a heading, and excludes a sentence.
+_HEADING_SLACK = 8
+
 
 def _best_row(table: PageTable, row_label: str) -> int | None:
     """The row that best names ``row_label``, or ``None``.
@@ -358,14 +364,23 @@ def resolve_page(
     A heading only reaches forward into the table that immediately follows it, and only when that
     table has no row of its own bearing the name. Reaching further would let any heading claim
     any later total on the page.
+
+    And it must actually look like a heading. `matches_label` is containment, so the sentence
+    「本公司與存貨相關之營業成本中，包含將存貨成本沖減至淨變現價值⋯」 *contains* 存貨 and carries no
+    figures -- a prose paragraph would otherwise qualify as the heading of whatever table follows
+    it and hand back that table's total. :data:`_HEADING_SLACK` separates 「十二、存貨」 from a
+    paragraph that happens to mention it.
     """
     for table in tables:
         found = resolve_row(table, row_label, column_label)
         if found is not None:
             return found
+    wanted = len(re.sub(r"\s+", "", normalise(row_label)))
     for position, table in enumerate(tables[:-1]):
         candidate = _best_row(table, row_label)
         if candidate is None or table.rows[candidate].figures:
+            continue
+        if len(table.rows[candidate].label) > wanted + _HEADING_SLACK:
             continue
         following = tables[position + 1]
         index = column_index(following.periods, column_label)
