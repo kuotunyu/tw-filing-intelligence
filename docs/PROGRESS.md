@@ -197,12 +197,12 @@
 | P1 | 資料來源探勘 ＋ manifest schema | 🟢 完成 | 2026-07-31 | 3 個關鍵發現，見上方 |
 | P2 | 資料取得 ＋ provenance ＋ SHA-256 | 🟢 完成 | 2026-07-31 | 10 份宣告全部取得；8 份可用 |
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
-| P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟢 完成 | 2026-07-31 | 253 筆 figures 已載入 |
+| P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟡 有實質限制 | 2026-08-01 | OpenAPI 253 筆已載入；歷史值 loader 已寫，但 **20 個 gold 指名 cell 只載入 2 個**（D-028，財報頁表格結構壞掉） |
 | P5 | Gold set 標註 | 🟢 完成 | 2026-08-01 | **53/53**：locked 33（稽核 71%）＋ dev 15（稽核 53%）＋ probe 5 |
-| P6 | Retrieval ＋ rerank | 🟡 進行中 | — | dense index 已建（4,063＋9,890 向量）；BM25／RRF／dense search 已寫並自審；**尚未接成 end-to-end 檢索** |
+| P6 | Retrieval ＋ rerank | 🟡 進行中 | — | **端到端可跑（全 CPU）**：dense 4,063＋9,890 向量、BM25 兩個索引、RRF 融合。首次 recall 量測見 D-029。**rerank 尚未接** |
 | P7 | Chart route | ⚪ 未開始 | — | GPU |
 | P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
-| P9 | Eval harness ＋ metrics | ⚪ 未開始 | — | 部分 GPU |
+| P9 | Eval harness ＋ metrics | 🟡 部分 | — | `run_gate`／`verify_results`／`make_report` 已寫並測試；**`run_eval` 未寫** |
 | P10 | Freeze → locked run → gate → report | ⚪ 未開始 | — | GPU |
 
 圖例：⚪ 未開始 / 🟡 進行中 / 🟢 完成 / 🔴 卡住
@@ -322,17 +322,33 @@ ollama 版本 `0.32.0`。
 **已 commit 並 push**：`420e8d1` `16c0c52` `e189e19` `c9b1ed4` `968385b`。
 1230 passed／1 skipped、coverage 96.61%、ruff ＋ mypy 全綠（66 檔）。
 
-**未完成（token 上限中斷，不是做完了）**：
-1. **P4 loader** —— 現在解鎖了。設計已定：用 gold 的 `structured_source_key.row_key`
-   （格式 `doc|p頁|列標籤|欄標籤`）當載入目標，找出該格載入 DuckDB。
-   **關鍵約束：不得以「與 gold 相符」作為載入條件** ——
-   若只載入對得上的值，F4 就會因為建構方式而 100% 正確，那是作弊。
-   抽取器給什麼就載什麼，不符只能**報告**成資料品質發現。
-   **另一個必須寫進 report 的限制**：numeric store 只涵蓋 gold 有問到的 account，
-   **覆蓋率不是結果**。
-2. `make_report.py`
-3. 可信的壞字偵測器（我退掉的那個，需要先設計「合法字元」白名單）
-4. `pin_models`
+**撞上 token 上限之後仍完成的（我自己做，沒有再開 agent）**：
+
+- ✅ **自審那 1,500 行 agent 程式碼**（原本要三個 agent 做的）——
+  用探測失效模式的方式，不是逐行讀。三個模組在我測的每個性質上都站得住；
+  我原以為的兩個問題查下去都不成立。
+- ✅ **P4 loader**（`src/twfi/numeric/historical.py` ＋ `scripts/load_historical.py`）——
+  **而且 loader 自己抓到自己的 bug**：存貨被載成 `88`（附註編號），
+  因為原本「找不到欄位就取該列第一個數字」。改成**找不到欄位就拒絕**。
+  → 引出 **D-028**：locked 財報頁的表格結構壞到讓這條路幾乎不通（20 個目標載入 2 個）。
+- ✅ **`make_report.py`** ＋ `src/twfi/eval/report.py` ——
+  核心是**拒絕產出缺少必要段落的報告**（沒有分母的比率、五個必要限制段、lock hash、失敗的 gate）。
+  讀實際產出時抓到 gate 排序是字典序（G1, G10, G2）而非數字序。
+- ✅ **`pin_models.py`** ＋ `configs/models.lock.json` ——
+  核心是**宣告 digest 與實際不符就失敗，不改寫 lock**（故意弄壞驗證過）。
+- ✅ **P6 檢索端到端**（`src/twfi/index/retrieve.py`）——
+  **全部 CPU**（語料向量預先算好，查詢 embedding 在 CPU 55 ms）。
+  → 引出 **D-029**：第一次真實 recall 量測。
+- ✅ **`src/twfi/io/jsonl.py`** —— 修一個真 bug：
+  `json.dumps(ensure_ascii=False)` 不轉義 U+2028／U+2029／U+0085，
+  而 `str.splitlines()` 會在那裡斷行 → 寫出去的 JSONL 讀不回來。修在寫入端。
+
+**仍未完成**：
+1. **切開被合併成一張的附註** —— D-028 的真正解法（不是跨格接合，那個診斷我修正過了）。
+2. **旋轉頁處理**（2412 p137）。
+3. **candidate hybrid 為何不隨 depth 改善** —— D-029 裡有一個未驗證的猜測。
+4. **可信的壞字偵測器**（我退掉的那個，需要先設計「合法字元」白名單）。
+5. `run_eval` —— 現在有 retriever 了，是下一個可做的大塊。
 
 ---
 
