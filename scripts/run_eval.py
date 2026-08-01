@@ -51,6 +51,7 @@ from twfi.numeric.route import answer_numerically
 from twfi.numeric.store import NumericStore
 from twfi.paths import repo_paths
 from twfi.protocol import COVERAGE_AT, MRR_AT, RECALL_AT, TOP_K_RERANK, TOP_K_RETRIEVE
+from twfi.router.classify import classify, confusion_matrix, route_accuracy
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -217,6 +218,9 @@ def main(
         typer.echo(f"{name} ({rung['what']}) …")
         scores = []
         latencies: list[float] = []
+        decisions = []
+        kinds: list[str] = []
+        refused: list[bool] = []
         started_rung = time.perf_counter()
         for position, record in enumerate(records, start=1):
             retrieval_started = time.perf_counter()
@@ -228,6 +232,9 @@ def main(
             retrieval_seconds = time.perf_counter() - retrieval_started
             passages = shortlist[:TOP_K_RERANK]
 
+            decision = classify(record.question)
+            decisions.append(decision)
+            kinds.append(record.question_type)
             prompt = build_prompt(record.question, passages, variant=prompt_variant)
             # F4 tries the deterministic route first, on *every* question rather than on a
             # hand-picked set: its parser needs a company, a period and a known account, so a
@@ -258,6 +265,7 @@ def main(
                 predicted_period=draft.period,
             )
             scores.append(score)
+            refused.append(score.refused)
             latencies.append(completion.seconds)
 
             targets = record.evidence_targets
@@ -286,6 +294,7 @@ def main(
                         "seconds": round(retrieval_seconds, 3),
                     },
                     "generation": completion.to_json(),
+                    "route": decision.to_json(),
                     "score": score.to_json(),
                 }
             )
@@ -316,6 +325,15 @@ def main(
                 "unit_applicable": sum(1 for s in scores if s.unit is not None),
                 "period_correct": sum(1 for s in scores if s.period),
                 "refusal": refusal_rates(scores),
+                # Protocol 3.5. Reported two ways: the router alone, which is what the
+                # metric is defined over, and with the pipeline post-hoc refusal label,
+                # because `unanswerable` is a gold route no pre-retrieval router can reach.
+                "route_accuracy": round(route_accuracy(decisions, kinds), 4),
+                "route_accuracy_with_refusals": round(route_accuracy(decisions, kinds, refused), 4),
+                "route_confusion": {
+                    f"{gold}->{got}": n
+                    for (gold, got), n in sorted(confusion_matrix(decisions, kinds).items())
+                },
                 "generation_median_seconds": round(statistics.median(latencies), 2),
                 "generation_max_seconds": round(max(latencies), 2) if latencies else 0.0,
                 "rung_seconds": round(time.perf_counter() - started_rung, 1),

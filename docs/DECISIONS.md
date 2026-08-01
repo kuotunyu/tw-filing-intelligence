@@ -2058,6 +2058,55 @@
 
 ---
 
+## D-043 typed router：先把 protocol 的 route 對照表讀錯，20% → 73.3%，然後停手
+
+- **`twfi/router/`：protocol 2.4 要求的 typed router，先前完全不存在**，
+  §3.5 的 route accuracy 與 confusion matrix 也因此從未量過。
+
+- **用規則不用模型**，三個理由依序：模型 router 會在受測系統裡再塞一個生成元件，
+  它的錯誤會落進 F7 的數字而無從歸因（與 `lexical.py` 不用分詞器同一個論證）；
+  routing 是 6 個標籤的**有界**決策，protocol 2.4 又限制最多一次 correction，
+  規則可以對照這個上限稽核而模型不行；規則是決定性的，
+  route accuracy 因此是研究的性質而不是「當時剛好載入哪個模型」的性質。
+
+- **⚠️ 第一版 20%，因為我把 protocol §3.5 的對照表讀錯了。**
+  §3.5 寫 **`table_cell→chart`（表格走 chart/table route）** ——
+  「從表格讀一個印出來的數字」走 chart 這一階，而 **`numeric` 是給需要「算」的**
+  （`numeric_calculation`、`cross_period_comparison`）。
+  我照直覺把所有查數字的題目送去 numeric，5 題 `chart→numeric` 全錯。
+  **這個對照表現在有一個逐項 parametrize 的測試釘住**，因為讀錯它的代價就是整個 router 作廢。
+
+- **修正後 73.3%**（G6 門檻 85%）。再加一條「題目提到兩個期間 → 是比較不是查詢 → numeric」
+  之後從 53.3% 到 73.3%。**排除事前不可判定的 2 題 unanswerable 後是 11/13 = 84.6%。**
+
+  ```
+  chart → chart          4      numeric → numeric      6
+  chart → numeric        1      narrative → narrative  1
+  narrative → numeric    1      unanswerable → chart   2
+  ```
+
+- **`unanswerable` 這個 gold route，事前的 router 原則上判不出來。**
+  「文件裡有沒有這個數字」是**證據**的性質不是**措辭**的性質；
+  在 router 裡判它等於把 G7／G8 在檢索之前就決定掉。
+  所以 `classify()` **永遠不回傳 `unanswerable`**，
+  而 `route_accuracy()` 接受一個選用的「pipeline 最後有沒有拒答」訊號來補這個標籤。
+  兩個數字都輸出：router 單獨（§3.5 定義的那個）與加上事後標籤的。
+  **這是 protocol 的一個內在張力，不是實作缺陷** —— 記錄下來，freeze 前可考慮澄清。
+
+- **⚠️ 我在 84.6% 停手，而門檻是 85%。**
+  剩下的 2 個錯誤是真的歧義不是缺規則：
+  DEV-0009 問「變動比例」（措辭像計算）但那個值**是印在表上的**（所以 gold 是 table_cell→chart），
+  router 事前無從知道它印出來了；DEV-0008 是 `cross_page`，protocol 把它映到 narrative，
+  但題目同時問了兩個數字。
+  **再加規則直到 dev 越過 85% 不是調參，是在 13 題上硬湊。**
+  這條線我不越過。
+
+- **狀態**：ACCEPTED (2026-08-02)。22 個測試；route accuracy 與 confusion matrix
+  已進 `ladder_dev.json`。F7 尚未成為 ladder 的一階（router 目前是量測用，
+  還沒接成「依 route 分派」）—— 那需要 chart route 存在才有意義。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
