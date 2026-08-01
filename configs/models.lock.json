@@ -1,0 +1,65 @@
+{
+  "roles": {
+    "chart": {
+      "model": "qwen3.6:27b",
+      "backend": "ollama",
+      "digest_observed": "a50eda8ed977",
+      "digest_declared": "a50eda8ed977",
+      "architecture": "qwen35",
+      "parameters": "27.8B",
+      "context_length": "262144",
+      "quantization": "Q4_K_M",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ]
+    },
+    "embedding": {
+      "model": "BAAI/bge-m3",
+      "backend": "hf_transformers",
+      "revision_observed": "5617a9f61b028005a4858fdac845db406aefb181",
+      "revision_declared": null
+    },
+    "generation": {
+      "model": "qwen3.6:27b",
+      "backend": "ollama",
+      "digest_observed": "a50eda8ed977",
+      "digest_declared": "a50eda8ed977",
+      "architecture": "qwen35",
+      "parameters": "27.8B",
+      "context_length": "262144",
+      "quantization": "Q4_K_M",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ]
+    },
+    "reranker": {
+      "model": "BAAI/bge-reranker-v2-m3",
+      "backend": "hf_transformers",
+      "revision_observed": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+      "revision_declared": null
+    }
+  },
+  "ollama_version": "0.32.0",
+  "chart_challenger": {
+    "model": "qwen3-vl:8b",
+    "status": "cancelled",
+    "status_reason": "The dev filings contain no charts. All 20 geometry positives in 2412-FY2023-AR and 1301-FY2023-AR were inspected one by one and all 20 are tables -- mostly the diagonal-split header 「項目＼年度」, the rest seal stamps -- so the 16 dev chart crops the comparison needs cannot be written. Selecting a model on the locked set's 4 charts is forbidden, and running the comparison on dev tables would report a table-reading result as a chart-route decision.",
+    "outcome": null
+  },
+  "excluded": [
+    {
+      "model": "gpt-oss:20b",
+      "reason": "User decision (2026-07-31); this study does not run a model leaderboard."
+    },
+    {
+      "model": "Qwen/Qwen3-VL-8B-Instruct (HF bf16)",
+      "reason": "Superseded by the ollama qwen3-vl:8b challenger; keeping both an HF and an ollama copy of the same family would mix backends for one role."
+    }
+  ]
+}
