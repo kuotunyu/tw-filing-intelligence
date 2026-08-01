@@ -69,9 +69,19 @@ class Retriever:
     #:
     #: ``None`` means "whatever ``top_k`` is", which is the degenerate setting: the fused list
     #: is then cut back to the length both sides already supplied, so a document only one side
-    #: found can never reach the answer and fusion has nothing to recover. Measured on dev,
-    #: raising it took baseline hybrid recall@10 from 7/15 to 13/15, past lexical's 10/15; on
-    #: the candidate parser it moved the other way, 10/15 to 8/15 (D-029).
+    #: found can never reach the answer and fusion has nothing to recover.
+    #:
+    #: **The two parsers want opposite depths, and 100 is one of them.** Hybrid recall@10 on dev
+    #: across depth None/20/50/100/200: baseline 7, 9, 11, **13**, 12; candidate **13**, 12, 9,
+    #: 10, 10 (re-measured 2026-08-01). So 100 is baseline's peak and near candidate's floor,
+    #: and the reported "candidate hybrid loses to candidate lexical" holds *at this depth*
+    #: rather than being a property of the parser -- at ``None`` candidate hybrid is 13/15 and
+    #: beats its own lexical 12/15. Both are dev-chosen, which protocol 1.3 permits, but the
+    #: claim has to travel with the depth. None of these differences is significant (D-035).
+    #:
+    #: The earlier note here recorded the candidate move as 10/15 to 8/15 from D-029; on the
+    #: rebuilt index the same comparison is 13/15 to 10/15. The direction survived, the literals
+    #: did not.
     #:
     #: Absolute rather than a multiple of ``top_k``, and that is a correction. The first version
     #: scaled with ``top_k``, so recall at two cutoffs came from two different candidate pools --
@@ -181,7 +191,7 @@ def recall_at_budget(
 
     The fair cross-parser comparison, and the reason `recall_at_k` is not one (D-030). At one
     ``top_k`` the baseline returns roughly eight times the text -- its chunks have a median of
-    800 characters against the candidate's 99 -- so recall at a fixed chunk count rewards
+    800 characters against the candidate's 317 -- so recall at a fixed chunk count rewards
     whichever parser packs more into a chunk. That is a chunk-size difference wearing a
     retrieval result's clothes.
 

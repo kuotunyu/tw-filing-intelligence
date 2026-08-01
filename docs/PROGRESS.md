@@ -7,18 +7,19 @@
 
 ## 目前狀態
 
-- 🟡 **重建 index —— 不需要 GPU，正在 CPU 上跑（D-034）。**
-  D-031 修掉了一個 heading 偵測的 bug，**chunk 邊界因此改變**，
-  所以舊的 `vectors.npy` 對應舊切塊。原本這條被標成 🔴 GPU 阻塞，**那是錯的**：
-  bge-m3 在 24 執行緒 CPU 上每 chunk 601–825 ms，整個 corpus 約 2.6 小時。
+- ✅ **index 已重建並重量完成（D-036）。全程 CPU，沒有動 GPU。**
+  原本這條被標成 🔴「GPU 阻塞」，**那是錯的**：bge-m3 在 24 執行緒 CPU 上約 2.6 小時（D-034）。
   ```bash
-  uv run python scripts/build_index.py --device cpu    # 重建向量與 chunks.jsonl
-  uv run python scripts/build_bm25.py                  # 再重建 BM25（新腳本）
-  uv run python scripts/eval_retrieval.py --set dev    # 然後重量
+  uv run python scripts/build_index.py --device cpu    # 向量 + chunks.jsonl
+  uv run python scripts/build_bm25.py                  # BM25，必須在後
+  uv run python scripts/eval_retrieval.py --set dev    # 兩張表 + McNemar
   ```
-  **D-029／D-030 的所有 recall 數字都對應舊切塊，重建後必須重量。**
-  ⚠️ 原本這裡寫「`load_vectors(expect_rows=)` 會擋下不一致，所以不會靜靜地用錯 index」，
-  **那是假的** —— `eval_retrieval.py` 當時直接 `np.load` 繞過了那道保險。已修（D-034）。
+  **量測結果的唯一結論是「沒有一個差異撐得住」** —— 15 個成對比較中通過
+  多重比較校正的是 **0** 個，事前註冊的 F2（hybrid vs lexical）在兩個 parser 上都不顯著。
+  詳見 D-036。**locked 的檢索量測沒跑，freeze 前也不該跑。**
+  ⚠️ 原本這裡寫「`load_vectors(expect_rows=)` 會擋下不一致」，**那是假的**
+  （`eval_retrieval.py` 當時直接 `np.load` 繞過），而且就算沒繞過也不夠：
+  chunk 數與 id 都沒變而 text 變了的情況它抓不到。已加內容 hash（D-034／D-035）。
 
 - **Phase**：P0–P4 🟢 完成。**P5 🟢 完成：53/53 已標註、兩個集合的抽樣稽核都通過**
   （probe 5 ／ **locked 33/33 ✅ 稽核完成** ／ **dev 15/15 ✅ 8/8 抽樣稽核通過** ／
@@ -433,7 +434,7 @@ chunk 深度分布也變成合理的金字塔。
 D-024 的範圍比原本記的大。
 
 **仍未完成**：
-1. 🔴 **重建 index（需要 GPU）** —— 見本頁最上方。
+1. ~~🔴 **重建 index（需要 GPU）**~~ → ✅ **完成，而且從來不需要 GPU**（D-034／D-036）。
 2. ~~**切開被合併成一張的附註**~~ → ✅ **已解決（D-032）**，而且不需要專門的切分啟發式：
    改用**文字流**讀頁（`twfi/numeric/rows.py`），「新的期間表頭開啟一張表」這條規則
    自然就把 p41 併成一張的三個附註切成三張。單格數值目標從 **2/9 到 8/9**，零不符。
@@ -444,7 +445,12 @@ D-024 的範圍比原本記的大。
    **數字要等 index 重建完才有意義。** 註：D-030 原本寫「必須不含重疊」，
    實作時判斷那半句是錯的 —— 重疊該計費，因為回答模型還是得讀那些字。
 5. ~~2330 的頂層 section 仍偏多~~ → **已查明，不是 bug**：台積電用十進位編號（`5`／`5.1`），裸的 `5` 靠字體偵測所以沒有編號 level，其子項因此各自成根。不修（見 D-031 末段）。
-6. **candidate hybrid 為何在 k=5/10/20 恆為 8/15** —— 已排除融合 bug，原因未明（且要重量）。
+6. ~~**candidate hybrid 為何恆定**~~ → ✅ **查明（D-035）**：三題要的是**同一個 chunk**，
+   它在 dense 側的全corpus 排名 211–244、不在前 100 內，只拿到一項 `1/(60+3)`，
+   而 32 個「兩側都回傳」的文件各拿兩項把它壓下去 —— **那正是 RRF 在 k=60 的設計**
+   （驗證者用精確有理數獨立重寫 RRF，順序與分數完全相同）。
+   而且這個現象**綁在 depth=100**：depth=None 時 candidate hybrid 是 13/15，反而贏過自己的 lexical。
+   **不顯著**（p=0.250）。
 7. ~~**可信的壞字偵測器**~~ → ✅ **完成（D-033）**：白名單從全 corpus 的字元普查寫出來，
    不是猜的。乾淨／損壞相差五十倍，門檻 5% 落在量出來的空隙裡。
    抓出的兩份**正是 dev 的兩份**，而 `readable%` 給它們 95%／96%。

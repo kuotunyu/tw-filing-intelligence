@@ -20,7 +20,7 @@ chunker drew its boundaries rather than whether retrieval found the evidence.
 Two tables come out, and which one answers which question matters:
 
 * **``r@k`` compares modes within one parser, never the parsers.** At one ``top_k`` the baseline
-  retrieves more text -- median chunk 800 raw characters against the candidate's 326 -- so a
+  retrieves more text -- median chunk 800 raw characters against the candidate's 317 -- so a
   baseline-versus-candidate gap in this table is partly a chunk-size difference wearing a
   retrieval result's clothes (D-030). Mode comparisons are sound because those share a chunk set.
 * **``recall at a matched character budget`` is the cross-parser table.** Both parsers are charged
@@ -316,6 +316,19 @@ def main(
         typer.echo(f"paired exact McNemar at {label} -- same {len(records)} questions:")
         for line in lines:
             typer.echo(line)
+        # Printing fifteen p-values and marking the smallest "significant" is the multiplicity
+        # error these tests exist to avoid, so the threshold that accounts for them is printed
+        # beside them. The pre-registered comparison is F2's hybrid-versus-lexical within one
+        # parser; everything else in this table is exploratory and needs the corrected threshold.
+        corrected = 0.05 / len(lines)
+        survivors = [
+            line for line in lines if (value := _p_of(line)) is not None and value < corrected
+        ]
+        typer.echo(
+            f"  ({len(lines)} comparisons; a Bonferroni threshold is {corrected:.4f}, and "
+            f"{len(survivors)} of them clear it. A nominal p below 0.05 among fifteen tests is "
+            "not a finding.)"
+        )
 
     monotone = _monotonicity_problems(rows) + _monotonicity_problems(
         budget_rows, key="budget_chars"
@@ -500,6 +513,19 @@ def _significance_report(rows: list[dict[str, Any]], *, key: str, cutoff: Any) -
             f" {only_left}+/{only_right}- discordant, p={probability:.3f}{verdict}"
         )
     return lines
+
+
+def _p_of(line: str) -> float | None:
+    """The p-value out of a formatted comparison line, or ``None`` if it has none."""
+    marker = "p="
+    start = line.find(marker)
+    if start < 0:
+        return None
+    tail = line[start + len(marker) :].split()[0]
+    try:
+        return float(tail)
+    except ValueError:
+        return None
 
 
 def _model_mismatch(paths: Any, vector_manifest: dict[str, Any]) -> str:

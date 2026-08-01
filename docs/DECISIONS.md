@@ -1683,6 +1683,73 @@
 
 ---
 
+## D-036 重建後的檢索量測：唯一撐得住的結論是「沒有一個差異撐得住」
+
+- **量測條件**：index 全部重建（chunker provenance bug 修正後、CPU float32、
+  bge-m3 revision `5617a9f6`，與 `models.lock.json` 相符）；dev 15 題；depth 100；
+  產物 `results/runs/retrieval_dev.json` 帶完整 provenance（gold hash、
+  兩個 index 的 `chunk_text_sha256`、逐題結果）。
+
+- **`recall@k`（只能比同一 parser 內的 mode）**：
+
+  | parser | mode | r@10 | r@20 |
+  |---|---|---|---|
+  | baseline | lexical | 10/15 | 12/15 |
+  | baseline | dense | 6/15 | 9/15 |
+  | baseline | hybrid | **13/15** | **14/15** |
+  | candidate | lexical | 12/15 | 13/15 |
+  | candidate | dense | 6/15 | 7/15 |
+  | candidate | hybrid | 10/15 | 10/15 |
+
+- **字元預算對齊（跨 parser 的那張表）**，括號內是「chunk 數／相異頁數」中位數：
+
+  | parser | mode | 4k | 8k | 16k |
+  |---|---|---|---|---|
+  | baseline | lexical | 7/15 (7ch 13pg) | 10/15 (13ch 24pg) | 12/15 (27ch 43pg) |
+  | baseline | dense | 5/15 (7ch 13pg) | 8/15 (13ch 24pg) | 12/15 (27ch 45pg) |
+  | baseline | hybrid | **11/15** (7ch 13pg) | **13/15** (13ch 22pg) | **14/15** (26ch 43pg) |
+  | candidate | lexical | 8/15 (7ch 9pg) | 12/15 (11ch 14pg) | 13/15 (22ch 28pg) |
+  | candidate | dense | 6/15 (5ch 7pg) | 7/15 (8ch 9pg) | 7/15 (17ch 20pg) |
+  | candidate | hybrid | 8/15 (4ch 7pg) | 10/15 (8ch 10pg) | 10/15 (18ch 22pg) |
+
+  **頁數那一欄就是預算沒有拉平的東西**：同樣 8k 字元，baseline 交出 24 頁、candidate 14 頁
+  （16k 是 43 對 28）。而 recall 是按頁判定的。所以這張表的 baseline 優勢
+  **有一部分是「跨頁 chunk 兩頁都算」**，不是檢索比較好。
+
+- **⚠️ 統計上：15 個成對比較裡，通過多重比較校正的是 0 個。**
+  精確配對 McNemar，同一批 15 題。名目 p<0.05 的只有三個，全都是「某個設定贏 dense-only」：
+  `baseline/hybrid 14 vs candidate/dense 7`（7+/0−, p=0.016）、
+  `candidate/lexical 13 vs candidate/dense 7`（6+/0−, p=0.031）、
+  8k 預算下 `baseline/hybrid 13 vs candidate/dense 7`（6+/0−, p=0.031）。
+  **每張表 15 個比較 → Bonferroni 門檻 0.0033，三個都沒過。**
+  而**事前註冊的那個比較**（F2：hybrid vs lexical，同一 parser 內）
+  在兩個 parser、兩張表上都不顯著：baseline p=0.375–0.500、candidate p=0.250–0.625。
+
+  → **本輪 dev 檢索量測不支持任何「哪個設定較好」的結論。**
+  它支持的是一件較弱但真實的事：**dense-only 是六個設定裡最弱的那一個**
+  （唯一三個名目顯著全部指向它，且方向一致），但即使這一點也沒通過校正，
+  只能寫成「與最弱一致，未達顯著」。
+
+- **一個乾淨的內部對照**：baseline 的 6 個 `recall@k` 數字在 chunker 修正前後**完全相同**。
+  baseline 用 fixed window，不受 heading 偵測影響，chunk 逐字節相同 —— 所以那 6 個數字
+  本來就該不變，而它們不變這件事說明重建過程沒有引入別的變化。
+
+- **provenance bug 對檢索是中性的**：修掉 1,515 個 chunk 的錯誤標題行之後，
+  `recall@k` 12 個格子**一個都沒動**，預算表只有 candidate/hybrid@4k 動了一題（9→8）。
+  所以那個 bug 是**真的**（G4 的 citation 會對到錯的標題），但**不是**檢索數字的成因。
+  兩件事都要說：修它是對的，而它不解釋任何 recall 差異。
+
+- **chunk profile（修正後）**：baseline 4,063 個／median 800 raw／1.57 頁per chunk；
+  candidate 4,796 個／median **317** raw／1.25 頁per chunk。
+  （candidate 從 9,890 個／median 99 變成這樣，是 D-031 的 heading 修正；
+  median 從 326 再降到 317 是這次移除重複標題行。）
+
+- **狀態**：ACCEPTED (2026-08-01)。
+  D-029 的表格已被本條取代（那一版的 depth 綁 top_k，且 index 是舊切塊）。
+  **locked 的檢索量測沒有跑，也不該在 freeze 前跑**（protocol 1.3）。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
