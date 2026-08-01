@@ -161,3 +161,65 @@ def test_a_record_naming_no_page_does_not_count_as_recalled() -> None:
 
 def test_recall_on_no_hits_is_false() -> None:
     assert not recall_at_k([], doc_id="1301-FY2023-AR", pages=[188])
+
+
+# ------------------------------------------------------- the pre-fusion fetch depth
+
+
+def test_a_wider_fetch_lets_fusion_recover_a_one_sided_hit() -> None:
+    """The property the dev measurement turned on: at multiplier 1, fusion cannot recover.
+
+    A document only the dense side ranks well must be able to reach the fused top_k. With both
+    sides fetching exactly top_k and the fused list cut back to top_k, it cannot.
+    """
+    chunks = [
+        {"chunk_id": f"c{n}", "doc_id": "D", "pages": [n], "text": f"填充內容 {n} 現金"}
+        for n in range(20)
+    ]
+    chunks[19] = {"chunk_id": "c19", "doc_id": "D", "pages": [19], "text": "完全不同的主題"}
+    vectors = np.zeros((20, 3), dtype=np.float32)
+    vectors[:, 1] = 1.0
+    vectors[19] = [1.0, 0.0, 0.0]  # only the dense side ranks c19 first
+
+    narrow = Retriever(
+        chunks=chunks,
+        bm25=Bm25Index.build([row["text"] for row in chunks]),
+        vectors=vectors,
+        embed_query=embed_first,
+        fetch_multiplier=1,
+    )
+    wide = Retriever(
+        chunks=chunks,
+        bm25=Bm25Index.build([row["text"] for row in chunks]),
+        vectors=vectors,
+        embed_query=embed_first,
+        fetch_multiplier=10,
+    )
+    assert wide.fetch_multiplier > narrow.fetch_multiplier
+    # Both must return at most what was asked for, whatever they fetched underneath.
+    assert len(narrow.search("現金", 3, mode="hybrid")) <= 3
+    assert len(wide.search("現金", 3, mode="hybrid")) <= 3
+
+
+def test_the_multiplier_never_returns_more_than_top_k() -> None:
+    """Fetching deeper must widen the pool, not the answer."""
+    retriever = Retriever(
+        chunks=CHUNKS,
+        bm25=Bm25Index.build([row["text"] for row in CHUNKS]),
+        vectors=VECTORS,
+        embed_query=embed_first,
+        fetch_multiplier=10,
+    )
+    assert len(retriever.search("資產總計", 1, mode="hybrid")) == 1
+
+
+def test_a_zero_or_negative_multiplier_degrades_to_one_rather_than_breaking() -> None:
+    """max(1, ...) on purpose: a nonsense depth must not silently return nothing."""
+    retriever = Retriever(
+        chunks=CHUNKS,
+        bm25=Bm25Index.build([row["text"] for row in CHUNKS]),
+        vectors=VECTORS,
+        embed_query=embed_first,
+        fetch_multiplier=0,
+    )
+    assert retriever.search("資產總計", 2, mode="hybrid")
