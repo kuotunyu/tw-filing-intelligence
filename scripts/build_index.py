@@ -19,7 +19,6 @@ Nothing here is committed: vectors and chunk dumps are build artifacts (CLAUDE.m
 
 from __future__ import annotations
 
-import json
 from typing import Annotated, Any
 
 import typer
@@ -33,6 +32,7 @@ from twfi.index.embeddings import (
     save_vectors,
     utc_now,
 )
+from twfi.io.jsonl import dump_lines
 from twfi.io.manifest import load_acquisition_lock
 from twfi.parsing.baseline import PARSER_NAME as BASELINE_PARSER
 from twfi.parsing.baseline import chunk_fixed, parse_baseline
@@ -92,11 +92,12 @@ def main(
         )
         directory = paths.root / "data" / "index" / which
         vector_path, manifest_path = save_vectors(directory, vectors, manifest)
+        # Written through twfi.io.jsonl, which escapes U+2028/U+2029/U+0085. json.dumps leaves
+        # those unescaped inside strings and str.splitlines() breaks on them, so a chunk of
+        # filing prose carrying one was written as a single line and read back as two
+        # fragments -- the first an unterminated string.
         chunk_path = directory / "chunks.jsonl"
-        chunk_path.write_text(
-            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-            encoding="utf-8",
-        )
+        dump_lines(chunk_path, rows)
         typer.echo(f"  wrote {vector_path.relative_to(paths.root)} {vectors.shape}")
         typer.echo(f"  wrote {manifest_path.relative_to(paths.root)}")
         typer.echo(f"  wrote {chunk_path.relative_to(paths.root)}")

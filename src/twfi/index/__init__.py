@@ -28,6 +28,7 @@ from twfi.index.lexical import (
     save_index,
     tokenise,
 )
+from twfi.index.retrieve import Hit, Mode, Retriever, recall_at_k
 
 __all__ = [
     # dense
@@ -48,6 +49,11 @@ __all__ = [
     "load_index",
     "save_index",
     "tokenise",
+    # end to end
+    "Hit",
+    "Mode",
+    "Retriever",
+    "recall_at_k",
     # fusion
     "DEFAULT_K",
     "RrfConfig",
