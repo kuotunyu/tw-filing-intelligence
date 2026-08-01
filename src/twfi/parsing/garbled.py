@@ -147,6 +147,26 @@ class PageDefects:
         return self.characters >= MIN_CHARACTERS
 
     @property
+    def has_unreadable(self) -> bool:
+        """Whether the page carries any character no reader can resolve.
+
+        Separate from :attr:`garbled`, and deliberately not rate-based. A rate threshold is the
+        right test for mojibake, where corruption is pervasive and a page is either broken or it
+        is not. It is the wrong test for the private use area, where nothing is assigned and
+        *every* occurrence is unresolvable however few there are.
+
+        Measured: 150 pages of this corpus carry private-use characters while scoring under the
+        5% threshold, 109 of them in `2882-FY2024-AR` -- the filing whose p26 turned out to hold
+        125 ticks encoded as U+F0FC. Judging those by rate would have reported one page of that
+        document and missed the other hundred and nine.
+
+        What it costs depends on what the glyph was: a tick in a board-expertise matrix is data,
+        a logo in a running header is not. So this reports rather than condemns, and the page
+        numbers are printed for someone to look at.
+        """
+        return self.private_use > 0
+
+    @property
     def garbled(self) -> bool:
         return self.judged and self.rate > GARBLED_THRESHOLD
 
@@ -199,6 +219,18 @@ class DocumentDefects:
         """Off-core share over the whole document."""
         characters = sum(page.characters for page in self.pages)
         return sum(page.defects for page in self.pages) / characters if characters else 0.0
+
+    @property
+    def unreadable_pages(self) -> tuple[PageDefects, ...]:
+        """Pages carrying private-use characters at any rate.
+
+        See :attr:`PageDefects.has_unreadable` for why this is not rate-gated.
+        """
+        return tuple(page for page in self.pages if page.has_unreadable)
+
+    @property
+    def unreadable_characters(self) -> int:
+        return sum(page.private_use for page in self.pages)
 
     @property
     def modes(self) -> tuple[str, ...]:

@@ -108,6 +108,24 @@ def main() -> None:
             )
             typer.echo(f"    pages: {pages}{more}")
 
+    # Reported separately from the garbled list, and not by rate: nothing is assigned in the
+    # private use area, so every occurrence is unresolvable however few there are. 109 of
+    # 2882-FY2024-AR's 110 such pages score under the garbled threshold, and its p26 holds 125
+    # ticks encoded as U+F0FC in a board-expertise matrix -- row and column labels readable,
+    # every tick gone. Whether it costs anything depends on what the glyph was, so the page
+    # numbers are printed for someone to look at rather than judged here.
+    unresolvable = [item for item in defects.values() if item.unreadable_pages]
+    if unresolvable:
+        typer.echo("")
+        typer.echo("pages carrying characters no reader can resolve (private use area):")
+        for broken in sorted(unresolvable, key=lambda entry: -len(entry.unreadable_pages)):
+            worst = max(broken.unreadable_pages, key=lambda page: page.private_use)
+            typer.echo(
+                f"  {broken.doc_id}: {len(broken.unreadable_pages)} page(s), "
+                f"{broken.unreadable_characters} character(s); worst p{worst.page} "
+                f"({worst.private_use} on one page)"
+            )
+
     target_path = paths.runs / "document_quality.json"
     target_path.write_text(
         json.dumps(
@@ -120,6 +138,16 @@ def main() -> None:
                         "judged_pages": len(item.judged_pages),
                         "garbled_share": round(item.garbled_share, 4),
                         "modes": list(item.modes),
+                        # Not rate-gated: see PageDefects.has_unreadable.
+                        "unreadable_pages": [
+                            {"page": page.page, "characters": page.private_use}
+                            for page in sorted(
+                                item.unreadable_pages,
+                                key=lambda entry: -entry.private_use,
+                            )[:20]
+                        ],
+                        "unreadable_page_count": len(item.unreadable_pages),
+                        "unreadable_characters": item.unreadable_characters,
                         "worst_pages": [
                             {"page": page.page, "rate": round(page.rate, 4), "mode": page.mode}
                             for page in sorted(item.garbled_pages, key=lambda entry: -entry.rate)[

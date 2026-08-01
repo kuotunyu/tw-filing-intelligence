@@ -65,6 +65,34 @@ def test_private_use_characters_are_flagged_and_named() -> None:
     assert defects.mode == "private_use"
 
 
+def test_private_use_is_reported_at_any_rate_not_only_above_the_threshold() -> None:
+    """A rate threshold is right for mojibake and wrong for the private use area.
+
+    Nothing is assigned there, so every occurrence is unresolvable however few. Measured on the
+    corpus: 150 pages carry private-use characters while scoring under 5%, 109 of them in the one
+    filing whose p26 holds 125 ticks encoded as U+F0FC.
+    """
+    page = page_defects(1, "" + "存貨" * 200)
+    assert page.private_use == 1
+    assert not page.garbled, "one tick among 400 characters is far under the rate threshold"
+    assert page.has_unreadable, "and it is still a character no reader can resolve"
+
+
+def test_a_page_with_no_private_use_is_not_reported_as_unreadable() -> None:
+    assert not page_defects(1, CLEAN).has_unreadable
+
+
+def test_a_document_counts_its_unreadable_pages_without_the_rate_gate() -> None:
+    document = document_defects(
+        "X-FY2024-AR",
+        [(1, "" + "存貨" * 200), (2, CLEAN), (3, "" * 60)],
+    )
+    assert len(document.unreadable_pages) == 2
+    assert document.unreadable_characters == 61
+    # Only the page that is mostly private-use crosses the garbled threshold.
+    assert len(document.garbled_pages) == 1
+
+
 def test_a_page_too_short_to_judge_is_not_judged() -> None:
     """One stray glyph on a six-character cover page is not a broken text layer."""
     defects = page_defects(1, "Ψҗᇙ")
