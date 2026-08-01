@@ -17,6 +17,14 @@ Recall is page-level: a retrieved chunk counts if it covers a page the gold reco
 cites pages, a chunk may span two, and demanding the exact chunk would measure where the
 chunker drew its boundaries rather than whether retrieval found the evidence.
 
+**⚠️ Do not compare the two parsers on these numbers (D-030).** At one ``top_k`` the baseline
+retrieves roughly eight times the text -- its chunks have a median of 800 characters against the
+candidate's 99 -- and covers 1.57 pages per chunk against 1.12. Page-level recall at a fixed
+chunk count therefore rewards whichever parser packs more in, so a baseline-versus-candidate
+gap here is a chunk-size difference wearing a retrieval result's clothes. Comparing *modes*
+within one parser is sound, because those share a chunk set. A fair cross-parser comparison
+needs a matched character budget, which is not implemented yet.
+
 Writes `results/runs/retrieval_<set>.json`, so the numbers in DECISIONS D-029 can be
 re-derived rather than trusted.
 """
@@ -171,6 +179,13 @@ def main(
             "small the intervals overlap and a difference of two or three questions settles "
             "nothing. Retrieval settings may be chosen on dev only (protocol 1.3)."
         ),
+        "cross_parser_comparison": (
+            "NOT VALID on these numbers (D-030). At one top_k the baseline retrieves about eight "
+            "times the text -- median chunk 800 characters against 99 -- so page-level recall at "
+            "a fixed chunk count rewards the larger chunker. Mode comparisons within one parser "
+            "are sound; a cross-parser comparison needs a matched character budget."
+        ),
+        "chunk_profile": _chunk_profile(paths),
     }
     destination = paths.runs / f"retrieval_{gold_set}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -192,6 +207,29 @@ def main(
     typer.echo(f"wrote: {destination.relative_to(paths.root)}")
     if monotone:
         raise typer.Exit(code=1)
+
+
+def _chunk_profile(paths: Any) -> dict[str, Any]:
+    """Chunk size per parser, recorded beside the recall numbers so the caveat travels with them.
+
+    Without this a reader sees two recall columns and assumes they are comparable. The profile
+    is the evidence that they are not.
+    """
+    profile: dict[str, Any] = {}
+    for parser in PARSERS:
+        path = paths.root / "data" / "index" / parser / "chunks.jsonl"
+        if not path.is_file():
+            continue
+        rows = read_lines(path)
+        lengths = sorted(len(str(row.get("text", ""))) for row in rows)
+        pages = [len(row.get("pages", ()) or ()) for row in rows]
+        profile[parser] = {
+            "chunks": len(rows),
+            "median_chars": lengths[len(lengths) // 2] if lengths else 0,
+            "total_chars": sum(lengths),
+            "mean_pages_per_chunk": round(sum(pages) / len(pages), 2) if pages else 0.0,
+        }
+    return profile
 
 
 def _monotonicity_problems(rows: list[dict[str, Any]]) -> list[str]:
