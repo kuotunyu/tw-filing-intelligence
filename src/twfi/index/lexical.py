@@ -62,6 +62,7 @@ from typing import Any, Final
 from twfi.parsing.normalise import normalise
 
 __all__ = [
+    "LEXICAL_MANIFEST",
     "TOKENISER_ID",
     "Bm25Config",
     "Bm25Index",
@@ -308,8 +309,13 @@ class Bm25Manifest:
         return payload
 
 
+#: The lexical half's manifest, named apart from the dense half's -- see
+#: :data:`twfi.index.embeddings.VECTOR_MANIFEST` for what sharing one filename cost.
+LEXICAL_MANIFEST = "postings.manifest.json"
+
+
 def save_index(directory: Path, index: Bm25Index, manifest: Bm25Manifest) -> tuple[Path, Path]:
-    """Write ``postings.json`` and ``manifest.json`` together, never one without the other.
+    """Write ``postings.json`` and its manifest together, never one without the other.
 
     Raises:
         ValueError: If the manifest does not describe this index. A manifest that names a
@@ -329,7 +335,7 @@ def save_index(directory: Path, index: Bm25Index, manifest: Bm25Manifest) -> tup
         )
     directory.mkdir(parents=True, exist_ok=True)
     postings_path = directory / "postings.json"
-    manifest_path = directory / "manifest.json"
+    manifest_path = directory / LEXICAL_MANIFEST
     payload = {
         "doc_lengths": list(index.doc_lengths),
         # Postings as pair lists rather than an object keyed by document number: JSON keys are
@@ -362,7 +368,7 @@ def load_index(
             a different tokeniser, or if the document count disagrees with ``expect_documents``.
     """
     postings_path = directory / "postings.json"
-    manifest_path = directory / "manifest.json"
+    manifest_path = directory / LEXICAL_MANIFEST
     for path in (postings_path, manifest_path):
         if not path.is_file():
             raise FileNotFoundError(f"{path} is missing; rebuild the index")

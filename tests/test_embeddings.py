@@ -14,6 +14,7 @@ import pytest
 
 from twfi.index.embeddings import (
     DEFAULT_MODEL,
+    VECTOR_MANIFEST,
     EmbeddingConfig,
     EmbeddingManifest,
     batches,
@@ -115,8 +116,23 @@ def test_a_saved_index_round_trips(tmp_path: Path) -> None:
 def test_half_an_index_is_not_an_index(tmp_path: Path) -> None:
     directory = tmp_path / "idx"
     save_vectors(directory, vectors(), manifest())
-    (directory / "manifest.json").unlink()
+    (directory / VECTOR_MANIFEST).unlink()
     with pytest.raises(FileNotFoundError, match="rebuild"):
+        load_vectors(directory)
+
+
+def test_an_index_from_before_the_manifests_were_split_is_refused(tmp_path: Path) -> None:
+    """Both halves used to write `manifest.json`, so building BM25 second erased this one.
+
+    Such a directory still holds a plausible `vectors.npy` and a manifest that parses -- but the
+    manifest describes the *lexical* index, and what it recorded about the vectors (model
+    revision, dimension, chunk ids) is gone. The vectors cannot answer for themselves, so they
+    are not loadable.
+    """
+    directory = tmp_path / "idx"
+    save_vectors(directory, vectors(), manifest())
+    (directory / VECTOR_MANIFEST).rename(directory / "manifest.json")
+    with pytest.raises(FileNotFoundError, match="predates the split manifests"):
         load_vectors(directory)
 
 

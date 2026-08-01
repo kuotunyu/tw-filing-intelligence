@@ -42,6 +42,7 @@ import typer
 from twfi.console import use_utf8_output
 from twfi.eval.gates import wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
+from twfi.index.embeddings import load_vectors
 from twfi.index.lexical import load_index
 from twfi.index.retrieve import Retriever, recall_at_k
 from twfi.io.jsonl import read_lines
@@ -133,7 +134,16 @@ def main(
             continue
         chunks = read_lines(directory / "chunks.jsonl")
         bm25, _ = load_index(directory, expect_documents=len(chunks))
-        vectors = np.load(directory / "vectors.npy")
+        # Through load_vectors, not np.load. This line used to read the array directly, which
+        # bypassed every check that makes a vector set answerable for itself -- so the claim in
+        # D-031 that `load_vectors(expect_rows=...)` would stop a stale index from being searched
+        # was false on the one path that measures recall. A stale index here does not raise; it
+        # returns confident numbers for chunks that no longer exist.
+        try:
+            vectors, _ = load_vectors(directory, expect_rows=len(chunks))
+        except (FileNotFoundError, ValueError) as exc:
+            typer.echo(f"{parser}: {exc}")
+            raise typer.Exit(code=2) from exc
         retriever = Retriever(
             chunks=chunks, bm25=bm25, vectors=vectors, embed_query=embed, fetch_depth=depth
         )

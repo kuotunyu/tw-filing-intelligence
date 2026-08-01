@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from twfi.index.lexical import (
+    LEXICAL_MANIFEST,
     TOKENISER_ID,
     Bm25Config,
     Bm25Index,
@@ -301,16 +302,16 @@ def test_a_manifest_claiming_another_tokeniser_is_refused_at_save(tmp_path: Path
 
 def test_half_an_index_is_not_an_index(tmp_path: Path) -> None:
     directory = saved(tmp_path / "bm25", Bm25Index.build(CORPUS))
-    (directory / "manifest.json").unlink()
+    (directory / LEXICAL_MANIFEST).unlink()
     with pytest.raises(FileNotFoundError, match="rebuild the index"):
         load_index(directory)
 
 
 def test_postings_that_outgrew_their_manifest_are_refused(tmp_path: Path) -> None:
     directory = saved(tmp_path / "bm25", Bm25Index.build(CORPUS))
-    payload = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    payload = json.loads((directory / LEXICAL_MANIFEST).read_text(encoding="utf-8"))
     payload["rows"] = 9
-    (directory / "manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+    (directory / LEXICAL_MANIFEST).write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="different chunking"):
         load_index(directory)
 
@@ -330,18 +331,18 @@ def test_matching_expect_documents_loads(tmp_path: Path) -> None:
 def test_an_index_built_by_another_tokeniser_is_refused_at_load(tmp_path: Path) -> None:
     """Two tokenisers are two retrievers; comparing across them would confound the factor."""
     directory = saved(tmp_path / "bm25", Bm25Index.build(CORPUS))
-    payload = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    payload = json.loads((directory / LEXICAL_MANIFEST).read_text(encoding="utf-8"))
     payload["tokeniser"] = "cjk-bigram-ascii-v0"
-    (directory / "manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+    (directory / LEXICAL_MANIFEST).write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="rank differently"):
         load_index(directory)
 
 
 def test_a_manifest_without_parameters_cannot_reproduce_a_ranking(tmp_path: Path) -> None:
     directory = saved(tmp_path / "bm25", Bm25Index.build(CORPUS))
-    payload = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    payload = json.loads((directory / LEXICAL_MANIFEST).read_text(encoding="utf-8"))
     del payload["config"]
-    (directory / "manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+    (directory / LEXICAL_MANIFEST).write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="records no k1/b"):
         load_index(directory)
 

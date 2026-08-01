@@ -34,6 +34,7 @@ import numpy as np
 
 __all__ = [
     "DEFAULT_MODEL",
+    "VECTOR_MANIFEST",
     "EmbeddingConfig",
     "EmbeddingManifest",
     "batches",
@@ -176,19 +177,26 @@ def embed_texts(
     return np.vstack(out) if out else np.empty((0, settings.dimension), dtype=np.float32), revision
 
 
+#: The dense half's manifest. Named apart from the lexical half's on purpose: both used to write
+#: `manifest.json` into the same directory, so building BM25 after the vectors overwrote the
+#: embedding manifest -- and with it the model revision, the dimension and the chunk ids that let
+#: a stale index be rejected. What survived recorded `k1` and `b`, which describe the other index.
+VECTOR_MANIFEST = "vectors.manifest.json"
+
+
 def save_vectors(
     directory: Path,
     vectors: np.ndarray,
     manifest: EmbeddingManifest,
 ) -> tuple[Path, Path]:
-    """Write ``vectors.npy`` and ``manifest.json`` together, never one without the other."""
+    """Write ``vectors.npy`` and its manifest together, never one without the other."""
     if vectors.shape[0] != manifest.rows:
         raise ValueError(f"manifest says {manifest.rows} rows, array has {vectors.shape[0]}")
     if vectors.ndim != 2 or vectors.shape[1] != manifest.dimension:
         raise ValueError(f"manifest says dimension {manifest.dimension}, array is {vectors.shape}")
     directory.mkdir(parents=True, exist_ok=True)
     vector_path = directory / "vectors.npy"
-    manifest_path = directory / "manifest.json"
+    manifest_path = directory / VECTOR_MANIFEST
     np.save(vector_path, vectors)
     manifest_path.write_text(
         json.dumps(manifest.to_json(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -204,9 +212,18 @@ def load_vectors(directory: Path, *, expect_rows: int | None = None) -> tuple[np
         ValueError: If the array disagrees with the manifest, or with ``expect_rows``.
     """
     vector_path = directory / "vectors.npy"
-    manifest_path = directory / "manifest.json"
+    manifest_path = directory / VECTOR_MANIFEST
     for path in (vector_path, manifest_path):
         if not path.is_file():
+            if path == manifest_path and (directory / "manifest.json").is_file():
+                # An index from before the two halves stopped sharing a filename. Its embedding
+                # manifest was overwritten by the BM25 build, so what it can prove about itself
+                # is gone: rebuild rather than trust a vector set with no provenance.
+                raise FileNotFoundError(
+                    f"{path} is missing and {directory / 'manifest.json'} exists: this index "
+                    "predates the split manifests and its embedding provenance was overwritten "
+                    "by the lexical build; rebuild it"
+                )
             raise FileNotFoundError(f"{path} is missing; rebuild the index")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     vectors = np.load(vector_path)

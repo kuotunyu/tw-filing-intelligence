@@ -1,18 +1,28 @@
 """Embed both parsers' chunks and persist the dense index.
 
-    uv run python scripts/build_index.py --gpu
-    uv run python scripts/build_index.py --gpu --parser candidate --limit 500
+    uv run python scripts/build_index.py --device cuda
+    uv run python scripts/build_index.py --device cpu          # slower, needs no card
+    uv run python scripts/build_index.py --device cuda --parser candidate --limit 500
 
 One index per parser, never pooled: F0's fixed windows and F1-F7's layout-aware chunks are
 different corpora (5,815 chunks against 13,116), and a shared index would let the baseline
 retrieve from the candidate's chunking -- turning a parsing comparison into nothing.
 
-BM25 is not built here. It is CPU-only and belongs with the fusion code; this script exists
-to spend GPU time while the card is free, and dense vectors are the only part that needs it.
+**``--device`` is required and has no default**, because neither choice is safe to assume.
+``cuda`` must be deliberate (CLAUDE.md rule 8: another project may hold the card, and this loads
+a model onto it). ``cpu`` must be deliberate too: it is roughly an order of magnitude slower, so
+choosing it by accident looks like a hang. On CPU the dtype defaults to float32 -- half precision
+there is emulated and slower, not cheaper -- which also matches the query path, since
+`eval_retrieval.py` embeds its queries on CPU in float32.
 
-Writes `data/index/<parser>/{vectors.npy,manifest.json}` plus `chunks.jsonl` so that a
+BM25 is not built here. It is CPU-only and belongs with the fusion code; the dense vectors are
+the only part with a reason to want a card.
+
+Writes `data/index/<parser>/{vectors.npy,vectors.manifest.json}` plus `chunks.jsonl` so that a
 retrieved row can be turned back into text, a page and a section path -- G4 scores citations,
-so a vector without its provenance is not usable evidence.
+so a vector without its provenance is not usable evidence. The manifest filename is *not*
+`manifest.json`: the lexical build writes its own manifest into the same directory, and while
+both used that name, building BM25 afterwards silently overwrote the embedding provenance.
 
 Nothing here is committed: vectors and chunk dumps are build artifacts (CLAUDE.md rule 7).
 """
@@ -47,16 +57,26 @@ app = typer.Typer(add_completion=False, help=__doc__)
 
 @app.command()
 def main(
-    gpu: Annotated[
-        bool, typer.Option("--gpu", help="Required: this loads a model onto the GPU.")
-    ] = False,
+    device: Annotated[
+        str, typer.Option("--device", help="cuda or cpu. Required: neither is safe to assume.")
+    ] = "",
     parser: Annotated[str, typer.Option(help="baseline, candidate, or both.")] = "both",
     limit: Annotated[int, typer.Option(help="Cap chunks per parser (0 = no cap).")] = 0,
     batch_size: Annotated[int, typer.Option(help="Encoder batch size.")] = 16,
+    dtype: Annotated[str, typer.Option(help="float16 or float32. Defaults by device.")] = "",
 ) -> None:
     """Build the dense index for one or both parsers."""
-    if not gpu:
-        typer.echo("this loads a model onto the GPU; pass --gpu to say so deliberately")
+    if device not in {"cuda", "cpu"}:
+        typer.echo(
+            "pass --device cuda (loads a model onto the card; check nvidia-smi first) or "
+            "--device cpu (no card needed, roughly an order of magnitude slower)"
+        )
+        raise typer.Exit(code=2)
+    # float16 on CPU is emulated: slower than float32 rather than cheaper. And float32 is what
+    # the query path uses, so a CPU-built corpus matches its queries exactly.
+    resolved_dtype = dtype or ("float16" if device == "cuda" else "float32")
+    if resolved_dtype not in {"float16", "float32"}:
+        typer.echo(f"unknown dtype {resolved_dtype!r}; choose float16 or float32")
         raise typer.Exit(code=2)
     if parser not in {"baseline", "candidate", "both"}:
         typer.echo(f"unknown parser {parser!r}; choose baseline, candidate or both")
@@ -71,8 +91,12 @@ def main(
         if not rows:
             typer.echo(f"{which}: nothing to embed")
             continue
-        typer.echo(f"{which}: embedding {len(rows):,} chunks …")
-        config = EmbeddingConfig(batch_size=batch_size)
+        typer.echo(f"{which}: embedding {len(rows):,} chunks on {device} ({resolved_dtype}) …")
+        config = EmbeddingConfig(
+            batch_size=batch_size,
+            device=device,
+            dtype="float16" if resolved_dtype == "float16" else "float32",
+        )
 
         def report(done: int, total: int, *, which: str = which) -> None:
             if done % (batch_size * 40) == 0 or done == total:
