@@ -1750,6 +1750,72 @@
 
 ---
 
+## D-037 事前註冊的指標一個都沒實作；補上之後，F3（rerank）是第一個看起來真的有用的因子
+
+- **怎麼發現的**：使用者把當初的 ⑤A prompt 貼給我當參考。對照之下才發現
+  **protocol §3.2 註冊的四個檢索指標，一個都沒實作**：
+
+  | protocol §3.2 寫的 | 我實際在量的 |
+  |---|---|
+  | **Recall@5**（top-5 命中 `required_evidence` 任一項）| recall@10／@20，而且是**頁面層級**不是 evidence 層級 |
+  | **MRR@10** | 沒有 |
+  | complete evidence coverage（top-5 覆蓋**全部**）| 沒有 |
+  | cross-page evidence coverage | 沒有 |
+
+  更難堪的是 `dense.py` 與 `fusion.py` 的註解**已經在講**「Recall@5 和 MRR@10 會讀這個排序」
+  —— 程式預期這些指標存在，只是沒有人寫。而 `tests/test_protocol_constants.py` 的
+  docstring 宣稱「protocol 存在兩份，必須一致」，**卻沒有任何一個測試去讀那份 markdown 比對這些數字**。
+  已補：`RECALL_AT`／`MRR_AT`／`COVERAGE_AT`／`TOP_K_RETRIEVE`／`TOP_K_RERANK`／`RRF_K`
+  進 `twfi.protocol`，並加測試直接讀 `FEASIBILITY_PROTOCOL.md` 斷言相符。
+
+- **連帶問題：`fetch_depth=100` 是拿非註冊指標選出來的。** D-029 與 D-036 的 depth sweep
+  都是看 recall@10。改用 Recall@5 重掃，baseline hybrid 在 **d=50** 就到頂（R11 M0.380 C11），
+  d=100 的 MRR 反而略低（0.377），d=200 更低（0.370）。
+
+- **管線語意本來是模糊的，已在 freeze 前寫死（protocol §2.5 新增段落）。**
+  `top_k_retrieve=20` ＋ `top_k_rerank=5` 在有 RRF 的情況下至少兩種讀法。確定為：
+  融合後截到 20 進 reranker；**每側融合前抓多少不是註冊常數**（§1.3 可在 dev 調）；
+  rerank 輸出 5；**Recall@5 判定的是管線最終的 5 筆**（F3 以上是 rerank 後，F0–F2 沒有
+  reranker 就是檢索前 5）。**寫這段時 dev 各 depth 的數字已經量過，所以刻意先定原則再看數字**，
+  已量到的數字不作為理由。
+
+- **`twfi/index/rerank.py`：F3 這一階本來完全不存在。** protocol 2.5 要求它、
+  ladder 有這一階、`measure_resources.py` 只拿它量延遲，但沒有任何實作。
+  設計上刻意讓 **F2 與 F3 只差一個開關**：兩者都 `search(q, 20)`，
+  F2 截到 5，F3 交給 cross-encoder 重排。檢索那一半逐字節相同，
+  否則兩者的差值就不能歸因於 rerank。分數是**取代**不是混合（與 fusion 同一個理由）。
+
+- **量到的（dev 15 題，depth 100）**：
+
+  | parser | mode | Recall@5 | +rerank | MRR@10 | +rerank |
+  |---|---|---|---|---|---|
+  | baseline | lexical | 6/15 | **10/15** | 0.251 | **0.545** |
+  | baseline | dense | 5/15 | **9/15** | 0.296 | **0.447** |
+  | baseline | hybrid | 11/15 | 11/15 | 0.377 | **0.521** |
+  | candidate | lexical | 9/15 | **11/15** | 0.348 | 0.362 |
+  | candidate | dense | 6/15 | **7/15** | 0.116 | **0.233** |
+  | candidate | hybrid | 9/15 | 8/15 | 0.229 | **0.278** |
+
+  **Recall@5 在 6 個設定中 5 個變好，MRR@10 六個全部變好**（+0.014 到 +0.294）。
+  這是本研究到目前為止**第一個看起來真的有作用的因子**。
+
+- **⚠️ 但它仍然不顯著，而且在這個樣本量下不可能顯著。**
+  最好的一組是 baseline lexical 與 baseline dense 的 **4+/0−** —— 一面倒、零退步 ——
+  而 4 個 discordant pair 的**雙尾精確二項最小 p 值就是 `2/2⁴ = 0.125`**。
+  6 個比較的 Bonferroni 門檻是 0.0083，**通過的是 0 個**。
+
+  **一般結論（與 n 無關，只與 discordant 數有關）**：兩尾精確檢定要 p<0.05，
+  **至少需要 6 個一面倒的 discordant pair**（`2/2⁶ = 0.031`）；
+  要過 15 個比較的 Bonferroni（0.0033）需要 **≥9 個**。
+  所以「dev 上 +4/15 的改善」在任何樣本量下都到不了顯著 —— **這是量測設計的性質，不是 rerank 的性質**。
+  locked 有 33 題，能容納的 discordant 數較多，但同樣的下限仍然適用。
+
+- **狀態**：ACCEPTED (2026-08-01)。四個指標、rerank、管線語意都已進；
+  **fetch_depth 尚未依 Recall@5 重新定案**（d=50 對 baseline 較好、candidate 仍偏好淺的），
+  兩個 parser 要求相反方向這件事沒有因為換指標而消失。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、

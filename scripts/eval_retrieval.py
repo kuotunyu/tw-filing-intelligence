@@ -61,6 +61,7 @@ from twfi.eval.gates import mcnemar_exact, wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
 from twfi.index.embeddings import chunk_text_digest, load_vectors, utc_now
 from twfi.index.lexical import load_index
+from twfi.index.rerank import load_cross_encoder, rerank_hits
 from twfi.index.retrieve import (
     Hit,
     Retriever,
@@ -74,7 +75,7 @@ from twfi.index.retrieve import (
 from twfi.io.hashing import sha256_text_file
 from twfi.io.jsonl import read_lines
 from twfi.paths import repo_paths
-from twfi.protocol import COVERAGE_AT, MRR_AT, RECALL_AT
+from twfi.protocol import COVERAGE_AT, MRR_AT, RECALL_AT, TOP_K_RETRIEVE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -124,6 +125,13 @@ def main(
         list[int] | None,
         typer.Option("--budget", help="Character budgets to report. The cross-parser comparison."),
     ] = None,
+    rerank_device: Annotated[
+        str,
+        typer.Option(
+            "--rerank",
+            help="cuda or cpu to add the F3 reranked pipeline. Empty skips it (F0-F2 only).",
+        ),
+    ] = "",
 ) -> None:
     """Report recall at each cutoff and at each character budget, per parser and mode."""
     paths = repo_paths()
@@ -157,6 +165,14 @@ def main(
     typer.echo(f"{len(records)} question(s) with a page citation, depth {depth}")
 
     embed = _cpu_embedder()
+    score_pairs = None
+    reranker_revision = None
+    if rerank_device:
+        if rerank_device not in {"cuda", "cpu"}:
+            typer.echo(f"unknown --rerank device {rerank_device!r}; choose cuda or cpu")
+            raise typer.Exit(code=2)
+        typer.echo(f"loading the cross-encoder on {rerank_device} for the F3 pipeline …")
+        score_pairs, reranker_revision = load_cross_encoder(device=rerank_device)
     rows: list[dict[str, Any]] = []
     budget_rows: list[dict[str, Any]] = []
     protocol_rows: list[dict[str, Any]] = []
@@ -204,6 +220,7 @@ def main(
             "embed_device": (vector_manifest.get("config") or {}).get("device"),
             "embed_dtype": (vector_manifest.get("config") or {}).get("dtype"),
             "tokeniser": lexical_manifest.get("tokeniser"),
+            "reranker_revision": reranker_revision,
         }
         retriever = Retriever(
             chunks=chunks, bm25=bm25, vectors=vectors, embed_query=embed, fetch_depth=depth
@@ -217,8 +234,27 @@ def main(
                 for record in records
             }
             registered = _protocol_metrics(records, ranked_by_question)
-            registered.update({"parser": parser, "mode": mode})
+            registered.update({"parser": parser, "mode": mode, "reranked": False})
             protocol_rows.append(registered)
+
+            if score_pairs is not None:
+                # Protocol 2.5's pipeline: the retrieval stage hands TOP_K_RETRIEVE candidates to
+                # the cross-encoder, which reorders them. The cutoffs are then read off the
+                # reordered list -- Recall@5 and complete@5 over the five the pipeline would pass
+                # on, MRR@10 over ten, which is why the whole shortlist is reordered rather than
+                # truncated to five here.
+                reranked = {
+                    record.question_id: rerank_hits(
+                        record.question,
+                        ranked_by_question[record.question_id][:TOP_K_RETRIEVE],
+                        score_pairs=score_pairs,
+                        top_k=TOP_K_RETRIEVE,
+                    )
+                    for record in records
+                }
+                after = _protocol_metrics(records, reranked)
+                after.update({"parser": parser, "mode": mode, "reranked": True})
+                protocol_rows.append(after)
 
             for cutoff in cutoffs:
                 started = time.perf_counter()
@@ -305,12 +341,13 @@ def main(
         typer.echo("")
         typer.echo("protocol 3.2 -- the four pre-registered metrics, scored on required_evidence")
         typer.echo(
-            f"{'parser':<10} {'mode':<8} {'Recall@' + str(RECALL_AT):>9}"
+            f"{'parser':<10} {'mode':<11} {'Recall@' + str(RECALL_AT):>9}"
             f"  {'MRR@' + str(MRR_AT):>7}  {'complete@' + str(COVERAGE_AT):>11}  {'x-page':>7}"
         )
         for entry in protocol_rows:
+            label = f"{entry['mode']}+rr" if entry.get("reranked") else str(entry["mode"])
             typer.echo(
-                f"{entry['parser']:<10} {entry['mode']:<8}"
+                f"{entry['parser']:<10} {label:<11}"
                 f" {entry[f'recall_at_{RECALL_AT}']:>6}/{entry['n']}"
                 f"  {entry[f'mrr_at_{MRR_AT}']:>7.3f}"
                 f"  {entry[f'complete_at_{COVERAGE_AT}']:>8}/{entry['n']}"

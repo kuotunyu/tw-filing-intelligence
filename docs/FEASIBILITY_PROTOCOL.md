@@ -369,6 +369,25 @@ baseline chunk `size=800 chars / overlap=100`、RRF `k=60`、
 crop `dpi=200`、crop 最長邊 resize 至 `1024 px`、每題最多 3 個 crop、
 `num_ctx=8192`、`num_predict=512`。
 
+**管線語意澄清（2026-08-01 補入，freeze 前，依原則而非依數字）**
+
+`top_k_retrieve=20` 與 `top_k_rerank=5` 原本沒有寫明是管線的哪一段，
+而在有 RRF 融合的情況下至少有兩種讀法。以下為**確定的讀法**：
+
+1. **`top_k_retrieve=20` 是「交給 reranker 的候選數」** ——
+   融合後的清單截到 20 筆再進 reranker。
+2. **融合前每一側各自抓多少（`Retriever.fetch_depth`）不是事前註冊的常數**，
+   它只需 ≥20 以填滿融合清單，屬 §1.3 允許在 DEV 上調整的參數。
+3. **`top_k_rerank=5` 是 reranker 的輸出數**。
+4. **§3.2 的 Recall@5 與 complete evidence coverage 判定的是「管線最終的 5 筆」**：
+   F3 以上有 reranker，就是 rerank 後的 5 筆；F0–F2 沒有 reranker
+   （reranking 本身是 F3 這一階），就是檢索的前 5 筆。
+
+> 為什麼要在這裡寫死：這份文件被 freeze 之後，
+> 「Recall@5 指的是哪個 5」就不能再解釋了，而它會直接決定 G3 的判定。
+> 澄清的方向是**先定原則再看數字** —— 寫下這段時 DEV 上各種 depth 的數字已經量過，
+> 若照數字挑讀法就是在事後選一個對自己有利的定義。已量到的數字一律不作為本段的理由。
+
 > VRAM 預算（G10 用）：`qwen3.6:27b` Q4_K_M 權重約 17 GB ＋ `num_ctx=8192` 的 KV cache
 > ＋ 常駐的 bge-m3／reranker 約 2.2 GB ≈ **20–21 GB**，加上桌面程式約 1.4 GB
 > 仍在 24 GB 內，但餘裕不大。G10 的 22 GB 上限是依**硬體**（RTX 4090 24GB
