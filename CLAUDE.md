@@ -43,8 +43,17 @@ uv run pytest                       # 離線測試, coverage gate 85%
 uv run ruff check . ; uv run mypy src
 uv run python scripts/verify_manifests.py     # SHA-256 / provenance
 uv run python scripts/check_leakage.py        # dev vs locked 洩漏檢查
-uv run python scripts/freeze_protocol.py      # 凍結 protocol + locked set
+uv run python scripts/freeze_protocol.py --dry-run   # 看會凍結什麼，不寫檔
+uv run python scripts/freeze_protocol.py      # 凍結 protocol + locked set（不可逆，需確認旗標）
 uv run python scripts/verify_results.py       # summary 與 raw artifacts 一致性
+```
+
+索引（兩個半邊要一起重建，順序固定）：
+
+```bash
+uv run python scripts/build_index.py --device cpu   # 向量 + chunks.jsonl（cuda 需先看 nvidia-smi）
+uv run python scripts/build_bm25.py                 # BM25，必須在 build_index 之後
+uv run python scripts/eval_retrieval.py --set dev   # recall（dev 是唯一可據以調整的集合）
 ```
 
 ## 目錄語意
