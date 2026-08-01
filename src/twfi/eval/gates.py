@@ -33,6 +33,7 @@ __all__ = [
     "GateOutcome",
     "Proportion",
     "wilson_interval",
+    "mcnemar_exact",
     "read_proportion",
     "evaluate",
     "decide",
@@ -99,6 +100,30 @@ def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
         max(0.0, (centre - spread) / denominator),
         min(1.0, (centre + spread) / denominator),
     )
+
+
+def mcnemar_exact(left: Mapping[str, int], right: Mapping[str, int]) -> tuple[int, int, float]:
+    """Exact McNemar on paired per-question outcomes. Returns ``(left-only, right-only, p)``.
+
+    Paired because the two configurations answer *the same* questions: comparing two independent
+    binomial proportions throws away that pairing and is the wrong test. Exact rather than the
+    chi-square approximation because the discordant counts here are single digits, where the
+    approximation is not usable.
+
+    The two-sided p is the binomial probability, under the null that a discordant pair falls
+    either way with probability one half, of a split at least as lopsided as the observed one.
+    """
+    shared = sorted(set(left) & set(right))
+    only_left = sum(1 for qid in shared if left[qid] and not right[qid])
+    only_right = sum(1 for qid in shared if right[qid] and not left[qid])
+    discordant = only_left + only_right
+    if discordant == 0:
+        # No question distinguishes them at all, so the data cannot separate them: p = 1.
+        return 0, 0, 1.0
+    smaller = min(only_left, only_right)
+    tail = sum(math.comb(discordant, index) for index in range(smaller + 1))
+    probability = min(1.0, 2.0 * tail / (2**discordant))
+    return only_left, only_right, probability
 
 
 def read_proportion(payload: Any, *, where: str) -> Proportion | str:

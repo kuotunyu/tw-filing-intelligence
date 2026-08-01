@@ -16,6 +16,7 @@ from twfi.eval.gates import (
     Proportion,
     decide,
     evaluate,
+    mcnemar_exact,
     read_proportion,
     wilson_interval,
 )
@@ -325,3 +326,61 @@ def test_the_thresholds_come_from_the_protocol() -> None:
     """Not restated here: a second copy would be a second thing to forget to update."""
     assert GATES.pooled_hard_min_gain_pp == 15.0
     assert GATES.min_probe_refusals == 4
+
+
+# ------------------------------------------------- paired significance (McNemar)
+
+
+def _outcomes(bits: str) -> dict[str, int]:
+    return {f"Q{index}": int(bit) for index, bit in enumerate(bits)}
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "expected"),
+    [
+        # Hand-computed two-sided exact binomial on the discordant pairs.
+        ("11101", "00011", (3, 1, 0.625)),
+        ("110", "001", (2, 1, 1.0)),
+        ("11111", "00000", (5, 0, 0.0625)),
+        ("111111", "000000", (6, 0, 0.03125)),
+        ("11110", "00001", (4, 1, 0.375)),
+    ],
+)
+def test_mcnemar_matches_the_exact_binomial(
+    left: str, right: str, expected: tuple[int, int, float]
+) -> None:
+    only_left, only_right, probability = mcnemar_exact(_outcomes(left), _outcomes(right))
+    assert (only_left, only_right) == expected[:2]
+    assert probability == pytest.approx(expected[2])
+
+
+def test_identical_outcomes_cannot_be_separated() -> None:
+    """No discordant pair means the data does not distinguish them at all, so p = 1."""
+    assert mcnemar_exact(_outcomes("1011"), _outcomes("1011")) == (0, 0, 1.0)
+
+
+def test_the_test_is_paired_not_a_comparison_of_totals() -> None:
+    """Same totals, opposite questions: unpaired tests see nothing, McNemar sees the maximum.
+
+    This is the whole reason for using it -- two configurations scoring 3/4 each are not
+    equivalent if they succeed on disjoint questions.
+    """
+    only_left, only_right, probability = mcnemar_exact(_outcomes("1110"), _outcomes("0111"))
+    assert (only_left, only_right) == (1, 1)
+    assert probability == pytest.approx(1.0)
+
+
+def test_a_five_percent_result_is_reachable_at_this_sample_size() -> None:
+    """Sanity on the honesty of the reported p-values: six discordant pairs one way suffices.
+
+    Worth pinning, because with 15 dev questions almost nothing reaches it -- and a test that
+    could *never* reach significance would make "not significant" vacuous rather than informative.
+    """
+    assert mcnemar_exact(_outcomes("111111"), _outcomes("000000"))[2] < 0.05
+    assert mcnemar_exact(_outcomes("11111"), _outcomes("00000"))[2] > 0.05
+
+
+def test_questions_missing_from_one_side_are_ignored_rather_than_guessed() -> None:
+    left = {"Q1": 1, "Q2": 0, "Q3": 1}
+    right = {"Q1": 0, "Q2": 1}
+    assert mcnemar_exact(left, right) == (1, 1, 1.0)

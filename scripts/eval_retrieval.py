@@ -19,15 +19,28 @@ chunker drew its boundaries rather than whether retrieval found the evidence.
 
 Two tables come out, and which one answers which question matters:
 
-* **``r@k`` compares modes within one parser.** At one ``top_k`` the baseline retrieves roughly
-  eight times the text -- median chunk 800 characters against the candidate's 99 -- and covers
-  1.57 pages per chunk against 1.12, so a baseline-versus-candidate gap in this table is a
-  chunk-size difference wearing a retrieval result's clothes (D-030). Mode comparisons are sound
-  because those share a chunk set.
-* **``recall at a matched character budget`` compares the parsers.** Both are charged the same
-  number of whitespace-stripped characters, taken in rank order, so neither is rewarded for
-  packing more into a chunk. Each rate carries the median number of chunks the budget bought,
-  because that difference is the thing the budget neutralises and it should be visible.
+* **``r@k`` compares modes within one parser, never the parsers.** At one ``top_k`` the baseline
+  retrieves more text -- median chunk 800 raw characters against the candidate's 326 -- so a
+  baseline-versus-candidate gap in this table is partly a chunk-size difference wearing a
+  retrieval result's clothes (D-030). Mode comparisons are sound because those share a chunk set.
+* **``recall at a matched character budget`` is the cross-parser table.** Both parsers are charged
+  the same number of whitespace-stripped characters in rank order, so neither is rewarded for
+  packing more into a chunk.
+
+**What the budget does not equalise, stated because it was measured.** Recall is scored per page,
+and a chunk spanning two pages is credited for both. The baseline covers 1.57 pages per chunk
+against the candidate's 1.25, so at equal characters it still delivers 1.3-1.7x the distinct
+pages. A gap in the budget table can therefore still be page-spanning generosity rather than
+better retrieval. Each row carries ``median_pages`` beside ``median_chunks`` so the size of that
+residual is visible rather than asserted away. Removing it entirely would mean scoring recall per
+chunk, which D-029 rejected for measuring where the chunker drew its boundaries instead of whether
+retrieval found the evidence -- so the bias is reported, not eliminated.
+
+**Every difference comes with a paired exact McNemar p-value**, because these tables invite
+comparisons they cannot support: with 15 dev questions covering four distinct (document, pageset)
+targets, nothing in them separates at the 5% level. Per-question outcomes are written into the
+artifact so a later run can be paired against this one -- the absence of them is why the 8/15
+recorded in D-029 can never be compared to anything.
 
 Writes `results/runs/retrieval_<set>.json` with both tables, so the numbers in DECISIONS D-029
 can be re-derived rather than trusted.
@@ -44,7 +57,7 @@ import numpy as np
 import typer
 
 from twfi.console import use_utf8_output
-from twfi.eval.gates import wilson_interval
+from twfi.eval.gates import mcnemar_exact, wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
 from twfi.index.embeddings import chunk_text_digest, load_vectors
 from twfi.index.lexical import load_index
@@ -171,14 +184,14 @@ def main(
             cells: list[str] = []
             for cutoff in cutoffs:
                 started = time.perf_counter()
-                hits = 0
+                outcomes: dict[str, bool] = {}
                 for record in records:
-                    found = recall_at_k(
+                    outcomes[record.question_id] = recall_at_k(
                         retriever.search(record.question, cutoff, mode=mode),  # type: ignore[arg-type]
                         doc_id=record.source_document[0],
                         pages=list(record.page_numbers),
                     )
-                    hits += int(found)
+                hits = sum(outcomes.values())
                 elapsed = time.perf_counter() - started
                 low, high = wilson_interval(hits, len(records))
                 rows.append(
@@ -190,6 +203,10 @@ def main(
                         "correct": hits,
                         "rate": round(hits / len(records), 4),
                         "ci95": [round(low, 4), round(high, 4)],
+                        # Per question, so a paired test is possible and so a later session can
+                        # compare against this run without re-running it. The absence of these
+                        # is why the 8/15 recorded in D-029 can never be paired against anything.
+                        "outcomes": {qid: int(value) for qid, value in sorted(outcomes.items())},
                         "seconds": round(elapsed, 2),
                     }
                 )
@@ -204,19 +221,20 @@ def main(
             # that tying fetch depth to top_k produced.
             for budget_chars in budgets:
                 started = time.perf_counter()
-                hits = 0
+                budget_outcomes: dict[str, bool] = {}
                 chunks_used: list[int] = []
+                pages_seen: list[int] = []
                 for record in records:
                     ranked = retriever.search(record.question, depth, mode=mode)  # type: ignore[arg-type]
-                    hits += int(
-                        recall_at_budget(
-                            ranked,
-                            doc_id=record.source_document[0],
-                            pages=list(record.page_numbers),
-                            budget=budget_chars,
-                        )
+                    budget_outcomes[record.question_id] = recall_at_budget(
+                        ranked,
+                        doc_id=record.source_document[0],
+                        pages=list(record.page_numbers),
+                        budget=budget_chars,
                     )
                     chunks_used.append(_chunks_within(ranked, budget_chars))
+                    pages_seen.append(_pages_within(ranked, budget_chars))
+                hits = sum(budget_outcomes.values())
                 elapsed = time.perf_counter() - started
                 low, high = wilson_interval(hits, len(records))
                 budget_rows.append(
@@ -224,6 +242,9 @@ def main(
                         "parser": parser,
                         "mode": mode,
                         "budget_chars": budget_chars,
+                        "outcomes": {
+                            qid: int(value) for qid, value in sorted(budget_outcomes.items())
+                        },
                         "n": len(records),
                         "correct": hits,
                         "rate": round(hits / len(records), 4),
@@ -231,6 +252,13 @@ def main(
                         # How many chunks the budget bought, which is what makes the comparison
                         # legible: the same budget is a different number of chunks per parser.
                         "median_chunks": sorted(chunks_used)[len(chunks_used) // 2],
+                        # And how many distinct pages, which is the residual bias the character
+                        # budget does *not* remove. Recall is scored per page, and the coarser
+                        # chunker covers more pages per character (1.57 pages a chunk against
+                        # 1.25), so a gap at matched characters can still be page-spanning
+                        # generosity rather than better retrieval. Reported so the reader can see
+                        # the size of it instead of being told it was handled.
+                        "median_pages": sorted(pages_seen)[len(pages_seen) // 2],
                         "seconds": round(elapsed, 2),
                     }
                 )
@@ -250,10 +278,27 @@ def main(
                 if not series:
                     continue
                 cells = [
-                    f"{row['correct']:>3}/{row['n']} ({row['median_chunks']:>3} ch)"
+                    f"{row['correct']:>3}/{row['n']}"
+                    f" ({row['median_chunks']:>2}ch {row['median_pages']:>2}pg)"
                     for row in sorted(series, key=lambda item: int(item["budget_chars"]))
                 ]
-                typer.echo(f"{parser:<10} {mode:<8} " + " ".join(f"{cell:>16}" for cell in cells))
+                typer.echo(f"{parser:<10} {mode:<8} " + " ".join(f"{cell:>20}" for cell in cells))
+
+    # Every pairwise comparison with its exact paired p-value. Printed because the tables above
+    # invite comparisons they cannot support, and a reader not handed the p-value will make them.
+    middle_cutoff = cutoffs[len(cutoffs) // 2]
+    middle_budget = budgets[len(budgets) // 2]
+    for label, series_rows, key, at in (
+        (f"r@{middle_cutoff}", rows, "k", middle_cutoff),
+        (f"{middle_budget // 1000}k chars", budget_rows, "budget_chars", middle_budget),
+    ):
+        lines = _significance_report(series_rows, key=key, cutoff=at)
+        if not lines:
+            continue
+        typer.echo("")
+        typer.echo(f"paired exact McNemar at {label} -- same {len(records)} questions:")
+        for line in lines:
+            typer.echo(line)
 
     monotone = _monotonicity_problems(rows) + _monotonicity_problems(
         budget_rows, key="budget_chars"
@@ -402,6 +447,26 @@ def _monotonicity_problems(rows: list[dict[str, Any]], *, key: str = "k") -> lis
     return problems
 
 
+def _significance_report(rows: list[dict[str, Any]], *, key: str, cutoff: Any) -> list[str]:
+    """Every pairwise comparison at one cutoff, with its exact paired p-value.
+
+    Printed because the numbers invite comparisons that they cannot support, and a reader who is
+    not handed the p-value will make them anyway. With n=15 over four distinct gold targets, the
+    honest finding is expected to be that nothing separates.
+    """
+    series = [row for row in rows if row[key] == cutoff and row.get("outcomes")]
+    lines: list[str] = []
+    for left, right in itertools.combinations(series, 2):
+        only_left, only_right, probability = mcnemar_exact(left["outcomes"], right["outcomes"])
+        verdict = "" if probability < 0.05 else "  not significant"
+        lines.append(
+            f"  {left['parser']}/{left['mode']} {left['correct']}"
+            f" vs {right['parser']}/{right['mode']} {right['correct']}:"
+            f" {only_left}+/{only_right}- discordant, p={probability:.3f}{verdict}"
+        )
+    return lines
+
+
 def _model_mismatch(paths: Any, vector_manifest: dict[str, Any]) -> str:
     """Whether the vectors were built by a model other than the pinned one.
 
@@ -435,6 +500,23 @@ def _model_mismatch(paths: Any, vector_manifest: dict[str, Any]) -> str:
             f"{expected}; the same corpus under a different revision is a different index"
         )
     return ""
+
+
+def _pages_within(hits: Sequence[Hit], budget: int) -> int:
+    """How many distinct ``(doc, page)`` pairs a budget delivers.
+
+    The quantity that reveals what the character budget does not equalise. Recall is judged per
+    page, and a chunk spanning two pages is credited for both, so a parser whose chunks span more
+    pages wins page-level recall at equal characters without retrieving better.
+    """
+    spent = 0
+    pages: set[tuple[str, int]] = set()
+    for hit in hits:
+        pages.update((hit.doc_id, page) for page in hit.pages)
+        spent += characters_of(hit.text)
+        if spent >= budget:
+            break
+    return len(pages)
 
 
 def _chunks_within(hits: Sequence[Hit], budget: int) -> int:
