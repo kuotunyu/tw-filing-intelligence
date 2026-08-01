@@ -12,6 +12,7 @@ from twfi.parsing.tables import (
     Table,
     TableConfig,
     UnitSpec,
+    detect_basis,
     detect_unit,
     document_unit,
     extract_tables,
@@ -470,3 +471,35 @@ def test_the_document_scope_qualifier_is_not_read_as_an_exception() -> None:
     spec = detect_unit("（除另予註明者外，金額為新台幣仟元）")
     assert spec.exception is None
     assert spec.qualified is True
+
+
+# ------------------------------------------------ consolidated or parent-only
+
+
+def test_a_consolidated_heading_reads_as_consolidated() -> None:
+    assert detect_basis("（一）簡明資產負債表-合併財務報告  單位：新台幣千元") == "consolidated"
+
+
+def test_a_parent_only_heading_reads_as_parent_only() -> None:
+    """1301-FY2023-AR p177, the page immediately after the consolidated one."""
+    assert detect_basis("（二）簡明資產負債表-個體財務報告  單位：新台幣千元") == "parent_only"
+
+
+def test_the_two_summaries_are_told_apart() -> None:
+    """The failure this prevents: 非流動負債 FY2023 is 80,276,535 consolidated and 76,380,920
+    parent-only, printed on facing pages under the same account name. Reading both as
+    consolidated files them under one key and keeps whichever page was written last."""
+    consolidated = "（一）簡明資產負債表-合併財務報告 非流動負債 80,276,535"
+    parent = "（二）簡明資產負債表-個體財務報告 非流動負債 76,380,920"
+    assert detect_basis(consolidated) != detect_basis(parent)
+
+
+def test_a_page_naming_neither_is_consolidated() -> None:
+    """A filing reports consolidated by default, and every dev question asks about it."""
+    assert detect_basis("柒、財務狀況及財務績效之檢討分析 單位：新台幣千元") == "consolidated"
+
+
+def test_the_heading_wins_over_a_later_mention() -> None:
+    """The basis is named in the heading; the body below may mention the other in passing."""
+    text = "簡明資產負債表-個體財務報告 ……本表與合併財務報告之差異詳見附註"
+    assert detect_basis(text) == "parent_only"

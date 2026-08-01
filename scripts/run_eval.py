@@ -162,6 +162,13 @@ def main(
     prompt_variant: Annotated[
         str, typer.Option("--prompt", help="Instruction wording variant.")
     ] = DEFAULT_VARIANT,
+    numeric_db: Annotated[
+        str,
+        typer.Option(
+            help="Store for F4. numeric.duckdb is gold-keyed; numeric_broad.duckdb is the "
+            "whole-corpus ingest, which is what F4 would face in production."
+        ),
+    ] = "numeric.duckdb",
 ) -> None:
     """Run each requested rung over the gold set and score every answer."""
     paths = repo_paths()
@@ -200,12 +207,12 @@ def main(
 
     store = None
     if any(LADDER[name].get("numeric") for name in wanted):
-        database = paths.duckdb / "numeric.duckdb"
+        database = paths.duckdb / numeric_db
         if not database.is_file():
             typer.echo(f"{database} does not exist; run load_historical.py --set dev first")
             raise typer.Exit(code=2)
         store = NumericStore(database)
-        typer.echo(f"numeric store: {store.count():,} figure(s)")
+        typer.echo(f"numeric store: {numeric_db}, {store.count():,} figure(s)")
 
     config = GenerationConfig()
     rows: list[dict[str, Any]] = []
@@ -315,6 +322,9 @@ def main(
                 "parser": rung["parser"],
                 "mode": rung["mode"],
                 "reranked": rung["rerank"],
+                # Which store F4 read. The gold-keyed and whole-corpus stores give different
+                # numbers, so a rate recorded without this is not interpretable.
+                "numeric_db": numeric_db if rung.get("numeric") else None,
                 "n": len(scores),
                 "correct": correct,
                 "rate": round(correct / len(scores), 4) if scores else 0.0,

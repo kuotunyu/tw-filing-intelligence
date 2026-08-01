@@ -293,6 +293,36 @@ ollama 版本 `0.32.0`。
 
 ## Session 日誌
 
+### 2026-08-02 — Session 12（夜間：全語料 ingest，發現稀疏資料一直在替正確性擋子彈）
+
+使用者去睡覺，給約 12 小時自由發揮。
+
+**先做的判斷：F5／F6 不做。** dev 兩份 filing 沒有任何圖表題（D-021 取消 challenger 的
+同一個理由），chart route 只能在 locked 上被觸發 —— freeze 前寫它等於交付一個
+無法驗證的元件。缺口寫進 PROGRESS，不留半成品。
+
+改做**唯一還能量測**的事：拆掉 D-042 的但書。詳見 **D-044**。
+
+- `scripts/load_all_rows.py`：全語料 ingest，769 rows / 207 keys，**全程不看 gold**。
+  寫進 `numeric_broad.duckdb` 而非 primary store —— 後者會覆寫 gold-loaded 數字、
+  並讓 `require()` 因為多候選而拒絕選擇，**F4 會不升反降**。
+- **主要發現：科目名稱不是 key。** 50% 的 key 對到多個不同的值。
+  一大塊是「合併 vs 個體」：ROC 年報把五年簡表印兩次、面對面、科目同名
+  （1301 p176／p177，非流動負債差 380 萬千元）。
+  `detect_basis()` 從標題讀 basis → **dev 歧義 15 → 0**，
+  且 1301 非流動負債由 p176 與 p188 互相印證，不再是頁序決定。
+- **第二個發現，比分數重要：稀疏的 store 一直在遮兩個 route bug。**
+  DEV-0011（該拒答）被答成台塑營收 —— 因為「營收」出現在**括號裡的單位說明**中；
+  DEV-0015 拿著正確的兩個運算元算錯運算（問金額卻回成長率，而差值正好是 gold）。
+  兩個 bug 一直都在，只是 gold-keyed store 太空、在犯錯之前就先拒答了。
+- **F4：gold-keyed 7/15 → broad 11/15。** 修完 bug 後回頭跑 gold-keyed **仍然 7/15**
+  （那兩個 bug 在那裡本來就到不了），所以增益不是調參來的。
+  ladder（broad）：F0 3、F1 5、F2 3、F3 4、**F4 11**。
+- 仍成立的但書：broad store 對 locked 三家仍有 34% key 歧義且留值任意（2882 94%）。
+  **freeze 前不為此再動手** —— 那需要「報表屬於哪個個體」這層資訊，且在 locked 上調它就是調參。
+
+---
+
 ### 2026-08-01 — Session 11（表格抽取器的失效、P6 檢索層、撞上 token 上限）
 
 **最重要的發現：表格抽取器在 dev 文件上，15 個已知數字一個都取不出來。**
@@ -462,9 +492,17 @@ D-024 的範圍比原本記的大。
    判準要用 refusal precision（目前 15–25%），不是 overall correct。
 10. ✅ **F4 numeric route 已完成（D-042）** —— ladder 上最大的一次增益（F3 4/15 → F4 7/15），
     但覆蓋率不是發現：store 裡只有 gold 指名的 4 格 FY2023 數值。
-11. **F5–F7 需要的模組**：`twfi/numeric` 的 SQL route 接線、`twfi/chart/`（不存在）、
-    `twfi/router/`（不存在）。這是 ⑤A 完成定義第 5 條「baseline 與 candidate 都完整執行」
-    尚未滿足的部分。
+    → **D-044 已拆掉這個但書**：`scripts/load_all_rows.py` 全語料 ingest
+    （769 rows / 207 keys，全程不看 gold），F4 **11/15**。
+    附帶抓到兩個一直被稀疏資料遮住的 route bug，以及
+    「合併 vs 個體」同名衝突（dev 歧義已歸零，locked 仍 34%）。
+11. ✅ **F7 typed router 已完成（D-043）**，`twfi/router/` 存在，route accuracy 73.3%
+    （排除事前判不出的 `unanswerable` 為 84.6%）；但**尚未接成「依 route 分派」**。
+    **F5／F6 仍未實作**，`twfi/chart/` 不存在。這是 ⑤A 完成定義第 5 條
+    「baseline 與 candidate 都完整執行」尚未滿足的部分。
+    ⚠️ **F5／F6 在 freeze 前無法量測**：dev 兩份 filing 沒有任何圖表題
+    （D-021 取消 challenger 的同一個理由），chart route 只能在 locked 上被觸發。
+    所以現在寫 chart route 等於寫一個無法驗證的元件 —— 不做，寫清楚缺口。
 9. **`2317-FY2024-FS` p14 的代碼欄損益表版型**（D-032 剩下的那 1 個未取到目標）。
    **刻意留著**：那一頁只在 locked，為它調整抽取器就是在 locked 上調參。
    要修得先在 dev 上找到同型頁面，否則 freeze 後寫成已知限制。

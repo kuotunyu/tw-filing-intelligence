@@ -144,3 +144,80 @@ def test_a_refusal_renders_as_the_contract_expects(store: NumericStore) -> None:
 
 def test_a_figure_renders_without_spurious_decimals(store: NumericStore) -> None:
     assert answer_numerically("台塑民國112年度的資產總計是多少？", store).as_text() == "530,738,356"
+
+
+# --------------------------------------------- a change: as a percentage or as an amount
+
+
+def test_a_change_asked_as_a_proportion_is_a_percentage() -> None:
+    assert (
+        parse_question("台塑民國112年度的非流動負債，較前一年度的變動比例是多少？").kind == "growth"
+    )
+
+
+def test_a_change_asked_as_an_amount_is_a_difference() -> None:
+    """「增加了多少」 wants 735,913, not 0.14 -- same shape of question, different answer."""
+    parsed = parse_question("台塑的資產總計，民國112年度較民國111年度增加了多少？")
+    assert parsed.kind == "delta"
+
+
+def test_a_difference_returns_the_amount_and_keeps_the_unit(store: NumericStore) -> None:
+    """Reading every change as a growth rate answered DEV-0015 with 0.14 from correct operands."""
+    answer = answer_numerically("台塑的資產總計，民國112年度較民國111年度增加了多少？", store)
+    assert answer.ok
+    assert answer.value == Decimal("19483949")
+    assert answer.unit == "千元"
+
+
+# ------------------------------------- an account named only as a rate's denominator
+
+
+def test_an_account_inside_a_per_unit_gloss_is_not_the_subject() -> None:
+    """DEV-0011: 「碳排放強度（每百萬元營收的排放公噸數）」 is not a question about 營收."""
+    assert parse_question("台塑民國112年度的碳排放強度（每百萬元營收的排放公噸數）是多少？") is None
+
+
+def test_the_gloss_rule_holds_even_when_the_store_has_the_figure() -> None:
+    """The gold-keyed store hid this by not holding 營業收入; a fuller store does hold it.
+
+    The failure this pins is the expensive kind: a real figure, correctly cited, returned as the
+    answer to a question about something else entirely.
+    """
+    with NumericStore() as opened:
+        opened.add_companies([CompanyRow(code="1301", name="台塑", industry_schema="general")])
+        opened.add_line_items(
+            [
+                LineItem(
+                    company_code="1301",
+                    period="FY2023",
+                    statement="income",
+                    basis="consolidated",
+                    industry_schema="general",
+                    account="營業收入",
+                    value=Decimal("199138777"),
+                    unit="千元",
+                    currency="TWD",
+                    source_kind="extracted_text_row",
+                    source_ref="1301-FY2023-AR|p189|營業收入|112年度",
+                )
+            ]
+        )
+        answer = answer_numerically(
+            "台塑民國112年度的碳排放強度（每百萬元營收的排放公噸數）是多少？", opened
+        )
+        assert not answer.ok
+        assert answer.as_text() == "無法回答"
+
+
+def test_an_account_named_outside_a_gloss_still_matches(store: NumericStore) -> None:
+    """The gloss rule must not suppress a question that genuinely asks for the account."""
+    answer = answer_numerically("台塑民國112年度的資產總計（每股計算）是多少？", store)
+    assert answer.ok
+
+
+def test_the_gloss_rule_does_not_swallow_an_unbracketed_question(store: NumericStore) -> None:
+    """An earlier unbracketed pattern stripped 「每年財報的資產總計是多少？」 and refused a real
+    question. Suppressing a genuine lookup is worse than missing an unbracketed gloss."""
+    answer = answer_numerically("台塑民國112年度每年財報的資產總計是多少？", store)
+    assert answer.ok
+    assert answer.value == Decimal("530738356")

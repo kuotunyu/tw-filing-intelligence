@@ -60,6 +60,7 @@ __all__ = [
     "link_continuations",
     "extract_tables",
     "tables_to_blocks",
+    "detect_basis",
 ]
 
 _CURRENCY_WORDS = "新台幣|新臺幣|美元|美金|人民幣|港幣|日圓|歐元"
@@ -98,6 +99,11 @@ _UNIT_EXCEPTION = re.compile(
 #: 「除另予註明者外」 -- "unless otherwise noted". The unit holds by default but the
 #: document reserves the right to override it per line.
 _UNIT_QUALIFIER = re.compile(r"除另(?:予|行)?(?:註|注)明者?外")
+
+#: Consolidated or parent-only. See :func:`detect_basis` for why a page needs to say.
+_BASIS_MARKER = re.compile(
+    r"(?P<parent>個體財務報[告表]|母公司個體)|(?P<consolidated>合併財務報[告表])"
+)
 
 #: Currency words to ISO codes. Absent means absent: the numeric route refuses to
 #: compare figures whose currency was never stated rather than assuming TWD.
@@ -328,6 +334,23 @@ def detect_unit(text: str) -> UnitSpec:
     qualified = _UNIT_QUALIFIER.search(text[window_start : match.end()]) is not None
 
     return UnitSpec(unit=unit, currency=currency, exception=exception, qualified=qualified)
+
+
+def detect_basis(text: str) -> Literal["consolidated", "parent_only"]:
+    """Which set of books a page reports, from its own heading.
+
+    A ROC annual report prints its five-year summary twice, back to back, under identical
+    account names: `1301-FY2023-AR` p176 is 「簡明資產負債表-合併財務報告」 and p177 is
+    「簡明資產負債表-個體財務報告」. 非流動負債 FY2023 is 80,276,535 on the first and
+    76,380,920 on the second, so an ingestion that assumes consolidated files two different
+    figures under one key and keeps whichever page it read last.
+
+    Whichever marker appears **first** wins: the basis is named in the heading, and the body
+    below it may mention the other in passing. A page naming neither is consolidated, which is
+    what a filing reports by default.
+    """
+    found = _BASIS_MARKER.search(text)
+    return "parent_only" if found and found.group("parent") else "consolidated"
 
 
 def document_unit(page_texts: Sequence[str], *, marker: str = "附註") -> UnitSpec:

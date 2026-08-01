@@ -19,11 +19,17 @@ template miss and is refused rather than improvised.
 separates this route from the model doing arithmetic in its head: 「34.55」 on its own is a
 number to be trusted, while 「183,378,211 / 530,738,356 x 100」 is a claim anyone can check.
 
-What this deliberately does not do is widen coverage by loading more of the page. The store holds
-the cells gold names, which -- as ``twfi.numeric.historical`` says in its own docstring -- means
-"the numeric route had the figure it needed" must never be reported as a coverage finding. It was
-arranged. What F4 *can* honestly show is whether, given the figure, the deterministic path
-answers more reliably than the generative one.
+**Which store it reads decides what its number means.** ``numeric.duckdb`` holds the cells gold
+names, so -- as ``twfi.numeric.historical`` says in its own docstring -- "the numeric route had
+the figure it needed" is not a coverage finding there: it was arranged. ``numeric_broad.duckdb``
+(``scripts/load_all_rows.py``) holds every classifiable row in the corpus and consults gold for
+nothing, so it is the honest denominator. On dev the route scores 7/15 against the first and
+11/15 against the second.
+
+The gap is not only coverage. A store that holds the cells gold names holds *few* cells, and that
+sparsity was silently standing in for correctness: two route bugs (D-044) were unreachable against
+it and appeared the moment the fuller store could reach them. Sparse data hides parsing errors by
+refusing before the error can be made.
 """
 
 from __future__ import annotations
@@ -34,7 +40,13 @@ from decimal import Decimal
 
 from twfi.errors import NumericRouteError, UnitMismatchError
 from twfi.numeric.calculator import Computation
-from twfi.numeric.sql_tools import LookupResult, account_ratio, lookup, period_growth
+from twfi.numeric.sql_tools import (
+    LookupResult,
+    account_ratio,
+    lookup,
+    period_delta,
+    period_growth,
+)
 from twfi.numeric.store import NumericStore
 from twfi.protocol import COMPANIES
 
@@ -65,7 +77,32 @@ _FY_PERIOD = re.compile(r"FY(?P<year>\d{4})", re.IGNORECASE)
 
 #: Phrasings that ask for one figure as a share of another, and for a change between periods.
 _RATIO = re.compile(r"佔|占|比率|比重|占比")
-_GROWTH = re.compile(r"成長|增減|變動比例|年增|較.*(?:增加|減少|變動)")
+_CHANGE = re.compile(r"成長|增減|變動|年增|較.*(?:增加|減少)")
+
+#: A change can be asked for as a percentage or as an amount, and the two are different answers to
+#: the same shape of question. 「變動比例是多少」 wants 39.11; 「增加了多少」 wants 735,913. Reading
+#: every change as a percentage answered DEV-0015 with 0.14 when the store held both operands and
+#: their difference was exactly the gold figure -- right data, wrong operation, and the result
+#: looks like a confident answer rather than a miss.
+_AS_PERCENTAGE = re.compile(r"比例|比率|率|幅度|百分比|成長|年增")
+
+#: 「每百萬元營收的排放公噸數」 -- a 每-led gloss names the *denominator of a rate*, not the
+#: quantity being asked for. Without this, 「碳排放強度（每百萬元營收的排放公噸數）」 matched 營收
+#: and DEV-0011, a registered *unanswerable*, came back as 台塑's revenue: a real figure, correctly
+#: cited, presented as a carbon-emission intensity. The gold-keyed store hid this by happening not
+#: to hold that row; the whole-corpus store exposed it.
+#:
+#: This removes the gloss before accounts are matched, so an account named *only* inside one is
+#: not treated as the subject. An account named outside it still matches, which is what keeps
+#: 「每股盈餘」-style qualifiers from suppressing a legitimate question.
+#:
+#: **Parenthesised only, and that is a deliberate limit.** An unbracketed version -- 每 followed by
+#: a bounded run of characters -- also strips 「台塑每年財報的資產總計是多少？」 down to nothing,
+#: because 資產總計 sits inside the run and no comma stops it. Suppressing a real question is a
+#: worse failure than missing an unbracketed gloss, and the observed case is bracketed. An
+#: unbracketed 「每百萬元營收的排放公噸數」 would still slip through; that is recorded rather than
+#: guessed at, because the fix needs to know where the noun phrase ends and this does not.
+_PER_UNIT_GLOSS = re.compile(r"[（(]\s*每[^）)]{1,30}[）)]")
 
 #: A question asking for more than one figure. 「分別是多少」 names two periods; a second
 #: 「是多少」 names a second quantity.
@@ -86,7 +123,7 @@ class NumericQuestion:
     company_code: str
     period: str
     accounts: tuple[str, ...]
-    kind: str  # "lookup" | "ratio" | "growth"
+    kind: str  # "lookup" | "ratio" | "growth" | "delta"
 
     @property
     def account(self) -> str:
@@ -148,11 +185,15 @@ def parse_question(question: str) -> NumericQuestion | None:
             return None
         period = f"FY{int(roc.group('year')) + 1911}"
 
+    # Accounts are matched against the question with any per-unit gloss removed, so a name that
+    # appears only as a rate's denominator does not become the subject. See _PER_UNIT_GLOSS.
+    subject = _PER_UNIT_GLOSS.sub("", question)
+
     # Longest spelling first, so 非流動資產 is not matched as 流動資產.
     found: list[tuple[int, str]] = []
     for canonical, spellings in _ACCOUNTS.items():
         for spelling in spellings:
-            position = question.find(spelling)
+            position = subject.find(spelling)
             if position >= 0:
                 found.append((position, canonical))
                 break
@@ -167,8 +208,8 @@ def parse_question(question: str) -> NumericQuestion | None:
     elif _MULTI_FIGURE.search(question):
         # More figures wanted than one lookup returns. Refused rather than half-answered.
         return None
-    elif _GROWTH.search(question):
-        kind = "growth"
+    elif _CHANGE.search(question):
+        kind = "growth" if _AS_PERCENTAGE.search(question) else "delta"
     else:
         kind = "lookup"
     return NumericQuestion(company_code=code, period=period, accounts=ordered, kind=kind)
@@ -204,11 +245,10 @@ def answer_numerically(question: str, store: NumericStore) -> NumericAnswer:
                 store, parsed.company_code, parsed.accounts[0], parsed.accounts[1], parsed.period
             )
             return _from_computation(computed, parsed.period)
-        if parsed.kind == "growth":
+        if parsed.kind in {"growth", "delta"}:
             earlier = f"FY{int(parsed.period[2:]) - 1}"
-            computed = period_growth(
-                store, parsed.company_code, parsed.account, parsed.period, earlier
-            )
+            template = period_growth if parsed.kind == "growth" else period_delta
+            computed = template(store, parsed.company_code, parsed.account, parsed.period, earlier)
             return _from_computation(computed, parsed.period)
     except (NumericRouteError, UnitMismatchError) as exc:
         return NumericAnswer(
