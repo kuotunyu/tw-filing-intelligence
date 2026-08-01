@@ -55,7 +55,11 @@ def page_of(*lines: Line, number: int = 1, height: float = 842.0) -> RawPage:
         ("（一）市場風險", 3),
         ("(三)匯率風險", 3),
         ("（1）細項", 4),
-        ("1. 概述", 1),
+        # A bare arabic number is level 4, matching （1）: in these filings the hierarchy runs
+        # 壹/貳 -> 一/二 -> （一）/（二） -> 1./2., so it is the deepest customary level. This
+        # asserted 1 until the consequence was measured -- every numbered list item became a
+        # new top-level section, 518 of them in 1301-FY2023-AR against the ten a filing has.
+        ("1. 概述", 4),
         ("1.2 明細", 2),
         ("3.4.5 子項", 3),
     ],
@@ -95,10 +99,15 @@ def test_a_table_row_beginning_with_a_figure_is_not_numbering(text: str) -> None
 
 @pytest.mark.parametrize(
     ("text", "level"),
-    [("1. 概述", 1), ("1、概述", 1), ("1.2 明細", 2), ("1.2.3 子項", 3)],
+    [("1. 概述", 4), ("1、概述", 4), ("1.2 明細", 2), ("1.2.3 子項", 3)],
 )
 def test_real_arabic_numbering_still_works(text: str, level: int) -> None:
-    """A dot or 、 is what makes numbering unambiguous; a space alone is not."""
+    """A dot or 、 is what makes numbering unambiguous; a space alone is not.
+
+    A single number is level 4 and a dotted one takes its depth from the dots, so 1.2 is
+    shallower than 1. -- which reads oddly and is right: 1.2 names a second-level item
+    explicitly, while a bare 1. is a list marker at the bottom of the hierarchy.
+    """
     assert detect_numbering_level(text) == level
 
 
@@ -578,9 +587,9 @@ def test_a_decimal_is_not_heading_numbering(text: str) -> None:
 @pytest.mark.parametrize(
     ("text", "level"),
     [
-        ("1. 產品方面", 1),
-        ("2、公司概況", 1),
-        ("10.結論", 1),
+        ("1. 產品方面", 4),
+        ("2、公司概況", 4),
+        ("10.結論", 4),
         ("1.2 明細", 2),
         ("一、營運概況", 2),
         ("壹、公司簡介", 1),
@@ -590,3 +599,16 @@ def test_a_decimal_is_not_heading_numbering(text: str) -> None:
 def test_real_headings_still_detected_after_the_decimal_fix(text: str, level: int) -> None:
     """The lookahead must reject decimals without rejecting numbered headings."""
     assert detect_numbering_level(text) == level
+
+
+def test_a_numbered_list_item_does_not_become_a_top_level_section() -> None:
+    """The consequence that made the level wrong, stated as a property.
+
+    A bare `1.` at level 1 resets the section stack, so every numbered list in the document
+    starts a new root. Measured: 518 top-level sections in 1301-FY2023-AR and 424 in
+    2412-FY2023-AR, against 22 and 18 after the fix -- and 2882-FY2024-AR came out at exactly
+    ten, which is what an annual report has (壹 through 拾).
+    """
+    assert detect_numbering_level("1. 概述") is not None
+    assert detect_numbering_level("1. 概述") > detect_numbering_level("一、公司概況")  # type: ignore[operator]
+    assert detect_numbering_level("1. 概述") == detect_numbering_level("（1）細項")

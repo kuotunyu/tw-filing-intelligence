@@ -85,6 +85,10 @@ _DOTTED_NUMBER = re.compile(r"^(\d{1,2}(?:\.\d{1,2})+)[.、\s]")
 #: holding one chunk, and 29% of chunks under 50 characters all follow from this one pattern.
 _SINGLE_NUMBER = re.compile(r"^(\d{1,2})[.、](?!\d)")
 
+#: The level a bare ``1.`` implies. Matches ``(1)`` in the table above, because both are the
+#: deepest customary level in these filings rather than the shallowest.
+_ARABIC_LEVEL = 4
+
 #: A line ending in sentence punctuation is prose, not a heading.
 _SENTENCE_END = ("。", "；", ".", ";", "，", ",", "、")
 
@@ -152,7 +156,7 @@ class RawPage:
 def detect_numbering_level(text: str) -> int | None:
     """Return the heading level implied by a numbering prefix, if any.
 
-    ``一、`` is level 2, ``（一）`` level 3, ``1.2.3`` level 3 (one per component).
+    ``一、`` is level 2, ``（一）`` level 3, ``1.`` level 4, ``1.2.3`` level 3.
     Returns ``None`` when the text carries no recognised numbering.
     """
     stripped = text.strip()
@@ -165,7 +169,12 @@ def detect_numbering_level(text: str) -> int | None:
     if dotted:
         return min(dotted.group(1).count(".") + 1, 6)
     if _SINGLE_NUMBER.match(stripped):
-        return 1
+        # Level 4, not 1. The convention in these filings runs 壹/貳 -> 一/二 -> （一）/（二） ->
+        # 1./2., so a bare arabic number is the *deepest* customary level, and ``(1)`` above
+        # already maps there. Returning 1 made every numbered list item in the document a
+        # top-level section: 1301-FY2023-AR reported 518 of them against the ten a filing
+        # has, because each list restarts at 1. and each got its own root.
+        return _ARABIC_LEVEL
     return None
 
 
