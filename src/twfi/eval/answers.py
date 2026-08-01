@@ -160,31 +160,72 @@ def token_f1(predicted: str, gold: str) -> float:
     return 2 * precision * recall / (precision + recall)
 
 
-def numeric_match(predicted: str, record: GoldRecord) -> bool | None:
-    """Whether a figure falls within the declared tolerance. ``None`` if this is not numeric.
+#: A figure inside a longer answer. Comma-grouped, decimal, or a bare integer -- unlike the
+#: parsing side of this repository, an *answer* is short enough that a bare integer in it is
+#: almost certainly the answer rather than a note reference.
+_FIGURE_IN_TEXT = re.compile(r"-?\d+(?:\.\d+)?")
 
-    Protocol 3.1 rule 7: numeric questions compare as numbers, never as strings, so
-    「530,738,356」 and 「530738356」 agree and 「530,738,357」 does not.
+
+def _figures(text: str, *, unit: str | None) -> list[Decimal]:
+    """Every figure an answer states, in order.
+
+    A cross-period question's gold answer is 「民國111年度 511,254,407 千元；民國112年度
+    530,738,356 千元」 -- two figures, and an answer giving only the first is not correct. Taking
+    just the leading number scored every two-value answer as though it were a one-value one, which
+    marked 「95.40%、82.82%」 wrong against a gold that says exactly those two numbers.
     """
-    if record.answer is None:
-        return None
-    expected = _magnitude(record.answer, unit=record.unit)
-    if expected is None:
-        return None
-    got = _magnitude(predicted, unit=record.unit)
-    if got is None:
-        return False
+    flat = normalise_text(text)
+    # 1. Parenthesised negatives, before anything strips the brackets (rule 3).
+    flat = re.sub(r"[(（]\s*(\d[\d.]*)\s*[)）]", r"-\1", flat)
+    # 2. The declared unit, but only where it *follows a figure* -- that is the position in which
+    #    it would otherwise be read as a magnitude word. 「530738356千元」 loses 千元 and keeps its
+    #    value; 「1.2億」 under a unit of 元 keeps 億, which step 3 then expands.
+    declared = normalise_text(unit) if unit else ""
+    if declared:
+        flat = re.sub(rf"(?<=\d)\s*{re.escape(declared)}", " ", flat)
+    # 3. Remaining CJK magnitude words multiply the figure they follow (rule 2).
+    for word, scale in CJK_UNIT_SCALES.items():
+        flat = re.sub(
+            rf"(-?\d+(?:\.\d+)?)\s*{word}",
+            lambda match, factor=scale: str(Decimal(match.group(1)) * factor),  # type: ignore[misc]
+            flat,
+        )
+    # 4. Years are labels, not values: 「民國111年度 511,254,407」 states one figure, not two.
+    flat = re.sub(r"-?\d+(?:\.\d+)?\s*年", " ", flat)
+    return [Decimal(match) for match in _FIGURE_IN_TEXT.findall(flat)]
+
+
+def _within(got: Decimal, expected: Decimal, record: GoldRecord) -> bool:
     tolerance = record.tolerance
     if tolerance is None:
         return got == expected
     if tolerance.type == "absolute":
         return abs(got - expected) <= Decimal(str(tolerance.value))
-    #: Relative to the gold value. A gold of zero admits only an exact zero -- any relative
-    #: window around zero has zero width, and widening it would be inventing a tolerance the
-    #: annotator did not declare.
+    # Relative to the gold value. A gold of zero admits only an exact zero -- any relative window
+    # around zero has zero width, and widening it would invent a tolerance nobody declared.
     if expected == 0:
         return got == 0
     return abs(got - expected) / abs(expected) <= Decimal(str(tolerance.value))
+
+
+def numeric_match(predicted: str, record: GoldRecord) -> bool | None:
+    """Whether the stated figures match gold's, within tolerance. ``None`` if this is not numeric.
+
+    Protocol 3.1 rule 7: numeric questions compare as numbers, never as strings, so
+    「530,738,356」 and 「530738356」 agree and 「530,738,357」 does not.
+
+    *Figures*, plural. A cross-period answer states two, and both must be right; requiring the
+    same count is what stops an answer that gives one of two from passing.
+    """
+    if record.answer is None:
+        return None
+    wanted = _figures(roc_to_common_era(record.answer), unit=record.unit)
+    if not wanted:
+        return None
+    got = _figures(roc_to_common_era(predicted), unit=record.unit)
+    if len(got) != len(wanted):
+        return False
+    return all(_within(a, b, record) for a, b in zip(got, wanted, strict=True))
 
 
 def unit_match(predicted_unit: str | None, record: GoldRecord) -> bool | None:

@@ -454,7 +454,15 @@ D-024 的範圍比原本記的大。
 7. ~~**可信的壞字偵測器**~~ → ✅ **完成（D-033）**：白名單從全 corpus 的字元普查寫出來，
    不是猜的。乾淨／損壞相差五十倍，門檻 5% 落在量出來的空隙裡。
    抓出的兩份**正是 dev 的兩份**，而 `readable%` 給它們 95%／96%。
-8. `run_eval` —— 需要生成（GPU）。
+8. ~~`run_eval`~~ → ✅ **F0–F3 端到端可跑（D-040）**。F4–F7 仍未實作
+   （numeric route／chart caption／crop answering／typed routing），
+   `run_eval` 的輸出與產物都明確列出這四階沒跑，且**不寫 `results/feasibility/`**。
+   **第一次端到端結果：答對 3–5/15，而瓶頸是「過度拒答」不是檢索** ——
+   dev 只有 2 題該拒答，系統拒答 8–13 題。下一步是調 prompt，
+   判準要用 refusal precision（目前 15–25%），不是 overall correct。
+10. **F4–F7 需要的模組**：`twfi/numeric` 的 SQL route 接線、`twfi/chart/`（不存在）、
+    `twfi/router/`（不存在）。這是 ⑤A 完成定義第 5 條「baseline 與 candidate 都完整執行」
+    尚未滿足的部分。
 9. **`2317-FY2024-FS` p14 的代碼欄損益表版型**（D-032 剩下的那 1 個未取到目標）。
    **刻意留著**：那一頁只在 locked，為它調整抽取器就是在 locked 上調參。
    要修得先在 dev 上找到同型頁面，否則 freeze 後寫成已知限制。

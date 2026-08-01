@@ -244,6 +244,38 @@ def test_a_scale_word_still_expands_when_it_is_not_the_unit() -> None:
     assert numeric_match("1.2億", entry) is True
 
 
+def test_a_two_figure_answer_needs_both_figures() -> None:
+    """A cross-period answer states two, and giving one of them is not correct.
+
+    Taking only the leading number scored 「95.40%、82.82%」 wrong against a gold saying exactly
+    those two, because the comparison never looked past the first.
+    """
+    entry = record(
+        answer="民國111年 95.40%；民國112年 82.82%",
+        unit="%",
+        tolerance=Tolerance(type="absolute", value=0.1),
+    )
+    assert numeric_match("95.40%、82.82%", entry) is True
+    assert numeric_match("95.40%", entry) is False, "one of two figures is not the answer"
+    assert numeric_match("95.40%、99.99%", entry) is False
+
+
+def test_year_labels_are_not_counted_as_figures() -> None:
+    """民國111年度 511,254,407 states one figure, not two."""
+    entry = record(answer="民國112年度 530,738,356 千元", unit="千元")
+    assert numeric_match("530,738,356", entry) is True
+
+
+def test_figure_order_matters_for_a_period_comparison() -> None:
+    """Swapping the two years' figures is a different, wrong answer."""
+    entry = record(
+        answer="民國111年 95.40%；民國112年 82.82%",
+        unit="%",
+        tolerance=Tolerance(type="absolute", value=0.1),
+    )
+    assert numeric_match("82.82%、95.40%", entry) is False
+
+
 # ----------------------------------------------------------- the primary metric
 
 
