@@ -362,6 +362,37 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
   unanswerable`，並保留 `reason` 與 `confidence`。
   **最多一次 bounded correction**；無上限 agent loop 禁止。
 
+**numeric store 的來源（2026-08-02 補入，freeze 前；⚠️ 待使用者批准）**
+
+本節原本沒有寫明 numeric route 讀哪一個 store，而實作上有兩個，
+且**選哪一個會改變 F4 的數字**。這個缺口必須在 freeze 前補上：
+留著不寫，等於允許 locked run 之後挑一個對自己有利的 store，那會讓整份研究失效。
+
+| store | 建立方式 | 覆蓋範圍 |
+|---|---|---|
+| `numeric.duckdb` | `load_historical.py`，只載入 gold `structured_source_key` 指名的格 | gold 指名者 |
+| `numeric_broad.duckdb` | `load_all_rows.py`，全語料逐頁抽取，**不看 gold** | 每個可分類的 row |
+
+**註冊的讀法：locked run 使用 `numeric_broad.duckdb`。**
+理由**只有原則，沒有數字**：
+
+1. gold-keyed store 的內容是 locked **答案卷**的函數 ——
+   系統會剛好拿到它將被問到的那幾格。那不是覆蓋率，是安排，
+   F4 的 locked 數字也就無法當成能力宣稱來讀。
+2. `load_all_rows.py` 全程不看 gold，所以它的覆蓋率是**管線的性質**。
+   RQ2 問的是「官方結構化數值走 deterministic SQL 是否勝過讓模型讀回數字」，
+   只有後者能回答這個問題。
+3. 這與 `CLAUDE.md` 規則 4（gold 不得由 candidate 產生）是同一條原則的另一面：
+   **candidate 的輸入也不得由 gold 產生。**
+
+> **誠實揭露**：寫下這段時 dev 上兩個 store 的數字都已經量過
+> （gold-keyed 7/15、broad 11/15，見 D-044）。
+> 依 §2.5 澄清段的同一個承諾，**已量到的數字不作為本段的理由** ——
+> 上面三點若把數字反過來也完全成立（broad store 較差時，
+> 它仍然是唯一能回答 RQ2 的那一個，而 gold-keyed 的高分仍然是安排出來的）。
+> 但「先決定再看數字」這個條件在事實上已經破了，
+> 所以本段**標為待使用者批准**，而不是由實作者逕行寫定。
+
 ### 2.5 固定超參數（在 DEV 上決定，locked run 前寫死）
 
 `top_k_retrieve=20`、`top_k_rerank=5`、baseline `top_k=5`、

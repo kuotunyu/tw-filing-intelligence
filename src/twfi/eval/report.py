@@ -63,6 +63,14 @@ REQUIRED_LIMITATIONS: Final[tuple[tuple[str, str], ...]] = (
     # unreachable so every dev retrieval rate has a 14/15 ceiling, and no measured difference
     # reaches p<0.05. Protocol "DEV 集合的聚集性" states what the report must say.
     ("dev_clustering", "That dev's 15 questions cover only four distinct evidence targets"),
+    # Added 2026-08-02 from measurement, before the freeze. `numeric_coverage` says what the store
+    # holds; this says whether what it holds is right, which is a different claim and the one a
+    # report is likelier to drop. Ingesting the whole corpus rather than the cells gold names
+    # (D-044) showed the account name is not a key: 34% of locked keys carry conflicting values
+    # -- 2882 is 94%, its notes repeating 資產總計 for every subsidiary -- and the store keeps
+    # whichever page was read last. Dev is at 0% after reading consolidated-vs-parent-only off the
+    # page heading, so a dev figure does not license a claim about locked.
+    ("numeric_ambiguity", "That an account name is not a unique key in a filing"),
 )
 
 
