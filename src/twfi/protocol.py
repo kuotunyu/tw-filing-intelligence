@@ -40,6 +40,13 @@ __all__ = [
     "POOLED_HARD_SIZE",
     "ROUTE_BY_QUESTION_TYPE",
     "FACTOR_IDS",
+    "TOP_K_RETRIEVE",
+    "TOP_K_RERANK",
+    "BASELINE_TOP_K",
+    "RRF_K",
+    "RECALL_AT",
+    "MRR_AT",
+    "COVERAGE_AT",
     "BASELINE_FACTOR",
     "CANDIDATE_FACTOR",
     "Gates",
@@ -296,6 +303,25 @@ CANDIDATE_FACTOR: Final = "F7"
 
 #: Protocol 2.3. The chart challenger switches models only on a clear margin.
 CHALLENGER_SWITCH_MIN_GAIN_PP: Final = 10.0
+
+#: Protocol 2.5. Fixed on dev, written down before the locked run, identical for F0 through F7 --
+#: retuning them per rung would move retrieval strength between rungs and make each factor's
+#: delta unattributable.
+TOP_K_RETRIEVE: Final = 20
+TOP_K_RERANK: Final = 5
+BASELINE_TOP_K: Final = 5
+RRF_K: Final = 60
+
+#: Protocol 3.2. The cutoffs the four retrieval metrics are defined at.
+#:
+#: These are constants, not options. `eval_retrieval.py` spent its development reporting
+#: page-level recall at 10 and 20 -- adjacent quantities that the study does not gate on -- and
+#: `fetch_depth` was chosen against one of them. Naming the registered cutoffs here is what stops
+#: a convenient cutoff being reported as if it were the pre-registered one.
+RECALL_AT: Final = 5
+MRR_AT: Final = 10
+#: Complete-evidence and cross-page coverage are both judged over the same top-5 as Recall@5.
+COVERAGE_AT: Final = 5
 
 
 # -------------------------------------------------------------------------- gates

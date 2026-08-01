@@ -18,7 +18,7 @@ have the larger scale, and the mixing weight becomes a free parameter nobody mea
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -28,7 +28,17 @@ from twfi.index.dense import search as dense_search
 from twfi.index.fusion import RrfConfig, reciprocal_rank_fusion
 from twfi.index.lexical import Bm25Index
 
-__all__ = ["Hit", "Mode", "Retriever", "characters_of", "recall_at_budget", "recall_at_k"]
+__all__ = [
+    "Hit",
+    "Mode",
+    "Retriever",
+    "characters_of",
+    "covered_targets",
+    "hit_rank",
+    "recall_at_budget",
+    "recall_at_k",
+    "reciprocal_rank",
+]
 
 #: ``lexical`` is F0/F1, ``hybrid`` is F2 onward. Named after what they are rather than after
 #: the factor, so a change to the ladder does not require renaming a retrieval mode.
@@ -170,6 +180,49 @@ def recall_at_k(hits: Sequence[Hit], *, doc_id: str, pages: Sequence[int]) -> bo
         return False
     wanted = set(pages)
     return any(hit.doc_id == doc_id and wanted & set(hit.pages) for hit in hits)
+
+
+def hit_rank(hits: Sequence[Hit], targets: Collection[tuple[str, int]]) -> int | None:
+    """The 1-based rank of the first hit covering any required target, or ``None``.
+
+    Targets are ``(document, page)`` pairs from a gold record's ``required_evidence``. Taking
+    them as an explicit set rather than a single ``doc_id`` plus pages is what makes
+    ``cross_document`` questions scoreable: their evidence lives in two filings, and a metric
+    keyed on one document silently ignores half of it.
+    """
+    wanted = set(targets)
+    if not wanted:
+        return None
+    for position, hit in enumerate(hits, start=1):
+        if any((hit.doc_id, page) in wanted for page in hit.pages):
+            return position
+    return None
+
+
+def reciprocal_rank(hits: Sequence[Hit], targets: Collection[tuple[str, int]], *, k: int) -> float:
+    """Protocol 3.2's MRR contribution for one question: ``1/rank``, or 0 beyond ``k``.
+
+    Zero rather than omitted when nothing is found within ``k``: dropping unfound questions from
+    the mean would make a retriever look better the more often it failed completely.
+    """
+    rank = hit_rank(hits, targets)
+    return 1.0 / rank if rank is not None and rank <= k else 0.0
+
+
+def covered_targets(
+    hits: Sequence[Hit], targets: Collection[tuple[str, int]], *, k: int
+) -> frozenset[tuple[str, int]]:
+    """Which required targets the top ``k`` hits collectively reach.
+
+    The input to protocol 3.2's complete-evidence and cross-page coverage metrics. Collectively,
+    because a question whose evidence spans two pages is answerable only if *both* arrive -- and
+    Recall@5, which asks whether *any* of them arrived, cannot see the difference.
+    """
+    wanted = set(targets)
+    found: set[tuple[str, int]] = set()
+    for hit in hits[:k]:
+        found.update((hit.doc_id, page) for page in hit.pages if (hit.doc_id, page) in wanted)
+    return frozenset(found)
 
 
 def characters_of(text: str) -> int:

@@ -13,10 +13,12 @@ import pytest
 from twfi.paths import RepoPaths
 from twfi.protocol import (
     BASELINE_FACTOR,
+    BASELINE_TOP_K,
     CANDIDATE_FACTOR,
     CHALLENGER_ITEMS,
     CHALLENGER_SWITCH_MIN_GAIN_PP,
     COMPANIES,
+    COVERAGE_AT,
     DECLARED_DOCUMENTS,
     DEV_COMPANY_CODES,
     DEV_TOTAL,
@@ -26,10 +28,15 @@ from twfi.protocol import (
     LOCKED_COMPANY_CODES,
     LOCKED_TOTAL,
     LOCKED_TYPE_COUNTS,
+    MRR_AT,
     POOLED_HARD_SIZE,
     PROBE_COUNT,
+    RECALL_AT,
     ROUTE_BY_QUESTION_TYPE,
+    RRF_K,
     SINGLE_GATE_CATEGORIES,
+    TOP_K_RERANK,
+    TOP_K_RETRIEVE,
     USABLE_DOCUMENTS,
     consistency_problems,
     split_for_company,
@@ -311,3 +318,45 @@ def test_chart_cannot_satisfy_the_single_category_gate_alone() -> None:
     assert "chart_value_trend" in HARD_CATEGORIES
     assert "chart_value_trend" not in SINGLE_GATE_CATEGORIES
     assert 100.0 / LOCKED_TYPE_COUNTS["chart_value_trend"] == 50.0
+
+
+# ------------------------------ the retrieval metrics and their fixed hyperparameters
+#
+# These were the drift this file exists to catch and did not. The document pre-registered
+# Recall@5 and MRR@10 in section 3.2; the implementation measured page-level recall at 10 and 20,
+# and fetch_depth was chosen against a cutoff the study does not gate on. Nothing compared the two
+# because no test read the document for these numbers.
+
+
+def test_the_registered_retrieval_cutoffs_match_the_document(protocol_doc: str) -> None:
+    assert f"**Recall@{RECALL_AT}**" in protocol_doc
+    assert f"**MRR@{MRR_AT}**" in protocol_doc
+    assert COVERAGE_AT == RECALL_AT, (
+        "complete-evidence coverage is judged over the same top-k as Recall@5 (protocol 3.2)"
+    )
+
+
+def test_the_document_names_all_four_retrieval_metrics(protocol_doc: str) -> None:
+    """Four metrics are registered; measuring a subset is measuring something else."""
+    for phrase in (
+        f"Recall@{RECALL_AT}",
+        f"MRR@{MRR_AT}",
+        "complete evidence coverage",
+        "cross-page evidence coverage",
+    ):
+        assert phrase in protocol_doc, phrase
+
+
+def test_the_fixed_hyperparameters_match_the_document(protocol_doc: str) -> None:
+    """Protocol 2.5. Identical for F0 through F7, or the ladder deltas stop being attributable."""
+    assert f"`top_k_retrieve={TOP_K_RETRIEVE}`" in protocol_doc
+    assert f"`top_k_rerank={TOP_K_RERANK}`" in protocol_doc
+    assert f"baseline `top_k={BASELINE_TOP_K}`" in protocol_doc
+    assert f"RRF `k={RRF_K}`" in protocol_doc
+
+
+def test_the_rrf_constant_matches_the_fusion_default() -> None:
+    """The protocol fixes k=60; the fusion module must not carry a different default."""
+    from twfi.index.fusion import RrfConfig
+
+    assert RrfConfig().k == RRF_K

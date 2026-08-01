@@ -61,13 +61,23 @@ from twfi.eval.gates import mcnemar_exact, wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
 from twfi.index.embeddings import chunk_text_digest, load_vectors, utc_now
 from twfi.index.lexical import load_index
-from twfi.index.retrieve import Hit, Retriever, characters_of, recall_at_budget, recall_at_k
+from twfi.index.retrieve import (
+    Hit,
+    Retriever,
+    characters_of,
+    covered_targets,
+    hit_rank,
+    recall_at_budget,
+    recall_at_k,
+    reciprocal_rank,
+)
 from twfi.io.hashing import sha256_text_file
 from twfi.io.jsonl import read_lines
 from twfi.paths import repo_paths
+from twfi.protocol import COVERAGE_AT, MRR_AT, RECALL_AT
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
 app = typer.Typer(add_completion=False, help=__doc__)
 
@@ -149,14 +159,15 @@ def main(
     embed = _cpu_embedder()
     rows: list[dict[str, Any]] = []
     budget_rows: list[dict[str, Any]] = []
+    protocol_rows: list[dict[str, Any]] = []
     provenance: dict[str, Any] = {
         "measured_at": utc_now(),
         "gold_sha256": sha256_text_file(source),
         "question_ids": [record.question_id for record in records],
         "indexes": {},
     }
-    header = f"{'parser':<10} {'mode':<8} " + " ".join(f"{'r@' + str(c):>12}" for c in cutoffs)
     typer.echo("")
+    header = f"{'parser':<10} {'mode':<8} " + " ".join(f"{'r@' + str(c):>12}" for c in cutoffs)
     typer.echo(header)
 
     for parser in PARSERS:
@@ -199,6 +210,16 @@ def main(
         )
         for mode in MODES:
             cells: list[str] = []
+            # Protocol 3.2's four metrics, computed from one deep ranking per question so that
+            # every cutoff reads off the same candidate pool.
+            ranked_by_question = {
+                record.question_id: retriever.search(record.question, depth, mode=mode)  # type: ignore[arg-type]
+                for record in records
+            }
+            registered = _protocol_metrics(records, ranked_by_question)
+            registered.update({"parser": parser, "mode": mode})
+            protocol_rows.append(registered)
+
             for cutoff in cutoffs:
                 started = time.perf_counter()
                 outcomes: dict[str, bool] = {}
@@ -280,6 +301,25 @@ def main(
                     }
                 )
 
+    if protocol_rows:
+        typer.echo("")
+        typer.echo("protocol 3.2 -- the four pre-registered metrics, scored on required_evidence")
+        typer.echo(
+            f"{'parser':<10} {'mode':<8} {'Recall@' + str(RECALL_AT):>9}"
+            f"  {'MRR@' + str(MRR_AT):>7}  {'complete@' + str(COVERAGE_AT):>11}  {'x-page':>7}"
+        )
+        for entry in protocol_rows:
+            typer.echo(
+                f"{entry['parser']:<10} {entry['mode']:<8}"
+                f" {entry[f'recall_at_{RECALL_AT}']:>6}/{entry['n']}"
+                f"  {entry[f'mrr_at_{MRR_AT}']:>7.3f}"
+                f"  {entry[f'complete_at_{COVERAGE_AT}']:>8}/{entry['n']}"
+                f"  {entry['cross_page_covered']:>4}/{entry['cross_page_n']}"
+            )
+        typer.echo(
+            "  (x-page applies only to questions whose evidence spans >=2 pages; dev has one)"
+        )
+
     if budget_rows:
         typer.echo("")
         typer.echo("recall at a matched character budget -- this is the cross-parser comparison")
@@ -351,6 +391,7 @@ def main(
         "distinct_targets": len(
             {(record.source_document[0], record.page_numbers) for record in records}
         ),
+        "protocol_rows": protocol_rows,
         "rows": rows,
         "budget_rows": budget_rows,
         "monotonicity_problems": monotone,
@@ -513,6 +554,56 @@ def _significance_report(rows: list[dict[str, Any]], *, key: str, cutoff: Any) -
             f" {only_left}+/{only_right}- discordant, p={probability:.3f}{verdict}"
         )
     return lines
+
+
+def _protocol_metrics(
+    records: Sequence[GoldRecord], ranked: Mapping[str, Sequence[Hit]]
+) -> dict[str, Any]:
+    """Protocol 3.2's four retrieval metrics over one gold set.
+
+    Scored against ``required_evidence``, which is what the protocol defines them over, rather
+    than against ``page_numbers``. The two agree on this corpus; using the field the protocol
+    names is what stops them diverging later without anyone noticing.
+
+    ``cross_page_n`` is reported beside its numerator because the metric only applies to
+    questions whose evidence spans two or more pages, and on dev there is exactly one of those.
+    A rate of 1/1 is not evidence of anything, and printing the denominator is what says so.
+    """
+    recall_hits: dict[str, bool] = {}
+    complete_hits: dict[str, bool] = {}
+    reciprocal_total = 0.0
+    cross_page_total = 0
+    cross_page_hits = 0
+
+    for record in records:
+        targets = record.evidence_targets
+        hits = ranked.get(record.question_id, ())
+        rank = hit_rank(hits, targets)
+        recall_hits[record.question_id] = rank is not None and rank <= RECALL_AT
+        reciprocal_total += reciprocal_rank(hits, targets, k=MRR_AT)
+        covered = covered_targets(hits, targets, k=COVERAGE_AT)
+        complete = bool(targets) and covered == targets
+        complete_hits[record.question_id] = complete
+        if len({page for _, page in targets}) >= 2:
+            cross_page_total += 1
+            cross_page_hits += int(complete)
+
+    total = len(records)
+    recall_correct = sum(recall_hits.values())
+    complete_correct = sum(complete_hits.values())
+    recall_low, recall_high = wilson_interval(recall_correct, total)
+    return {
+        "n": total,
+        f"recall_at_{RECALL_AT}": recall_correct,
+        f"recall_at_{RECALL_AT}_rate": round(recall_correct / total, 4) if total else 0.0,
+        f"recall_at_{RECALL_AT}_ci95": [round(recall_low, 4), round(recall_high, 4)],
+        f"mrr_at_{MRR_AT}": round(reciprocal_total / total, 4) if total else 0.0,
+        f"complete_at_{COVERAGE_AT}": complete_correct,
+        "cross_page_covered": cross_page_hits,
+        "cross_page_n": cross_page_total,
+        "recall_outcomes": {qid: int(value) for qid, value in sorted(recall_hits.items())},
+        "complete_outcomes": {qid: int(value) for qid, value in sorted(complete_hits.items())},
+    }
 
 
 def _p_of(line: str) -> float | None:

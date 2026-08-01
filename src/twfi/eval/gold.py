@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -181,6 +182,11 @@ class StructuredSourceKey:
             raise ValueError("a structured source key needs both a table and a row key")
 
 
+#: ``<doc>#p<page>`` with an optional ``/row/column`` tail. Every evidence reference in the dev,
+#: locked and probe sets matches this; see :attr:`EvidenceRef.location`.
+_EVIDENCE_LOCATION: Final = re.compile(r"^(?P<doc>[A-Za-z0-9\-]+)#p(?P<page>\d+)(?:/.*)?$")
+
+
 @dataclass(frozen=True, slots=True)
 class EvidenceRef:
     kind: EvidenceKind
@@ -189,6 +195,24 @@ class EvidenceRef:
     def __post_init__(self) -> None:
         if not self.ref.strip():
             raise ValueError(f"{self.kind} evidence needs a reference")
+
+    @property
+    def location(self) -> tuple[str, int] | None:
+        """The ``(document, page)`` this reference names, or ``None`` if it names none.
+
+        Refs are written ``<doc>#p<page>`` with an optional ``/row/column`` or ``/series/label``
+        tail: ``1301-FY2023-AR#p188/資產總計/112年度``. All 59 references across the dev, locked
+        and probe sets parse this way, checked rather than assumed.
+
+        Page rather than cell, because this is what *retrieval* can be scored against. Retrieval
+        returns chunks; a chunk is not a table cell, so the finest unit both sides share is the
+        page the cell sits on. Protocol 3.2's Recall@5 and complete-evidence coverage are defined
+        over ``required_evidence``, and this is the part of an evidence item a retriever can hit.
+        """
+        match = _EVIDENCE_LOCATION.match(self.ref.strip())
+        if match is None:
+            return None
+        return match.group("doc"), int(match.group("page"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,6 +318,19 @@ class GoldRecord:
     @property
     def evidence_kinds(self) -> frozenset[str]:
         return frozenset(item.kind for item in self.required_evidence)
+
+    @property
+    def evidence_targets(self) -> frozenset[tuple[str, int]]:
+        """Every ``(document, page)`` that ``required_evidence`` names.
+
+        The input to protocol 3.2's four retrieval metrics. Derived from ``required_evidence``
+        rather than from ``page_numbers`` because that is what the protocol says the metrics are
+        defined over -- the two agree on this corpus, and deriving from the field the protocol
+        names means they cannot silently diverge later.
+        """
+        return frozenset(
+            location for item in self.required_evidence if (location := item.location) is not None
+        )
 
 
 @dataclass(frozen=True, slots=True)
