@@ -133,17 +133,21 @@ def main(
             typer.echo(f"{parser}: no index; run build_index.py first")
             continue
         chunks = read_lines(directory / "chunks.jsonl")
-        bm25, _ = load_index(directory, expect_documents=len(chunks))
+        bm25, lexical_manifest = load_index(directory, expect_documents=len(chunks))
         # Through load_vectors, not np.load. This line used to read the array directly, which
         # bypassed every check that makes a vector set answerable for itself -- so the claim in
         # D-031 that `load_vectors(expect_rows=...)` would stop a stale index from being searched
         # was false on the one path that measures recall. A stale index here does not raise; it
         # returns confident numbers for chunks that no longer exist.
         try:
-            vectors, _ = load_vectors(directory, expect_rows=len(chunks))
+            vectors, vector_manifest = load_vectors(directory, expect_rows=len(chunks))
         except (FileNotFoundError, ValueError) as exc:
             typer.echo(f"{parser}: {exc}")
             raise typer.Exit(code=2) from exc
+        drift = _chunk_id_drift(chunks, lexical_manifest, vector_manifest)
+        if drift:
+            typer.echo(f"{parser}: {drift}")
+            raise typer.Exit(code=2)
         retriever = Retriever(
             chunks=chunks, bm25=bm25, vectors=vectors, embed_query=embed, fetch_depth=depth
         )
@@ -217,6 +221,38 @@ def main(
     typer.echo(f"wrote: {destination.relative_to(paths.root)}")
     if monotone:
         raise typer.Exit(code=1)
+
+
+def _chunk_id_drift(
+    chunks: list[dict[str, Any]],
+    lexical_manifest: dict[str, Any],
+    vector_manifest: dict[str, Any],
+) -> str:
+    """Whether either index was built from different chunks than the ones on disk.
+
+    The row-count checks above are necessary and not sufficient: two chunkings of the same corpus
+    can produce the same number of chunks, and then a stale index passes every count and returns
+    results for text that no longer exists. Both manifests record the first few chunk ids for
+    exactly this comparison, so it costs nothing to make.
+
+    Returns an empty string when everything agrees, so the caller can treat it as a message.
+    """
+    head = [str(chunk.get("chunk_id", "")) for chunk in chunks[:5]]
+    for name, manifest in (("lexical", lexical_manifest), ("dense", vector_manifest)):
+        recorded = [str(value) for value in manifest.get("chunk_ids_head") or []]
+        if not recorded:
+            # An index built before the manifests carried ids. Nothing to compare, and saying so
+            # is better than reporting agreement that was never checked.
+            return (
+                f"the {name} manifest records no chunk ids, so it cannot be shown to belong to "
+                "this chunking; rebuild it"
+            )
+        if recorded != head[: len(recorded)]:
+            return (
+                f"the {name} index was built from different chunks: it records {recorded[0]!r} "
+                f"first, this corpus starts with {head[0]!r}; rebuild rather than search it"
+            )
+    return ""
 
 
 def _chunk_profile(paths: Any) -> dict[str, Any]:

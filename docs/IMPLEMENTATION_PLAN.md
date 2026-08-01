@@ -200,9 +200,11 @@ index build 有 cold/warm 計時；`Recall@5` 在 DEV 上有合理數字。
 - `src/twfi/chart/caption.py` — 對 figure crop 產生 caption（**只進 index**）
 - `src/twfi/chart/crop_answer.py` — 最終答案由 original crop pixels 產生，
   輸出 `{value, unit, crop_page, bbox, model, source_document}`
-- `scripts/run_chart_challenger.py` — protocol §2.3 的一次性比較
-  （DEV 16 題，`qwen3.6:27b` vs `qwen3-vl:8b`），輸出寫入
-  `results/runs/chart_challenger/` 並由 `scripts/pin_models.py` 記入 lock
+- ~~`scripts/run_chart_challenger.py`~~ — **已取消，不會寫（D-021）**：DEV 的兩份文件
+  沒有圖表，16 題無從出題，所以 protocol §2.3 的一次性比較沒有資料可比。
+  chart route 依 §2.3 事前寫死的 fallback 使用 `qwen3.6:27b`，
+  `configs/models.lock.json` 記錄 challenger 為 `cancelled` 及原因，`outcome` 留 `null`。
+  **freeze 之後不得補跑** —— 「freeze 後不比較模型」這條不因 challenger 沒跑而放寬。
 - crop 產物存 `data/cache/crops/`（不 commit）
 
 **DoD**：測試以 fake ollama backend 覆蓋（離線）；contract 保證
