@@ -16,6 +16,18 @@ Measured decisions, not preferences:
   produced 12 degenerate tables totalling 24 cells; ``text`` produced 14 tables with
   2,783 cells, 1,128 of them numeric -- and ran twice as fast. On 2882-FY2024-FS,
   ``lines`` found nothing at all.
+
+  **That measurement was taken on locked filings, and it does not generalise (D-027.)**
+  Both cited documents are locked. Graded against dev's 15 known table figures, ``text``
+  recovers **none of them** and ``lines`` recovers 9: dev's issuers rule their tables with
+  rectangles, and the ``text`` strategy ignores rectangles entirely -- 1301-FY2023-AR p188
+  is a ruled 13x5 comparison table with 101 rects and one line, and ``text`` returns a 41x2
+  smear that the shape filter below correctly rejects.
+
+  So neither strategy dominates, and ``strategy="union"`` runs both and keeps whichever
+  recovered more of each region. It is opt-in until the two knock-ons in D-027 are measured.
+  The lesson is not about pdfplumber: a setting chosen by measuring one split was assumed to
+  hold for a corpus that turned out to be heterogeneous in exactly that respect.
 * **Acceptance thresholds are therefore mandatory.** The ``text`` strategy will
   happily read a table out of aligned prose, so a candidate must have real shape:
   two dimensions, some numbers, and enough filled cells.
@@ -43,6 +55,8 @@ __all__ = [
     "document_unit",
     "inherit_units",
     "is_table_like",
+    "overlap_share",
+    "deduplicate",
     "link_continuations",
     "extract_tables",
     "tables_to_blocks",
@@ -112,7 +126,21 @@ class TableConfig:
     Tunable on the development split only (protocol 1.3).
     """
 
-    strategy: Literal["text", "lines"] = "text"
+    #: ``"union"`` runs both pdfplumber strategies and keeps the better result per region.
+    #: Measured on dev (D-027): ``text`` recovers 0 of dev's 15 known table figures and
+    #: ``lines`` recovers 9, because dev's filings rule their tables with rectangles and the
+    #: text strategy ignores rectangles entirely. Neither strategy dominates across the
+    #: corpus, so the union is the choice that does not require knowing which split favours
+    #: which. Still opt-in: the default stays ``"text"`` until the two consequences named in
+    #: D-027 are measured -- duplicate regions, and the knock-on to chart candidates, which
+    #: are computed by subtracting table regions.
+    strategy: Literal["text", "lines", "union"] = "text"
+    #: Two candidate regions overlapping by at least this share of the smaller one are the
+    #: same table found twice. Chosen to be forgiving: the two strategies bound a table
+    #: differently -- ``lines`` follows the ruling, ``text`` follows the ink -- so requiring
+    #: near-identical boxes would keep both and hand the numeric store two rows claiming one
+    #: figure.
+    overlap_is_duplicate: float = 0.5
     min_rows: int = 2
     min_cols: int = 2
     min_numeric_cells: int = 1
@@ -131,10 +159,18 @@ class TableConfig:
             raise ValueError("min_fill_ratio must be in [0, 1]")
 
     def plumber_settings(self) -> dict[str, str]:
-        return {
-            "vertical_strategy": self.strategy,
-            "horizontal_strategy": self.strategy,
-        }
+        """The single settings dict. For ``"union"`` this is the first one it will try."""
+        return self.plumber_passes()[0]
+
+    def plumber_passes(self) -> tuple[dict[str, str], ...]:
+        """Every pdfplumber configuration to run, in a fixed order.
+
+        Order matters for determinism, not for quality: when two passes recover the same
+        region equally well the earlier one wins, so the result cannot depend on dict
+        iteration order or on which pass happened to finish first.
+        """
+        names = ("text", "lines") if self.strategy == "union" else (self.strategy,)
+        return tuple({"vertical_strategy": name, "horizontal_strategy": name} for name in names)
 
 
 @dataclass(frozen=True, slots=True)
@@ -440,31 +476,100 @@ def extract_tables(
                 page_texts.append("")
             page_texts.append(page_text)
 
-            for candidate in page.find_tables(config.plumber_settings()):
-                rows = tuple(
-                    tuple(normalise(cell or "").strip() for cell in row)
-                    for row in candidate.extract()
-                )
-                if not is_table_like(rows, config):
+            on_this_page: list[Table] = []
+            for settings in config.plumber_passes():
+                try:
+                    candidates = page.find_tables(settings)
+                except Exception:  # noqa: S112 - see comment
+                    # A pass that crashes on a page contributes nothing from that page.
+                    # Deliberately not logged and deliberately not fatal: under a single
+                    # strategy this was an uncaught crash that lost the whole document, and
+                    # with two passes, letting one failure abort the other would throw away
+                    # the tables the surviving pass can see. What a page yielded is visible
+                    # in the output, which is the report that matters.
                     continue
-                bbox = BBox.from_tuple(
-                    (
-                        float(candidate.bbox[0]),
-                        float(candidate.bbox[1]),
-                        float(candidate.bbox[2]),
-                        float(candidate.bbox[3]),
+                for candidate in candidates:
+                    rows = tuple(
+                        tuple(normalise(cell or "").strip() for cell in row)
+                        for row in candidate.extract()
                     )
-                )
-                # The units row sits above the table, so look back through the page
-                # text rather than inside the grid.
-                lookback = page_text[: config.unit_lookback_chars]
-                units = detect_unit(lookback)
-                if not units.is_stated:
-                    units = detect_unit(page_text)
-                found.append(Table(page=number, bbox=bbox, rows=rows, units=units))
+                    if not is_table_like(rows, config):
+                        continue
+                    bbox = BBox.from_tuple(
+                        (
+                            float(candidate.bbox[0]),
+                            float(candidate.bbox[1]),
+                            float(candidate.bbox[2]),
+                            float(candidate.bbox[3]),
+                        )
+                    )
+                    # The units row sits above the table, so look back through the page
+                    # text rather than inside the grid.
+                    lookback = page_text[: config.unit_lookback_chars]
+                    units = detect_unit(lookback)
+                    if not units.is_stated:
+                        units = detect_unit(page_text)
+                    on_this_page.append(Table(page=number, bbox=bbox, rows=rows, units=units))
+            found.extend(deduplicate(tuple(on_this_page), config))
 
     inherited = inherit_units(tuple(found), document_unit(page_texts))
     return link_continuations(inherited, page_heights, config)
+
+
+def overlap_share(left: BBox, right: BBox) -> float:
+    """Intersection area as a share of the smaller box, 0 when they do not meet.
+
+    Not IoU: the two strategies bound the same table differently -- ``lines`` follows the
+    ruling and ``text`` follows the ink, so one box is often strictly inside the other. IoU
+    punishes exactly that case, which is the one this has to recognise.
+    """
+    width = min(left.x1, right.x1) - max(left.x0, right.x0)
+    height = min(left.y1, right.y1) - max(left.y0, right.y0)
+    if width <= 0 or height <= 0:
+        return 0.0
+    smaller = min(
+        (left.x1 - left.x0) * (left.y1 - left.y0),
+        (right.x1 - right.x0) * (right.y1 - right.y0),
+    )
+    return (width * height) / smaller if smaller > 0 else 0.0
+
+
+def _recovery(table: Table) -> tuple[int, int]:
+    """How much a pass got into cells: numeric cells first, then filled cells.
+
+    Numeric cells lead because figures are what the numeric and table routes are for. A pass
+    that merges two number columns into one cell loses a figure even while its total cell
+    count stays respectable, and that loss is the failure worth ranking on.
+    """
+    return (table.numeric_cells, table.cells)
+
+
+def deduplicate(tables: tuple[Table, ...], config: TableConfig) -> tuple[Table, ...]:
+    """Keep one table per region: whichever pass recovered more of it.
+
+    Two passes over one page find the same table twice, and passing both downstream would
+    give the numeric store two rows asserting one figure -- from which no template could tell
+    which is authoritative. Both passes see the same ink, so the better result is simply the
+    one that got more of it into cells rather than losing it to a merged column.
+
+    Ties go to the table that appeared first, so the outcome is fixed by
+    ``plumber_passes()``' declared order rather than by whichever pass ran first.
+    """
+    kept: list[Table] = []
+    for table in tables:
+        merged = False
+        for position, existing in enumerate(kept):
+            if existing.page != table.page:
+                continue
+            if overlap_share(existing.bbox, table.bbox) < config.overlap_is_duplicate:
+                continue
+            if _recovery(table) > _recovery(existing):
+                kept[position] = table
+            merged = True
+            break
+        if not merged:
+            kept.append(table)
+    return tuple(kept)
 
 
 def tables_to_blocks(tables: tuple[Table, ...]) -> tuple[Block, ...]:
