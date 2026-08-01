@@ -28,7 +28,7 @@ from twfi.index.dense import search as dense_search
 from twfi.index.fusion import RrfConfig, reciprocal_rank_fusion
 from twfi.index.lexical import Bm25Index
 
-__all__ = ["Hit", "Mode", "Retriever", "recall_at_k"]
+__all__ = ["Hit", "Mode", "Retriever", "characters_of", "recall_at_budget", "recall_at_k"]
 
 #: ``lexical`` is F0/F1, ``hybrid`` is F2 onward. Named after what they are rather than after
 #: the factor, so a change to the ladder does not require renaming a retrieval mode.
@@ -160,3 +160,49 @@ def recall_at_k(hits: Sequence[Hit], *, doc_id: str, pages: Sequence[int]) -> bo
         return False
     wanted = set(pages)
     return any(hit.doc_id == doc_id and wanted & set(hit.pages) for hit in hits)
+
+
+def characters_of(text: str) -> int:
+    """A chunk's size for budgeting: characters with whitespace removed.
+
+    Whitespace removed because the two parsers lay it out differently -- the layout parser keeps
+    one cell per line where the baseline runs a page together -- and a budget that counted it
+    would spend itself on formatting rather than on content. Measuring the corpus both ways gave
+    2,161,264 against 2,161,561 characters, so the two parsers recover the same text and differ
+    only in whitespace; a comparison that let whitespace count would be comparing layout.
+    """
+    return len("".join(text.split()))
+
+
+def recall_at_budget(
+    hits: Sequence[Hit], *, doc_id: str, pages: Sequence[int], budget: int
+) -> bool:
+    """Whether the gold page is found before a fixed *character* budget is spent.
+
+    The fair cross-parser comparison, and the reason `recall_at_k` is not one (D-030). At one
+    ``top_k`` the baseline returns roughly eight times the text -- its chunks have a median of
+    800 characters against the candidate's 99 -- so recall at a fixed chunk count rewards
+    whichever parser packs more into a chunk. That is a chunk-size difference wearing a
+    retrieval result's clothes.
+
+    Hits are consumed in rank order and each one's characters are charged in full, *including*
+    text a previous hit already delivered. The baseline's fixed windows overlap by 100 of every
+    800 characters, so it pays for that text twice -- which is correct, not a penalty: a
+    retrieval budget spent re-delivering what the reader already has is spent. Deduplicating
+    would credit the baseline for redundancy the answering model still has to read.
+
+    The chunk that crosses the budget is *included*. Excluding it would make the metric depend
+    on chunk size again in the opposite direction, since a parser with large chunks would have
+    its last and possibly decisive hit discarded more often.
+    """
+    if not pages or budget <= 0:
+        return False
+    wanted = set(pages)
+    spent = 0
+    for hit in hits:
+        if hit.doc_id == doc_id and wanted & set(hit.pages):
+            return True
+        spent += characters_of(hit.text)
+        if spent >= budget:
+            return False
+    return False

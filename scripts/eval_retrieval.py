@@ -17,16 +17,20 @@ Recall is page-level: a retrieved chunk counts if it covers a page the gold reco
 cites pages, a chunk may span two, and demanding the exact chunk would measure where the
 chunker drew its boundaries rather than whether retrieval found the evidence.
 
-**⚠️ Do not compare the two parsers on these numbers (D-030).** At one ``top_k`` the baseline
-retrieves roughly eight times the text -- its chunks have a median of 800 characters against the
-candidate's 99 -- and covers 1.57 pages per chunk against 1.12. Page-level recall at a fixed
-chunk count therefore rewards whichever parser packs more in, so a baseline-versus-candidate
-gap here is a chunk-size difference wearing a retrieval result's clothes. Comparing *modes*
-within one parser is sound, because those share a chunk set. A fair cross-parser comparison
-needs a matched character budget, which is not implemented yet.
+Two tables come out, and which one answers which question matters:
 
-Writes `results/runs/retrieval_<set>.json`, so the numbers in DECISIONS D-029 can be
-re-derived rather than trusted.
+* **``r@k`` compares modes within one parser.** At one ``top_k`` the baseline retrieves roughly
+  eight times the text -- median chunk 800 characters against the candidate's 99 -- and covers
+  1.57 pages per chunk against 1.12, so a baseline-versus-candidate gap in this table is a
+  chunk-size difference wearing a retrieval result's clothes (D-030). Mode comparisons are sound
+  because those share a chunk set.
+* **``recall at a matched character budget`` compares the parsers.** Both are charged the same
+  number of whitespace-stripped characters, taken in rank order, so neither is rewarded for
+  packing more into a chunk. Each rate carries the median number of chunks the budget bought,
+  because that difference is the thing the budget neutralises and it should be visible.
+
+Writes `results/runs/retrieval_<set>.json` with both tables, so the numbers in DECISIONS D-029
+can be re-derived rather than trusted.
 """
 
 from __future__ import annotations
@@ -44,12 +48,12 @@ from twfi.eval.gates import wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
 from twfi.index.embeddings import load_vectors
 from twfi.index.lexical import load_index
-from twfi.index.retrieve import Retriever, recall_at_k
+from twfi.index.retrieve import Hit, Retriever, characters_of, recall_at_budget, recall_at_k
 from twfi.io.jsonl import read_lines
 from twfi.paths import repo_paths
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
 app = typer.Typer(add_completion=False, help=__doc__)
 
@@ -92,10 +96,17 @@ def main(
     ] = "dev",
     depth: Annotated[int, typer.Option(help="Candidates each side fetches before fusion.")] = 100,
     k: Annotated[list[int] | None, typer.Option("--k", help="Cutoffs to report.")] = None,
+    budget: Annotated[
+        list[int] | None,
+        typer.Option("--budget", help="Character budgets to report. The cross-parser comparison."),
+    ] = None,
 ) -> None:
-    """Report recall at each cutoff, for every parser and mode."""
+    """Report recall at each cutoff and at each character budget, per parser and mode."""
     paths = repo_paths()
     cutoffs = sorted(set(k or [10, 20]))
+    # 8,000 characters is roughly what the baseline's top ten delivers (median chunk 800), so
+    # the middle budget is comparable to the middle cutoff and the table can be read across.
+    budgets = sorted(set(budget or [4_000, 8_000, 16_000]))
     if gold_set not in {"dev", "locked"}:
         typer.echo(f"unknown set {gold_set!r}; choose dev or locked")
         raise typer.Exit(code=2)
@@ -123,6 +134,7 @@ def main(
 
     embed = _cpu_embedder()
     rows: list[dict[str, Any]] = []
+    budget_rows: list[dict[str, Any]] = []
     header = f"{'parser':<10} {'mode':<8} " + " ".join(f"{'r@' + str(c):>12}" for c in cutoffs)
     typer.echo("")
     typer.echo(header)
@@ -180,13 +192,76 @@ def main(
                 cells.append(f"{hits:>3}/{len(records)} {low:.0%}-{high:.0%}")
             typer.echo(f"{parser:<10} {mode:<8} " + " ".join(f"{cell:>12}" for cell in cells))
 
-    monotone = _monotonicity_problems(rows)
+            # The same questions again, budgeted by characters instead of by chunk count. This
+            # is the comparison the ``r@k`` table above is not (D-030): a fixed chunk count
+            # rewards whichever parser packs more into a chunk, a fixed character budget does
+            # not. Fetched once at the deepest budget's worth of chunks and truncated per
+            # budget, so the candidate pool does not move with the budget -- the same defect
+            # that tying fetch depth to top_k produced.
+            for budget_chars in budgets:
+                started = time.perf_counter()
+                hits = 0
+                chunks_used: list[int] = []
+                for record in records:
+                    ranked = retriever.search(record.question, depth, mode=mode)  # type: ignore[arg-type]
+                    hits += int(
+                        recall_at_budget(
+                            ranked,
+                            doc_id=record.source_document[0],
+                            pages=list(record.page_numbers),
+                            budget=budget_chars,
+                        )
+                    )
+                    chunks_used.append(_chunks_within(ranked, budget_chars))
+                elapsed = time.perf_counter() - started
+                low, high = wilson_interval(hits, len(records))
+                budget_rows.append(
+                    {
+                        "parser": parser,
+                        "mode": mode,
+                        "budget_chars": budget_chars,
+                        "n": len(records),
+                        "correct": hits,
+                        "rate": round(hits / len(records), 4),
+                        "ci95": [round(low, 4), round(high, 4)],
+                        # How many chunks the budget bought, which is what makes the comparison
+                        # legible: the same budget is a different number of chunks per parser.
+                        "median_chunks": sorted(chunks_used)[len(chunks_used) // 2],
+                        "seconds": round(elapsed, 2),
+                    }
+                )
+
+    if budget_rows:
+        typer.echo("")
+        typer.echo("recall at a matched character budget -- this is the cross-parser comparison")
+        header = f"{'parser':<10} {'mode':<8} " + " ".join(
+            f"{str(value // 1000) + 'k chars':>16}" for value in budgets
+        )
+        typer.echo(header)
+        for parser in PARSERS:
+            for mode in MODES:
+                series = [
+                    row for row in budget_rows if row["parser"] == parser and row["mode"] == mode
+                ]
+                if not series:
+                    continue
+                cells = [
+                    f"{row['correct']:>3}/{row['n']} ({row['median_chunks']:>3} ch)"
+                    for row in sorted(series, key=lambda item: int(item["budget_chars"]))
+                ]
+                typer.echo(f"{parser:<10} {mode:<8} " + " ".join(f"{cell:>16}" for cell in cells))
+
+    monotone = _monotonicity_problems(rows) + _monotonicity_problems(
+        budget_rows, key="budget_chars"
+    )
     payload = {
         "gold_set": gold_set,
         "fetch_depth": depth,
         "cutoffs": cutoffs,
+        "budgets_chars": budgets,
         "questions": len(records),
         "rows": rows,
+        "budget_rows": budget_rows,
         "monotonicity_problems": monotone,
         "note": (
             "Page-level recall. Every rate carries n and a Wilson 95% interval; with a set this "
@@ -194,10 +269,13 @@ def main(
             "nothing. Retrieval settings may be chosen on dev only (protocol 1.3)."
         ),
         "cross_parser_comparison": (
-            "NOT VALID on these numbers (D-030). At one top_k the baseline retrieves about eight "
-            "times the text -- median chunk 800 characters against 99 -- so page-level recall at "
-            "a fixed chunk count rewards the larger chunker. Mode comparisons within one parser "
-            "are sound; a cross-parser comparison needs a matched character budget."
+            "Use `budget_rows`, not `rows`. `rows` reports recall at a fixed chunk count, and at "
+            "one top_k the baseline retrieves about eight times the text -- median chunk 800 "
+            "characters against 99 -- so that table rewards the larger chunker (D-030). Mode "
+            "comparisons within one parser are sound in either table, because those share a chunk "
+            "set. `budget_rows` charges each parser the same number of whitespace-stripped "
+            "characters and carries `median_chunks` so the same budget's different chunk counts "
+            "are visible."
         ),
         "chunk_profile": _chunk_profile(paths),
     }
@@ -278,21 +356,43 @@ def _chunk_profile(paths: Any) -> dict[str, Any]:
     return profile
 
 
-def _monotonicity_problems(rows: list[dict[str, Any]]) -> list[str]:
-    """Recall must not fall as the cutoff rises within one parser and mode."""
+def _monotonicity_problems(rows: list[dict[str, Any]], *, key: str = "k") -> list[str]:
+    """Recall must not fall as the cutoff, or the budget, rises within one parser and mode.
+
+    Applies to both tables for the same reason: more of the same ranked list cannot find less.
+    If it does, the candidate pool is moving with the cutoff -- the defect that tying fetch depth
+    to ``top_k`` produced -- so this check exists to catch its return in either metric.
+    """
     problems: list[str] = []
     by_series: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in rows:
         by_series.setdefault((str(row["parser"]), str(row["mode"])), []).append(row)
     for (parser, mode), series in sorted(by_series.items()):
-        ordered = sorted(series, key=lambda item: int(item["k"]))
+        ordered = sorted(series, key=lambda item: int(item[key]))
         for earlier, later in itertools.pairwise(ordered):
             if int(later["correct"]) < int(earlier["correct"]):
                 problems.append(
-                    f"{parser}/{mode}: r@{earlier['k']}={earlier['correct']} but "
-                    f"r@{later['k']}={later['correct']}"
+                    f"{parser}/{mode}: {key}={earlier[key]} gave {earlier['correct']} but "
+                    f"{key}={later[key]} gave {later['correct']}"
                 )
     return problems
+
+
+def _chunks_within(hits: Sequence[Hit], budget: int) -> int:
+    """How many chunks a budget buys, counting the one that crosses it.
+
+    Reported beside each budgeted rate because the same budget is a different number of chunks
+    per parser, and that difference is the thing the budget exists to neutralise -- so it should
+    be visible rather than implied.
+    """
+    spent = 0
+    used = 0
+    for hit in hits:
+        used += 1
+        spent += characters_of(hit.text)
+        if spent >= budget:
+            break
+    return used
 
 
 def _entrypoint() -> None:
