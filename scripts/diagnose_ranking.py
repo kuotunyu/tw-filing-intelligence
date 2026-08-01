@@ -1,6 +1,7 @@
 """Where does the chunk holding the answer actually rank?
 
     uv run python scripts/diagnose_ranking.py --set dev
+    uv run python scripts/diagnose_ranking.py --set dev --same-company-only
     uv run python scripts/diagnose_ranking.py --set dev --parser baseline --depth 200
 
 **A diagnostic, never a gate.** Protocol 3.2 registers Recall@5, MRR@10 and the two coverage
@@ -22,6 +23,12 @@ it is.
 Questions whose answer is computed rather than printed are reported separately. 65.45 is
 100 - 34.55 and appears nowhere in the corpus; counting it as a retrieval failure would blame the
 retriever for a number no page contains.
+
+``--same-company-only`` re-scores the *same* run with other issuers' hits dropped. It changes no
+registered behaviour and is not an alternative configuration -- it exists because the top hit for
+「台塑民國112年度的資產總計是多少？」 is a 台積公司 balance sheet, and the question is how much
+of the miss is that. Every filing declares its company and every question names one; nothing in
+the protocol 2.4 pipeline uses either.
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ from twfi.index.lexical import load_index
 from twfi.index.retrieve import Retriever
 from twfi.io.jsonl import read_lines
 from twfi.paths import repo_paths
+from twfi.protocol import USABLE_DOCUMENTS
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
@@ -80,6 +88,14 @@ def main(
     gold_set: Annotated[str, typer.Option("--set", help="dev only until the freeze.")] = "dev",
     parser: Annotated[str, typer.Option(help="baseline or candidate index.")] = "candidate",
     depth: Annotated[int, typer.Option(help="How far down to look before giving up.")] = 100,
+    same_company: Annotated[
+        bool,
+        typer.Option(
+            "--same-company-only",
+            help="Score ranks after dropping hits from other companies. Measures how much of "
+            "the failure is cross-company noise; changes no registered behaviour.",
+        ),
+    ] = False,
 ) -> None:
     """Report the rank of the answer-bearing chunk for every answerable question."""
     paths = repo_paths()
@@ -111,11 +127,19 @@ def main(
         if not record.answerable or record.answer is None:
             continue
         key = answer_key(str(record.answer))
+        company_of = record.company.code
         if not any(key in chunk["text"] for chunk in chunks):
             unprinted.append(record.question_id)
             typer.echo(f"{record.question_id:<11}{record.question_type:<24}{key:<16}{'—':>8}")
             continue
         hits = retriever.search(record.question, top_k=depth)
+        if same_company:
+            # The question names one company and every document declares one. Nothing in the
+            # registered pipeline uses that, so 「台塑的資產總計」 competes against every other
+            # issuer's 資產總計. Scoring the same run with the other companies removed says how
+            # much of the miss is that, without changing what the pipeline does.
+            wanted = {doc.doc_id for doc in USABLE_DOCUMENTS if doc.company_code == company_of}
+            hits = [hit for hit in hits if hit.doc_id in wanted]
         places = [index + 1 for index, hit in enumerate(hits) if key in hit.text]
         if places:
             ranked.append(places[0])
