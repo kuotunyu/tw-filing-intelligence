@@ -108,6 +108,15 @@ def _is_header(flat: str) -> bool:
     The order matters: `113年12月31日` contains digits that a figure pattern must not claim, so
     the periods come out first and the remainder is what decides whether anything else is on
     the line. `單位：新台幣仟元` alone is not a header -- it names no period.
+
+    **A known confusion, stated because the failure is safe.** A maturity or lease schedule uses
+    years as its *row* labels, and labels arrive on their own lines, so a row reading 「民國114年」
+    is indistinguishable here from a column header. Such a table splits into one table per row.
+    The consequence is that a target on that table resolves to nothing rather than to the wrong
+    figure -- `resolve_row` needs a row of exactly the table's width and finds none -- so it is a
+    refusal, which is the failure this module is willing to have. Separating the two needs to know
+    whether figures follow on the same visual row, which the line stream has already discarded.
+    None of the nine gold-named cells sits on such a table.
     """
     if not PERIOD.search(flat):
         return False
