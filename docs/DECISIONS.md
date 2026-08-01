@@ -1584,6 +1584,105 @@
 
 ---
 
+## D-035 把自己的五個主張交給獨立驗證：一個被推翻，而且推翻的方式抓到一個真 bug
+
+- **為什麼要做這件事**：index 重建完之後我有了新的 recall 數字，而**今晚我對同一件事量錯了三次**
+  （D-030 的撤回史）。所以在寫進 DECISIONS 之前，先把五個具體主張各交給一個獨立 agent
+  重新量，再加一個 completeness critic 問「哪些沒查、哪些結論撐不起來」。
+  結果：**1 個 REFUTED、1 個 AMBIGUOUS（critic 認為應為 REFUTED）、3 個 CONFIRMED**，
+  而且找出一個我自己寫的 bug。**這一節大部分內容不是我發現的。**
+
+### 被推翻的主張，以及它推出來的 bug
+
+- **我說**：candidate chunk body（去掉 heading path 前綴）2,087,174 字元，
+  parse_layout 輸出 2,161,264，差的 74,090 是「chunker 刻意不把 heading 放進 chunk body」。
+- **實際**：
+  - `2,161,264` 是 parse_layout 的 **全部 block**（含 header_footer），
+    不是 `content_blocks()`。後者是 **2,148,472**，差的 12,792 是頁首頁尾。
+  - heading block 總量是 **135,916**，是我說的 74,090 的 **1.83 倍**，所以它不可能是那個差額。
+  - **「chunker 不把 heading 放進 body」是錯的**：有 **74,618 字元的 heading path 留在 body 裡**。
+  - 精確分解（剛好收斂到個位數）：
+    `2,161,264 − 12,792（頁首頁尾）− 135,916（heading block）+ 74,618（殘留的 heading 行）= 2,087,174`
+  - **真正把 heading 去乾淨之後是 2,012,556，剛好等於非 heading 的 content block —— 零遺失。**
+
+- **⚠️ 那 74,618 是我自己的 bug**：`_merge_undersized` 把合併後 chunk 的 `section_path`
+  改成兩者共同的**父層**，但 text 開頭仍然是 `_build` 當時寫的**更深的**路徑。
+  也就是說 **1,515 / 4,796 個 candidate chunk（31.6%）宣告的 section 與自己第一行寫的不一致**。
+  例：`2412-FY2023-AR:struct:00025` 宣告 `['致股東報告書','72.6 百萬分鐘']`，
+  第一行卻是 `致股東報告書 > 72.6 百萬分鐘 > 2. 價格方面`。
+  宣告的路徑總長 42,334 字元 vs 內嵌的 74,616 —— **宣告的系統性偏淺**。
+
+  **這不是排版問題，是 provenance 問題**：`G4 評的是 citation`，而 citation 對的是
+  `section_path`。一個 chunk 的文字指向 A、自己聲稱在 B，那條 citation 會被拿去對錯的標題。
+  已修（兩邊都先去掉自己的 heading 行，再寫回共同路徑，不變式由建構保證），
+  兩個測試釘住，並用**磁碟上那份有 bug 的 chunks.jsonl 反向驗證測試真的會抓到**（1,515 次）。
+
+  **`2,087,174` 這個數字本身不代表任何量** —— 它是「字串剝前綴」在 31.6% 的 chunk 上失敗後的
+  混合物。要 prefix-free 的總量請用 `include_heading_prefix=False` 重跑（2,012,556），不要剝字串。
+
+### 被確認的三個
+
+- **baseline chunk 比 parser 輸出多 14%，overlap 解釋了 100.00%。**
+  `chunk_fixed` 是 800 字窗、步進 700，4,063 − 8 = 4,055 個重疊區，
+  去空白後正好 **308,312** 字元，**殘差 0**。所有 4,055 對的 100 字邊界逐一比對皆完全相同。
+  所以 `2,469,873` **不是一個文字量，是一個「被輸出的字元數」**。
+- **今晨 `2,161,264 / 2,161,561` 的撤回仍然成立，不得再撤回。** 那一對量的是 **parser 輸出**，
+  兩個 parser 取回的文字相差 **297 字元（0.014%）**；就算用較嚴格的
+  content-blocks 讀法也只差 0.61%。**任何定義下都沒有 15–23% 的遺失。**
+  chunk 空間 6.9% 的差距完整分解為
+  `12,792 頁首頁尾 + 135,916 heading（搬去前綴，不是遺失）+ 297 parser 差 = 149,005`。
+- **candidate hybrid < candidate lexical 是正確的 RRF 行為，不是融合 bug。**
+  驗證者用 `Fraction` 精確有理數獨立重寫了一次 RRF，**順序與每一個分數都相同**；
+  把 BM25 分數乘 1e6、cosine 乘 1e-6 後融合順序不變（尺度不變性成立）；
+  向量對齊也驗過（重新 embed 抽樣 chunk，argmax 回到自己那一列）。
+  機制：三題（DEV-0001／0003／0010）要的都是**同一個 chunk**，它在 dense 側的
+  全corpus 排名是 211–244，**不在 fetch 的前 100 內**，所以只拿到一項 `1/(60+3)`；
+  而 32 個「兩個 retriever 都回傳」的文件各拿兩項、分數更高，把它壓到融合後第 36 名。
+  **那正是 `fusion.py` docstring 事前寫明的設計**：k=60 時，兩個 retriever 的一致性
+  刻意重於單一 retriever 的頭名。
+
+### critic 找出的四件事，比上面五個主張都重要
+
+1. **⚠️ dev 15 題只覆蓋 8 份文件中的 2 份、3 個頁面、4 個不同的 (文件,頁組) 目標**
+   （p188×8、p191×2、p188+191×1、p137×4）。
+   **所以 n=15 是「15 種問法對 4 個目標」，不是 15 次獨立試驗** ——
+   檔案裡的 Wilson 區間因此**偏窄（anti-conservative）**。
+   更具體：**candidate index 裡覆蓋 1301 p188 的 chunk 只有一個**（第 1232 列），
+   而 **15 題裡有 8 題只能靠它**。candidate 的 lexical-vs-hybrid 全部差異
+   就是**那一個 chunk 的融合排名跨過 10** 這件事在三種問法上重複。
+2. **DEV-0011 在全部 30 個格子裡都取不到** —— 它是 `unanswerable` 題，
+   gold 頁是標註者選的「範圍證據」，文件裡本來就沒有碳排放強度。
+   **所以每一個比率的天花板是 14/15**，而 baseline hybrid 的 14/15@k=20
+   在「可檢索子集」上是**滿分**。DEV-0010 是第二題拒答型。
+3. **沒有任何一個差異達到統計顯著**（精確配對 McNemar，同一批 15 題）：
+   baseline hybrid vs candidate lexical **p=1.000**；
+   candidate hybrid vs candidate lexical **p=0.625**（而且在 4k 預算下**方向反轉**，8→9）；
+   candidate lexical vs baseline lexical **p=0.625**；
+   最強的訊號是 baseline hybrid vs baseline lexical 在 4k 預算下 **p=0.219**，仍不顯著。
+   → **(a) 「baseline hybrid 最好」、(b) 「candidate 在 lexical 上較好」、
+   (c) 「把 dense 融進 candidate 會變差」、(d) 「heading 修正改善了 candidate 檢索」
+   四個結論全部不被支持。** 已把 McNemar 內建進 `eval_retrieval.py`，
+   並把逐題結果寫進產物（D-029 的 8/15 之所以永遠無法配對比較，就是因為沒存逐題結果）。
+4. **字元預算並沒有把「頁數」拉平** —— 而 recall 是**按頁**判定的。
+   同樣 4k 字元，baseline/lexical 交出的相異頁數中位數是 13，candidate/lexical 是 10；
+   8k 是 24 vs 14；16k 是 43 vs 27（**1.3–1.7 倍**）。
+   原因是跨頁 chunk 兩頁都算，而 baseline 每 chunk 跨 1.57 頁、candidate 1.25 頁。
+   **我先前說預算「解決了」D-030 的跨 parser 問題，那說得太滿。**
+   要完全消除得改用 per-chunk recall，而 D-029 已經有理由否決那個
+   （會變成量 chunker 的邊界而不是檢索）。**所以現在是「把殘餘偏差量出來並印在旁邊」
+   （每列多一個 `median_pages`），不是聲稱已消除。**
+
+- **順帶**：`_chunk_id_drift` 原本只比 5 個 chunk id，而沒有任何 manifest 存內容 hash。
+  critic 指出「通過 5 個 id 的比對不構成新鮮度的證據」——
+  而那不是假設性的：**我修 chunker 的那一刻，chunk 數與每一個 chunk id 都沒變、只有 text 變**，
+  如果我當時直接重跑量測，所有 guard 都會通過並交出用已不存在的文字算出的數字。
+  已加 `chunk_text_sha256`（依序、長度前綴），沒有它的 index **直接拒絕**。
+
+- **狀態**：ACCEPTED (2026-08-01)。chunker bug 已修並重建 index 中；
+  McNemar 與 `median_pages` 已進；**recall 的實際數字待重建完成後重量並另記**。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、

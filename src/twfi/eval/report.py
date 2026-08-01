@@ -58,6 +58,11 @@ REQUIRED_LIMITATIONS: Final[tuple[tuple[str, str], ...]] = (
     # on dev was chosen on damaged documents. Protocol "文字層誠實性" states what the report must
     # say; this entry is what stops the report being written without saying it.
     ("text_layer", "That both development-set filings have damaged text layers"),
+    # Added 2026-08-01 from measurement, before the freeze. The 15 dev questions cover four
+    # distinct (document, pageset) targets, one chunk carries eight of them, DEV-0011 is
+    # unreachable so every dev retrieval rate has a 14/15 ceiling, and no measured difference
+    # reaches p<0.05. Protocol "DEV 集合的聚集性" states what the report must say.
+    ("dev_clustering", "That dev's 15 questions cover only four distinct evidence targets"),
 )
 
 
