@@ -300,6 +300,39 @@ def _numeric_store_problems(database: Path) -> list[str]:
     return []
 
 
+def _prepare_runtime(
+    paths: Any,
+    *,
+    depth: int,
+    needed: tuple[str, ...],
+    wanted: list[str],
+    rerank_device: str,
+    database: Path,
+) -> tuple[dict[str, Any], Any | None, NumericStore | None]:
+    """Load every index and local model that could otherwise fail after the marker."""
+    embed = _cpu_embedder()
+    retrievers = _retrievers(paths, embed, depth, needed)
+    score_pairs = None
+    if any(LADDER[name]["rerank"] for name in wanted):
+        typer.echo(f"loading the cross-encoder on {rerank_device} …")
+        score_pairs, _ = load_cross_encoder(device=rerank_device)
+    store = None
+    if any(LADDER[name].get("numeric") for name in wanted):
+        store = NumericStore(database)
+        typer.echo(f"numeric store: {database.name}, {store.count():,} figure(s)")
+    return retrievers, score_pairs, store
+
+
+def _prepare_then_begin(marker: Path, payload: dict[str, Any], prepare: Callable[[], Any]) -> Any:
+    """Create the one-shot marker only after every fallible runtime load succeeds."""
+    runtime = prepare()
+    begin_locked_run(
+        marker,
+        {"started_at": datetime.now(UTC).replace(microsecond=0).isoformat(), **payload},
+    )
+    return runtime
+
+
 def _gpu_preflight(config: GenerationConfig) -> list[str]:
     """Confirm local inference and reject a competing GPU workload."""
     query = [
@@ -554,6 +587,9 @@ def main(
     config = GenerationConfig()
     locked_lock_sha256 = ""
     locked_code_commit = ""
+    retrievers: dict[str, Any]
+    score_pairs: Any | None
+    store: NumericStore | None
     if is_locked:
         preflight = locked_request_problems(
             factors=wanted,
@@ -597,39 +633,47 @@ def main(
             for problem in gpu_problems:
                 typer.echo(f"  - {problem}")
             raise typer.Exit(code=3)
+        marker_payload = {
+            "protocol_lock_sha256": locked_lock_sha256,
+            "code_commit": locked_code_commit,
+            "factors": wanted,
+            "questions": len(records),
+            "prompt_variant": prompt_variant,
+            "numeric_db": numeric_db,
+            "fetch_depth": depth,
+            "rerank_device": rerank_device,
+        }
         try:
-            begin_locked_run(
+            retrievers, score_pairs, store = _prepare_then_begin(
                 marker,
-                {
-                    "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
-                    "protocol_lock_sha256": locked_lock_sha256,
-                    "code_commit": locked_code_commit,
-                    "factors": wanted,
-                    "questions": len(records),
-                    "prompt_variant": prompt_variant,
-                    "numeric_db": numeric_db,
-                    "fetch_depth": depth,
-                    "rerank_device": rerank_device,
-                },
+                marker_payload,
+                lambda: _prepare_runtime(
+                    paths,
+                    depth=depth,
+                    needed=needed,
+                    wanted=wanted,
+                    rerank_device=rerank_device,
+                    database=database,
+                ),
             )
         except EvaluationError as exc:
             typer.echo(str(exc))
             raise typer.Exit(code=2) from exc
+        except (ConfigError, FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+            typer.echo(f"locked-run runtime preflight failed; marker was not written: {exc}")
+            raise typer.Exit(code=3) from exc
         typer.echo(
             f"locked run started; wrote irreversible marker {marker.relative_to(paths.root)}"
         )
-
-    embed = _cpu_embedder()
-    retrievers = _retrievers(paths, embed, depth, needed)
-    score_pairs = None
-    if any(LADDER[name]["rerank"] for name in wanted):
-        typer.echo(f"loading the cross-encoder on {rerank_device} …")
-        score_pairs, _ = load_cross_encoder(device=rerank_device)
-
-    store = None
-    if any(LADDER[name].get("numeric") for name in wanted):
-        store = NumericStore(database)
-        typer.echo(f"numeric store: {numeric_db}, {store.count():,} figure(s)")
+    else:
+        retrievers, score_pairs, store = _prepare_runtime(
+            paths,
+            depth=depth,
+            needed=needed,
+            wanted=wanted,
+            rerank_device=rerank_device,
+            database=database,
+        )
 
     citation_grader = CitationGrader(
         {

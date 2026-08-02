@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from scripts.run_eval import _git_preflight, _numeric_store_problems
+from scripts.run_eval import _git_preflight, _numeric_store_problems, _prepare_then_begin
 
 from twfi.errors import ConfigError, EvaluationError
 from twfi.eval.locked_run import (
@@ -122,3 +122,15 @@ def test_numeric_store_schema_is_checked_before_the_locked_marker(
     problems = _numeric_store_problems(tmp_path / "numeric_broad.duckdb")
 
     assert problems == ["numeric store preflight failed: legacy schema; rebuild it"]
+
+
+def test_runtime_initialisation_failure_does_not_consume_the_locked_run(tmp_path: Path) -> None:
+    marker = tmp_path / "locked_run_started.json"
+
+    def unavailable() -> object:
+        raise RuntimeError("reranker cannot load")
+
+    with pytest.raises(RuntimeError, match="reranker"):
+        _prepare_then_begin(marker, {"factors": list(FACTOR_IDS)}, unavailable)
+
+    assert not marker.exists()
