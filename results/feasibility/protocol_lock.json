@@ -1,0 +1,41 @@
+{
+  "entries": [
+    {
+      "mode": "text",
+      "path": "docs/FEASIBILITY_PROTOCOL.md",
+      "sha256": "a605a5c244e1db1a9e21f89f44b1af9f645dd6e124080ff9b3e2144c642c4eb4"
+    },
+    {
+      "mode": "text",
+      "path": "data/evaluation/locked/gold.jsonl",
+      "sha256": "1f5e2f4ecc7c8f9ceccdd4f331aeea514033754c7bd01686aa003f58c5a55551"
+    },
+    {
+      "mode": "text",
+      "path": "data/evaluation/locked/probes.jsonl",
+      "sha256": "c8c2cf4cdbbf987e6c18d24d40795cf8ee73f7cddda8d98e2dfc36ad49704676"
+    },
+    {
+      "mode": "text",
+      "path": "data/manifests/documents.yaml",
+      "sha256": "0feaecdd42d6a1271cf0331a067fecdcc15e378059a0ec4179b620bfbda3f582"
+    },
+    {
+      "mode": "text",
+      "path": "data/manifests/structured.yaml",
+      "sha256": "dce756847b580890bfa26262859cfa443486cb57526264a4a630cefe7331cf34"
+    },
+    {
+      "mode": "text",
+      "path": "data/manifests/acquisition.lock.yaml",
+      "sha256": "d10f6246207f3e1eff7fb37eb64b3eeab636c54660f2563e34ae4b089e3a883e"
+    },
+    {
+      "mode": "text",
+      "path": "configs/models.lock.json",
+      "sha256": "092366baae541fc0042c0d31925d0b65dc0f91ac2c378883b16cd70d889f425b"
+    }
+  ],
+  "frozen_at": "2026-08-02T15:20:15+00:00",
+  "protocol_version": "1.0.0"
+}
