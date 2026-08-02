@@ -51,7 +51,9 @@ LIMITATIONS: dict[str, str] = {
         "更進一步（D-022 更正）：那兩頁的文字層完整，年份與圖例都抽得出來，"
         "所以**純文字系統靠座標鄰近也可能答對** —— 本語料唯一的真圖表也是文字可還原的。"
         "F5（caption）與 F6（crop VLM）的輸入幾乎全是有框表格，"
-        "它們的增益**不得**被描述為 chart-reading 能力（D-021）。"
+        "它們的增益**不得**被描述為 chart-reading 能力（D-021）。原訂的 chart challenger"
+        "因兩份 DEV filing 沒有真圖表、16 題無從建立而標記為 `cancelled`，`outcome=null`，"
+        "因此**沒有比較結果**；依事前 fallback，所有 route 使用 `qwen3.6:27b`。"
     ),
     "numeric_coverage": (
         "locked numeric route 使用 `numeric_broad.duckdb`：`load_all_rows.py` 逐頁走訪所有"
@@ -63,7 +65,8 @@ LIMITATIONS: dict[str, str] = {
     ),
     "structured_source": (
         "TWSE OpenAPI 只提供當期快照，與本研究的文件年度（FY2023／FY2024）交集為空，"
-        "所以歷史結構化數值來自**本 repository 自己的表格抽取**（`source_kind=extracted_table`）。"
+        "所以 locked store 的歷史結構化數值來自**本 repository 自己從 filing line stream"
+        "重建的 row**（`source_kind=extracted_text_row`）。"
         "因此報告一律寫「**已驗證結構化資料**」而非「官方結構化資料」（R7）。"
         "若日後取得官方 XBRL，這項限制大幅緩解，但那需要重跑並重新標示來源。"
     ),
@@ -75,16 +78,21 @@ LIMITATIONS: dict[str, str] = {
         "該選擇是在 dev 上量測後決定的，理由是沒有任一 strategy 支配另一個。"
     ),
     "text_layer": (
-        "兩份 development filing 的原生文字層都受損：2412-FY2023-AR 有 17.9% 字元解碼為"
-        "錯誤字集、48% 頁面受影響；1301-FY2023-AR 分別為 15.4% 與 43%。因此 DEV 上選出的"
-        "閾值、chunking 與路由行為同時反映系統能力和受損文字層，不能直接推論到文字層完整的"
-        "一般年報。locked 結果會誠實保留這個 domain shift，而不是把它解讀成純模型效果。"
+        "兩份 development filing 的原生文字層都受損：2412-FY2023-AR 的頁面可讀率為 95%，"
+        "但 17.9% 字元解碼為錯誤字集、48% 頁面受影響；1301-FY2023-AR 分別為 96%、15.4%"
+        "與 43%。『可讀』只表示頁面產出字元，**不代表字元正確**。此外，全語料有 150 頁含"
+        "無法解讀的 private-use 字元；2882-FY2024-AR p26 的 125 個打勾全數遺失。gold 的 71 個"
+        "引用頁面都不屬亂碼頁，標註者讀的是渲染頁，`verify_gold_answers.py` 會強制檢查。"
+        "因此 DEV 上選出的閾值、chunking 與路由行為同時反映系統能力和受損文字層，不能直接"
+        "推論到文字層完整的一般年報。locked 結果保留這個 domain shift，不把它解讀成純模型效果。"
     ),
     "dev_clustering": (
         "DEV 的 15 題只涵蓋 4 個不同的 (document, page-set) 證據目標，其中一個 chunk 承載"
-        "8 題；DEV-0011 的註冊答案又不在文件中，所以 retrieval 指標存在已知上限。這些題目"
+        "8 題；DEV-0011 的註冊答案又不在文件中，所以 retrieval 指標天花板是 14/15。這些題目"
         "高度相關，DEV 差異只能用來選定方向與發現接線錯誤，不能當作獨立樣本的效果量或"
-        "統計顯著性證據。"
+        "統計顯著性證據（量測差異皆未達 5%，最小 p=0.219）。字元預算雖拉平，baseline 每"
+        "chunk 平均跨 1.57 頁、candidate 1.25 頁，同預算的相異頁數仍差 1.3–1.7 倍；因此"
+        "預算表差距不得直接宣稱為檢索能力差距。"
     ),
     "numeric_ambiguity": (
         "全語料抽取顯示 account name 不是 filing 內的唯一鍵：locked 三家按正式 key 分組有"

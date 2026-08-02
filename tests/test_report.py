@@ -107,6 +107,41 @@ def test_numeric_ambiguity_limitation_uses_the_preserved_source_ref_measurement(
     assert "source_ref" in limitation
 
 
+def test_chart_limitation_explains_why_the_challenger_was_cancelled() -> None:
+    limitation = STUDY_LIMITATIONS["chart_route"]
+
+    assert "challenger" in limitation
+    assert "cancelled" in limitation
+    assert "沒有比較結果" in limitation
+
+
+def test_dev_limitation_discloses_the_residual_page_budget_bias() -> None:
+    limitation = STUDY_LIMITATIONS["dev_clustering"]
+
+    assert "1.57" in limitation
+    assert "1.25" in limitation
+    assert "1.3–1.7" in limitation
+    assert "檢索能力" in limitation
+
+
+def test_text_layer_limitation_keeps_every_registered_warning() -> None:
+    limitation = STUDY_LIMITATIONS["text_layer"]
+
+    for phrase in ("95%", "96%", "17.9%", "15.4%", "48%", "43%"):
+        assert phrase in limitation
+    assert "不代表字元正確" in limitation
+    assert "150 頁" in limitation
+    assert "125 個打勾" in limitation
+    assert "71 個" in limitation
+
+
+def test_structured_source_limitation_names_the_locked_store_source_kind() -> None:
+    limitation = STUDY_LIMITATIONS["structured_source"]
+
+    assert "source_kind=extracted_text_row" in limitation
+    assert "source_kind=extracted_table" not in limitation
+
+
 def test_report_uses_the_lock_digest_that_g9_verified_in_summary() -> None:
     digest = "a" * 64
     lock_payload = {"protocol_version": "1.0.0", "frozen_at": "now", "entries": []}
