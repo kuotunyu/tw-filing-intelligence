@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from scripts.make_report import LIMITATIONS as STUDY_LIMITATIONS
-from scripts.make_report import _report_lock_sha256
+from scripts.make_report import _error_findings, _next_question, _report_lock_sha256
 
 from twfi.eval.report import (
     REQUIRED_LIMITATIONS,
@@ -65,6 +65,7 @@ def report(**overrides: Any) -> str:
         "limitations": LIMITATIONS,
         "protocol_lock_sha256": "0" * 64,
         "findings": ["表格抽取在 locked 財報頁上 20 個目標只載入 2 個。"],
+        "next_question": "能否只修正引用選擇，讓 G4 達到門檻？",
     }
     base.update(overrides)
     return build(**base)
@@ -184,7 +185,31 @@ def test_a_failed_gate_appears_in_the_table() -> None:
 def test_no_go_carries_the_protocol_prohibition() -> None:
     text = report(verdict="NO_GO")
     assert "不得" in text
-    assert "最小的下一個研究問題" in text
+    assert "## 最小的下一個研究問題" in text
+    assert "能否只修正引用選擇" in text
+
+
+def test_a_non_go_report_without_one_next_question_is_refused() -> None:
+    with pytest.raises(MissingContent, match="next research question"):
+        report(verdict="NO_GO", next_question=None)
+
+
+def test_next_question_comes_from_the_first_failed_registered_gate() -> None:
+    assert "引用" in str(_next_question("NO_GO", GATES))
+    assert _next_question("GO", GATES) is None
+
+
+def test_error_analysis_becomes_a_counted_report_finding() -> None:
+    finding = _error_findings(
+        [
+            {"buckets": ["citation_invalid", "route_error"]},
+            {"buckets": ["citation_invalid"]},
+        ]
+    )
+
+    assert finding == [
+        "F7 error analysis（同一題可屬多個 bucket）：citation_invalid=2、route_error=1。"
+    ]
 
 
 def test_conditional_go_says_it_is_a_resource_result() -> None:

@@ -72,6 +72,7 @@ logs/
 !results/feasibility/error_analysis.jsonl
 !results/feasibility/GO_NO_GO.json
 !results/feasibility/protocol_lock.json
+!results/feasibility/results_verification.json
 
 # ---- OS / editor ----
 .DS_Store

@@ -19,6 +19,7 @@ conclusion would be the obvious place for that to happen.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -112,6 +113,93 @@ def _read(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _read_jsonl(path: Path) -> list[dict[str, Any]] | None:
+    if not path.is_file():
+        return None
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        rows.append(payload)
+    return rows
+
+
+def _error_findings(rows: list[dict[str, Any]]) -> list[str]:
+    """Turn the committed per-question error analysis into one counted finding."""
+    counts: Counter[str] = Counter()
+    for row in rows:
+        buckets = row.get("buckets")
+        if isinstance(buckets, list):
+            counts.update(str(bucket) for bucket in buckets if str(bucket).strip())
+    if not counts:
+        return ["F7 error analysis：沒有 bucketed failure。"]
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    rendered = "、".join(f"{bucket}={count}" for bucket, count in ordered)
+    return [f"F7 error analysis（同一題可屬多個 bucket）：{rendered}。"]
+
+
+_NEXT_QUESTION_BY_GATE = {
+    "G1": (
+        "能否在不更換研究文件的前提下，於乾淨環境重建全部 required artifact 並通過 SHA-256 驗證？"
+    ),
+    "G2": (
+        "僅將 rule-based layout parser 替換為 learned layout model，其餘設定固定，能否讓 "
+        "pooled hard categories 相對 F0 達到註冊的 +15pp？"
+    ),
+    "G3": (
+        "僅改善 evidence ranking、保持 parser 與 answer model 固定，能否讓 F7 overall "
+        "accuracy 相對 F0 達到註冊增益？"
+    ),
+    "G4": "僅修正證據選擇與引用 grounding、不改答案內容，能否把 citation validity 提高到 90%？",
+    "G5": (
+        "為 numeric row key 加入子公司／報表實體識別、仍不讀 gold，能否把 numeric route "
+        "accuracy 提高到 90%？"
+    ),
+    "G6": "保持各 route 不變，只替換 typed router，能否把 route accuracy 提高到 85%？",
+    "G7": (
+        "保持回答模型不變，只加入可校準的 abstention gate，能否同時滿足 over-answer 與 "
+        "refusal precision 門檻？"
+    ),
+    "G8": (
+        "保持問題與模型不變，只加入 evidence-presence gate，能否讓五個 no-evidence "
+        "probes 全部拒答？"
+    ),
+    "G9": (
+        "哪一個最小的 artifact/schema 修正能讓 summary 的每個數字在乾淨 clone 中由 raw "
+        "records 重算？"
+    ),
+    "G10": (
+        "保持模型與準確率設定不變，只調整 batching／量化，能否讓 latency 與 VRAM 同時進入 "
+        "G10 預算？"
+    ),
+}
+
+
+def _next_question(verdict: str, gates: list[dict[str, Any]]) -> str | None:
+    """Pick one follow-up from the first failed registered gate, never from aesthetics."""
+    if verdict == "GO":
+        return None
+    failed = [
+        str(gate.get("gate", ""))
+        for gate in gates
+        if gate.get("passed") is False
+        and (str(gate.get("kind", "hard")) == "hard" or verdict == "CONDITIONAL_GO")
+    ]
+    failed.sort(key=lambda name: int("".join(char for char in name if char.isdigit()) or 999))
+    if not failed:
+        return "哪一個單一、可獨立驗證的變更能解掉本次非 GO 判定的主要成因？"
+    gate = failed[0]
+    return _NEXT_QUESTION_BY_GATE.get(
+        gate, f"哪一個單一、可獨立驗證的變更能使 {gate} 通過而不改動其他 gate？"
+    )
+
+
 def _report_lock_sha256(summary: dict[str, Any], lock: dict[str, Any]) -> str | None:
     """Use G9's digest of the lock file; support legacy self-identifying locks second."""
     value = summary.get("protocol_lock_sha256") or lock.get("protocol_sha256") or lock.get("sha256")
@@ -129,6 +217,7 @@ def main(
     summary = _read(paths.feasibility / "summary.json")
     verdict_payload = _read(paths.feasibility / "GO_NO_GO.json")
     lock = _read(paths.feasibility / "protocol_lock.json")
+    error_analysis = _read_jsonl(paths.error_analysis_jsonl)
 
     absent = [
         name
@@ -136,6 +225,7 @@ def main(
             ("summary.json", summary),
             ("GO_NO_GO.json", verdict_payload),
             ("protocol_lock.json", lock),
+            ("error_analysis.jsonl", error_analysis),
         )
         if value is None
     ]
@@ -143,19 +233,27 @@ def main(
         typer.echo(f"cannot write the report: {absent} missing under results/feasibility/")
         typer.echo("Run the locked evaluation, then run_gate, then freeze_protocol first.")
         raise typer.Exit(code=2)
-    assert summary is not None and verdict_payload is not None and lock is not None
+    assert (
+        summary is not None
+        and verdict_payload is not None
+        and lock is not None
+        and error_analysis is not None
+    )
 
     records = load_gold(paths.locked_gold.read_text(encoding="utf-8").splitlines())
 
     try:
+        verdict = str(verdict_payload.get("verdict", ""))
+        gates = list(verdict_payload.get("gates", ()))
         text = build(
-            verdict=str(verdict_payload.get("verdict", "")),
-            gates=list(verdict_payload.get("gates", ())),
+            verdict=verdict,
+            gates=gates,
             summary=summary,
             composition=composition(records),
             limitations=LIMITATIONS,
             protocol_lock_sha256=_report_lock_sha256(summary, lock),
-            findings=list(summary.get("findings", ())),
+            findings=[*list(summary.get("findings", ())), *_error_findings(error_analysis)],
+            next_question=_next_question(verdict, gates),
         )
     except MissingContent as exc:
         typer.echo("refusing to write an incomplete report:")

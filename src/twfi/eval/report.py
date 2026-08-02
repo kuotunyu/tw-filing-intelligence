@@ -18,6 +18,9 @@ easy and specifically fatal:
   unaltered. So the verdict is written from ``GO_NO_GO.json`` and the gate table lists every
   gate that failed with its observed values. There is no code path that prints a verdict the
   gate evaluator did not produce.
+* **A promised but absent next question.** Protocol 4 allows a non-GO study to proceed only by
+  naming one independently testable question that addresses its main failure. Saying that such
+  a question appears "below" is not enough; :func:`build` requires and prints the actual text.
 
 Pure: it takes data and returns markdown. Nothing here reads a file or a clock, so the whole
 document is testable, and two runs over the same inputs produce the same bytes.
@@ -166,6 +169,7 @@ def build(
     limitations: Mapping[str, str],
     protocol_lock_sha256: str | None,
     findings: Sequence[str] = (),
+    next_question: str | None,
 ) -> str:
     """Render the report, or raise :class:`MissingContent` naming what is absent.
 
@@ -177,6 +181,11 @@ def build(
         raise MissingContent(
             f"verdict {verdict!r} is not one the gate evaluator produces; the report may not "
             "state a verdict that run_gate did not reach"
+        )
+    if verdict != "GO" and not str(next_question or "").strip():
+        raise MissingContent(
+            "a non-GO report must state one smallest next research question; mentioning the "
+            "requirement without printing the question does not satisfy protocol 4"
         )
     for key, heading in REQUIRED_LIMITATIONS:
         if not str(limitations.get(key, "")).strip():
@@ -241,6 +250,10 @@ def build(
         for finding in findings:
             parts.append(f"- {finding}")
         parts.append("")
+
+    if verdict != "GO":
+        parts.append("## 最小的下一個研究問題\n")
+        parts.append(str(next_question).strip() + "\n")
 
     parts.append("## 限制\n")
     for key, heading in REQUIRED_LIMITATIONS:

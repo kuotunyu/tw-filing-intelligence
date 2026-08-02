@@ -141,6 +141,7 @@ def test_gitignore_keeps_only_the_official_locked_run_evidence(repo_root: Path) 
     assert not ignored("results/runs/resources.json")
     assert not ignored("results/runs/resource_budget.json")
     assert not ignored("results/runs/locked_run_started.json")
+    assert not ignored("results/feasibility/results_verification.json")
 
 
 def test_no_filings_are_stored_outside_generated_directories(repo_root: Path) -> None:
