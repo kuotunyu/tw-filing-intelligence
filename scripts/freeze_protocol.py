@@ -19,6 +19,8 @@ study pre-registered: it is the difference between "the threshold was 5pp" and "
   lock over a set that leaks freezes the leak;
 * it refuses while `protocol_version` still ends in `-draft`, which is the version's own way of
   saying it is not ready;
+* it refuses while the protocol document's own status is not `FINAL`, so the lock cannot make
+  a contradictory `DRAFT` label permanent;
 * it requires `--i-understand-this-is-irreversible`, spelled out rather than `--force`, because
   the flag is the last thing between an ordinary command and an unrepeatable one.
 
@@ -46,6 +48,23 @@ app = typer.Typer(add_completion=False, help=__doc__)
 
 #: The sets that must be clean before a freeze. `challenger` is absent because D-021 cancelled it.
 _GOLD_SETS: tuple[GoldSet, ...] = ("dev", "locked", "probe")
+
+
+def _protocol_status_problem(source: str) -> str | None:
+    """Explain why the protocol document is not explicitly final, or return ``None``."""
+    status_line = next(
+        (line.strip() for line in source.splitlines() if line.strip().startswith("`status:")),
+        None,
+    )
+    if status_line is None:
+        return "protocol document has no explicit `status:` line; only FINAL may be frozen"
+    status = status_line.strip("`").partition(":")[2].strip()
+    if not status.upper().startswith("FINAL"):
+        return (
+            f"protocol document status is {status!r}; set it to FINAL before freeze so the "
+            "locked document does not describe itself as a draft"
+        )
+    return None
 
 
 @app.command()
@@ -85,6 +104,17 @@ def main(
             "Settle it in docs/FEASIBILITY_PROTOCOL.md and src/twfi/protocol.py, or pass "
             "--version explicitly if the draft suffix is what is being frozen."
         )
+
+    if paths.protocol_doc.is_file():
+        try:
+            status_problem = _protocol_status_problem(
+                paths.protocol_doc.read_text(encoding="utf-8")
+            )
+        except OSError as exc:
+            problems.append(f"protocol document status cannot be read: {exc}")
+        else:
+            if status_problem is not None:
+                problems.append(status_problem)
 
     missing = [
         relative

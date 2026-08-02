@@ -2548,3 +2548,21 @@ D-050 `protocol_version` 定為 `1.0.0`。
   `freeze_protocol.py --dry-run` 通過，負向 locked-run 測試 exit 2 且沒有建立 marker。
 
 - **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。
+
+---
+
+## D-053 Protocol 文件必須先明示 FINAL，freeze 才能把它鎖住
+
+- **發現方式**：最後一次 freeze dry-run 稽核時，`protocol_version` 已是
+  `1.0.0`，但 `docs/FEASIBILITY_PROTOCOL.md` 的狀態仍寫 `DRAFT`。原本腳本只擋
+  version 的 `-draft` 後綴，因此真正 freeze 會把「DRAFT」字樣一起寫入不可變的
+  hash，造成 lock 與被鎖文件自我矛盾。
+
+- **決策與實作**：在任何 locked 結果出現前，把文件狀態改為 `FINAL`；「是否已
+  freeze」不靠句子宣稱，而以 `results/feasibility/protocol_lock.json` 是否存在且 hash
+  通過為準。`freeze_protocol.py` 同時新增 preflight，缺少 status 或非 `FINAL` 均拒絕。
+
+- **為什麼可以在此時修正**：locked marker 與 protocol lock 都還不存在，也沒有看過
+  locked 問答結果；這是修正 freeze 狀態機的一致性，沒有更改題目、評分、門檻或模型。
+
+- **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。

@@ -1,7 +1,7 @@
 # FEASIBILITY PROTOCOL (pre-registered)
 
 `protocol_version: 1.0.0`
-`status: DRAFT — 尚未 freeze`
+`status: FINAL — 是否已 freeze 以 results/feasibility/protocol_lock.json 為準`
 `authored: 2026-07-31`
 
 > **這份文件是事前註冊協議。**
