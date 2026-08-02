@@ -250,13 +250,45 @@ citation 無法解析時視為 invalid（有測試）。
 **DoD**：normalize 有完整 table-driven 測試（民國年、億/萬、括號負數、百分比、幣別）；
 在 DEV 上跑完 F0 與 F7；`verify_results.py` 通過。
 
+### P9 實際結果（2026-08-02，🟡 元件完成、DoD **尚未**滿足）
+
+- ✅ normalize 規則與測試、`run_gate`／`verify_results`／`make_report`／`run_eval` 都已寫並測試
+- ✅ **F0–F7 八階已在 DEV 跑完**（`results/runs/ladder_dev.json`，D-047）
+- 🔴 **DoD 第三項「`verify_results.py` 通過」目前不可能滿足** —— 見 **D-051**：
+  `verify_results.py` 讀 `results/feasibility/summary.json`，而**沒有任何程式產生它**；
+  且 `run_eval.py` 寫出的 row 形狀與 `results.py` 的 `REQUIRED_RECORD_FIELDS` 對不上
+  （沒有 import `twfi.eval.results`）。
+- 🔴 **G4 的 `cited_ok` 沒有生產者**，citation validity 無法量測。
+
+**補 P9 的 DoD（2026-08-02 追加，必須在 locked run 之前完成）**
+
+- `src/twfi/eval/citations.py`（或等價位置）—— 判定一筆**預測**的引用是否有效，
+  依 protocol §3.4 已註冊的定義；可重用 `verify_gold_answers.py` 的
+  `_pages_of`／`_appears`／`_words_in_crop`／`_inside`（目前是 script 私有函式，且套用在 gold 上）
+- ladder 輸出 → `results/feasibility/summary.json` ＋ `results/runs/<run>/records.jsonl`
+  的轉接器，形狀符合 `twfi.eval.results.REQUIRED_RECORD_FIELDS` 與
+  `twfi.eval.gates.evaluate()` 讀的欄位
+- G10 三個資源數字改名對齊 `RESOURCE_KEYS`
+  （`retrieval_p95_s`／`generation_p95_s`／`vram_peak_gb`）
+- company scope 套用 F0–F7（D-049）→ **DEV ladder 重跑一次**，舊數字作廢
+
 ---
 
 ## P10 — Freeze → locked run → gate → report
 
 **順序不可調換**（見 protocol §5）
 
-1. `scripts/run_chart_challenger.py`（DEV only，protocol §2.3 的一次性模型決策）
+> ⚠️ **前置條件（2026-08-02 追加）：P9 補充 DoD 的四項全部完成後，才可以進入本 phase。**
+> 理由不是進度而是紀律 —— 「怎樣算一次有效引用」是評分規則，
+> 看過 locked 輸出之後才定它，就是在 locked 上調參（protocol §1.3 禁止）。見 **D-051**。
+>
+> 另外三個 code 一致性修正也要在 freeze 前完成：
+> 版號兩處同時改 `1.0.0`（D-050）、`run_eval.py:274` 的 `numeric_db` 預設改
+> `numeric_broad.duckdb`（D-048）、`run_eval.py:528` 那段自述「F4-F7 未實作」的假 note。
+
+1. ~~`scripts/run_chart_challenger.py`（DEV only，protocol §2.3 的一次性模型決策）~~
+   → **已取消（D-021）**：DEV 文件沒有圖表，16 題無從出題。
+   依事前寫死的 fallback，全部 route 用 `qwen3.6:27b`。
 2. `scripts/pin_models.py` → `configs/models.lock.json`（含 challenger 結果）
 3. `scripts/check_leakage.py` 通過
 4. `scripts/freeze_protocol.py` → `results/feasibility/protocol_lock.json`

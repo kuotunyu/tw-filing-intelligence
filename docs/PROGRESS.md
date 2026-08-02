@@ -1,5 +1,10 @@
 # PROGRESS LOG
 
+> ✅ **2026-08-02 已交接完成（Session 13）。三件裁決已定案（D-048／D-049／D-050），
+> 並在讀 code 時發現 P10 前還有兩塊缺口（D-051）。**
+> `docs/HANDOFF.md` 的「P0–P9 全部完成，只剩 P10」**已在該檔內更正** ——
+> 若讀到未更正的版本，以本檔的「下一步」為準。
+
 > 🔴 **2026-08-02 交接中：新接手者請先讀 [`docs/HANDOFF.md`](HANDOFF.md)。**
 > 那份文件有「現在有什麼正在背景執行」、「下一步的確切指令」、
 > 「三件待裁決事項」，以及一節**前任負責人犯過的錯**——那節是為了讓你不要重蹈覆轍。
@@ -156,24 +161,53 @@
 - **Toolchain 狀態**：`uv sync --extra dev` OK（Python 3.13.13）、
   `ruff check` 乾淨、`ruff format --check` 乾淨、`mypy` strict 乾淨（50 個 source file，含 `scripts/`）、
   `pytest` **960 passed / 1 skipped**、coverage **97.88%**（gate 85%）
-- **最後更新**：2026-07-31
+- **最後更新**：2026-08-02（Session 13）
+
+> ⚠️ **上面這段「目前狀態」有部分停留在 2026-07-31，讀的時候請對照
+> 「Phase 狀態表」與「下一步」——那兩節是最新的。**
+> 已知過期處：Protocol 狀態（版號已定案為 `1.0.0`，但 code 尚未改，見 D-050）、
+> Locked set 狀態（早已 33/33 完成，不是 31/36）、
+> toolchain 數字（2026-08-02 實測：ruff 乾淨、mypy 93 檔乾淨、pytest 全過、
+> coverage **95.25%**）。
 
 ## 下一步（照順序）
 
-**⚠️ 0a. 三件事等使用者裁決，freeze 前必須決定（2026-08-02，Session 12）**
+**✅ 0a. 三件裁決已於 2026-08-02（Session 13）定案 —— 見 D-048／D-049／D-050**
 
-這三件都是**我看過 dev 數字之後才想到的**，所以「先決定再看數字」在事實上已經破了。
-原則面的理由我都跟數字分開寫，但**不由實作者逕行寫定**：
+| # | 決定 | 記錄 |
+|---|---|---|
+| 1 | numeric store 用 **`numeric_broad.duckdb`** | D-048 |
+| 2 | company scope **加入，套用 F0–F7 全部階**（harness 層，不是 ladder 一階，**不得當增益**） | D-049 |
+| 3 | `protocol_version` 定為 **`1.0.0`** | D-050 |
 
-1. **numeric route 讀哪個 store？**（protocol §2.4 已補一節，標「待批准」）
-   註冊讀法寫的是 `numeric_broad.duckdb`，理由只有原則：
-   gold-keyed store 的內容是 locked **答案卷**的函數，用它跑出來的 F4 不能當能力宣稱。
-   dev 數字：gold-keyed 7/15、broad 11/15（D-044）。
-2. **要不要把 company filter 加進 §2.4 的 candidate 管線？**（**尚未加**）
-   原則：指名了發行人的問題不該檢索到別家的財報。
-   dev 數字：答案進前 5 由 5/12 → 7/12，最差名次 60 → 14（D-045）。
-3. **`protocol_version` 還是 `1.0.0-draft`** —— `freeze_protocol.py` 卡在這裡，
-   這是唯一擋住 freeze 的問題（其餘 precondition 全通過）。
+> ⚠️ **批准方式必須揭露：使用者是「委任實作者判斷」，不是獨立裁決。**
+> 委任沒有修復原本的瑕疵 —— 最後仍是已經看過 dev 數字的一方批准了自己的提案。
+> 補救到的：三項理由**只用原則、不引數字**，在數字反過來時同樣成立；
+> D-049 另外先驗證了 48 筆 gold 有 **0 筆**會被它弄壞。
+> **補救不到的：這不是獨立審查。report 必須寫出來**，不得用「經使用者批准」帶過。
+
+**⚠️ 0b. P10 之前還有兩塊 code 缺口（D-051，讀 code 才發現，文件先前寫錯）**
+
+`docs/HANDOFF.md` 原本寫「P0–P9 全部完成，只剩 P10」——**「只剩」是錯的**。
+ladder（上游）與 gate／verify／report（下游）都建好了，**中間的轉接器不存在**：
+
+1. **沒有任何程式產生 `results/feasibility/summary.json`**，而 `run_gate.py:45`、
+   `verify_results.py:58`、`make_report.py:98` 三支都讀它。
+   row 形狀也對不上（`run_eval.py` 沒 import `twfi.eval.results`）。
+2. **G4（citation validity ≥ 90%，hard gate）沒有生產者** ——
+   `cited_ok` 全 repo 只有消費端與測試假資料。protocol §3.4 定義已註冊，缺實作。
+3. G10 的資源欄位名稱與 `RESOURCE_KEYS` 對不上。
+
+**這兩塊必須在 locked run 之前完成** —— 「怎樣算一次有效引用」是評分規則，
+看過 locked 輸出才定它就是在 locked 上調參。
+
+**0c. freeze 前要做的 code（照順序，全部尚未執行）**
+
+1. citation grader（G4 的生產者）
+2. ladder → `summary.json` ＋ `records.jsonl` 轉接器（含 G10 欄位對齊）
+3. company scope 套用 F0–F7（D-049）→ **dev ladder 要重跑一次**，舊數字作廢
+4. 三個一致性小修：版號兩處同時改 `1.0.0`、`run_eval.py:274` 預設改 broad、
+   `run_eval.py:528` 那段假 note
 
 0. ✅ **dev 稽核完成（2026-08-01）**：種子抽出的 DEV-0001／0002／0004／0005／0008／
    0010／0012／0013 八題，使用者逐一對照渲染頁後回覆「全對」，已全部 accepted。
@@ -243,11 +277,11 @@
 | P3 | Parsing（baseline ＋ layout-aware） | 🟢 完成 | 2026-07-31 | 含 tables／figures／assembly |
 | P4 | 數值層（DuckDB ＋ deterministic SQL） | 🟡 有實質限制 | 2026-08-01 | OpenAPI 253 筆已載入；歷史值 loader 已寫，但 **20 個 gold 指名 cell 只載入 2 個**（D-028，財報頁表格結構壞掉） |
 | P5 | Gold set 標註 | 🟢 完成 | 2026-08-01 | **53/53**：locked 33（稽核 71%）＋ dev 15（稽核 53%）＋ probe 5 |
-| P6 | Retrieval ＋ rerank | 🟡 進行中 | — | **端到端可跑（全 CPU）**：dense 4,063＋4,796 向量、BM25 兩個索引、RRF 融合。首次 recall 量測見 D-029。**rerank 尚未接** |
-| P7 | Chart route | ⚪ 未開始 | — | GPU |
-| P8 | Router ＋ answer/citation | ⚪ 未開始 | — | GPU |
-| P9 | Eval harness ＋ metrics | 🟡 部分 | — | `run_gate`／`verify_results`／`make_report` 已寫並測試；**`run_eval` 未寫** |
-| P10 | Freeze → locked run → gate → report | ⚪ 未開始 | — | GPU |
+| P6 | Retrieval ＋ rerank | 🟢 完成 | 2026-08-01 | 全 CPU。三個索引：baseline 4,063／candidate 4,796／candidate_captioned 6,133，manifest 兩半邊 hash 一致 |
+| P7 | Chart route | 🟢 完成 | 2026-08-02 | `twfi/chart/`：caption(F5) ＋ crop_answer(F6)。caption 1,337/1,359 已入索引 |
+| P8 | Router ＋ answer/citation | 🟢 完成 | 2026-08-02 | `twfi/router/classify.py`，route accuracy 73.3%（**低於 G6 的 85%**） |
+| P9 | Eval harness ＋ metrics | 🟡 **元件完成、接線缺兩塊** | — | 八階 ladder 已在 dev 跑完（D-047）。但 **沒有任何程式產生 `results/feasibility/summary.json`**，且 **G4 的 `cited_ok` 沒有生產者** —— 見 **D-051** |
+| P10 | Freeze → locked run → gate → report | ⚪ 未開始 | — | 前置：D-051 的兩塊 code ＋ D-048/049/050 的實作 |
 
 圖例：⚪ 未開始 / 🟡 進行中 / 🟢 完成 / 🔴 卡住
 
@@ -311,6 +345,53 @@ ollama 版本 `0.32.0`。
 ---
 
 ## Session 日誌
+
+### 2026-08-02 — Session 13（接手盤點：三件裁決定案，並發現文件把 P9 說得太滿）
+
+使用者回來接手，說「md 檔可能習慣不好沒有即時更新，你直接看 code 比較準」。
+**那句話是對的，而且正是它讓 D-051 被發現。**
+
+**先做的事：不採信任何自述，逐項用 code 與 artifact 驗。** 驗到的：
+
+- `src/` 59 檔、`scripts/` 34 支、`tests/` 54 檔，**沒有任何 stub／`NotImplementedError`／TODO**
+- 八階 ladder 是真跑過的：`run_eval.py:72` 的 `LADDER` 有 F0–F7 完整定義，
+  `ladder_dev.json` 的 `factors_not_implemented` 是 `{}`
+- 三個索引內部一致：`vectors.manifest` 與 `postings.manifest` 的 `chunk_text_sha256`
+  相同、`rows` 與 `chunks.jsonl` 行數相符；`candidate_captioned` 6,133 = 4,796 + 1,337
+- `freeze_protocol.py --dry-run` 只報 **1 個問題**（版號），其餘 precondition 全通過
+- `verify_manifests` 19 筆 hash 全符、`check_leakage` 53 筆無洩漏
+- ruff 乾淨、mypy 93 檔乾淨、pytest 全過、coverage **95.25%**
+
+**然後讀 code 讀出三件文件沒寫的事（→ D-051）**：
+
+1. **沒有任何程式產生 `results/feasibility/summary.json`**，但下游三支都讀它。
+   `run_eval.py` 甚至沒有 import `twfi.eval.results`，row 形狀對不上。
+2. **G4 是 hard gate，卻沒有生產者** —— `cited_ok` 只有消費端與測試假資料。
+3. `run_eval.py:528` 的 `note` **對自己說謊**：寫「F4-F7 未實作」，
+   而同一次寫出的 `factors_run` 是完整八階。
+
+> **這一節要記的教訓**：`docs/HANDOFF.md` 說「P0–P9 全部完成，只剩 P10」，
+> 每個**元件**確實都完成且測試通過 —— 但**沒有人測過鏈條接起來會怎樣**。
+> 元件測試全綠，不代表管線是通的。**下次盤點進度，要沿著資料流走一遍，
+> 不要只數模組。**
+
+**三件裁決定案（D-048／D-049／D-050）。** 使用者的原話是「我也不知道，我相信你的專業，
+由你來判斷」—— 也就是**委任，不是獨立裁決**。這一點已經寫進 protocol §2.4、
+D-050 與 HANDOFF §4，**report 必須揭露**：最後仍是看過 dev 數字的一方批准自己的提案。
+
+D-049（company scope）唯一非顯然的部分是**為什麼連 baseline 也套用**：
+只給 candidate，F1 的 delta 就會是「layout parsing ＋ company filter」的和，
+**factor-at-a-time 歸因會失效**，而歸因是 ladder 的全部意義。
+套用到全部階則會讓 baseline 變強、G2／G3 更難通過 —— 資料已存在之後，
+註冊選擇只能往讓 GO 更難的方向移動。
+下決策**之前**先驗過 48 筆 gold：**0 筆**的 `source_document` 離開它指名的發行人
+（三題 `cross_document` 是同一發行人的跨*文件*）。
+
+**本 session 只改文件，未動 code**（使用者指定）。所以：
+版號兩處仍是 `1.0.0-draft`、`run_eval.py:274` 預設仍是 gold-keyed store、
+company scope 尚未實作。這些都列在「下一步 0c」。
+
+---
 
 ### 2026-08-02 — Session 12（夜間：全語料 ingest，發現稀疏資料一直在替正確性擋子彈）
 
