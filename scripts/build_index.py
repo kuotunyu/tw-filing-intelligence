@@ -43,7 +43,7 @@ from twfi.index.embeddings import (
     save_vectors,
     utc_now,
 )
-from twfi.io.jsonl import dump_lines
+from twfi.io.jsonl import dump_lines, read_lines
 from twfi.io.manifest import load_acquisition_lock
 from twfi.parsing.baseline import PARSER_NAME as BASELINE_PARSER
 from twfi.parsing.baseline import chunk_fixed, parse_baseline
@@ -79,8 +79,10 @@ def main(
     if resolved_dtype not in {"float16", "float32"}:
         typer.echo(f"unknown dtype {resolved_dtype!r}; choose float16 or float32")
         raise typer.Exit(code=2)
-    if parser not in {"baseline", "candidate", "both"}:
-        typer.echo(f"unknown parser {parser!r}; choose baseline, candidate or both")
+    if parser not in {"baseline", "candidate", "candidate_captioned", "both"}:
+        typer.echo(
+            f"unknown parser {parser!r}; choose baseline, candidate, candidate_captioned or both"
+        )
         raise typer.Exit(code=2)
 
     paths = repo_paths()
@@ -134,6 +136,17 @@ def main(
 
 def _collect(which: str, lock: Any, paths: Any, *, limit: int) -> list[dict[str, Any]]:
     """Chunk every usable filing with one parser, carrying page and section provenance."""
+    # `candidate_captioned` is not a parser -- it is the candidate chunk set plus one chunk per
+    # VLM caption, already assembled by scripts/build_captions.py. Re-chunking here would drop
+    # the captions, which are the entire difference F5 measures.
+    if which == "candidate_captioned":
+        prepared = paths.root / "data" / "index" / which / "chunks.jsonl"
+        if not prepared.is_file():
+            typer.echo(f"  {which}: {prepared} does not exist; run build_captions.py first")
+            return []
+        prepared_rows: list[dict[str, Any]] = read_lines(prepared)
+        return prepared_rows[:limit] if limit else prepared_rows
+
     rows: list[dict[str, Any]] = []
     for document in USABLE_DOCUMENTS:
         acquired = lock.get(document.doc_id)

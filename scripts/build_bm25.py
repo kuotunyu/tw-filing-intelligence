@@ -44,8 +44,10 @@ def main(
     b: Annotated[float, typer.Option(help="Length normalisation.")] = 0.75,
 ) -> None:
     """Index one or both parsers' chunks for BM25."""
-    if parser not in {"baseline", "candidate", "both"}:
-        typer.echo(f"unknown parser {parser!r}; choose baseline, candidate or both")
+    if parser not in {"baseline", "candidate", "candidate_captioned", "both"}:
+        typer.echo(
+            f"unknown parser {parser!r}; choose baseline, candidate, candidate_captioned or both"
+        )
         raise typer.Exit(code=2)
 
     paths = repo_paths()
