@@ -99,9 +99,13 @@ def test_every_document_tells_a_human_where_to_put_it(paths: RepoPaths) -> None:
 def test_recorded_acquisitions_still_verify(repo_root: Path, paths: RepoPaths) -> None:
     """Whatever the lock claims to have, the bytes on disk must still match.
 
-    Skips when nothing has been acquired yet -- an empty lock is the honest state
-    before P2, not a failure.
+    Raw filings are intentionally excluded from the repository.  A clean clone therefore
+    has the local acquisition lock but not the bytes it describes; that is an honest
+    pre-acquisition state for CI.  When raw data is present locally, every recorded hash
+    is still checked and any missing or changed file remains a test failure.
     """
+    if not paths.raw.exists():
+        pytest.skip("raw acquisition artifacts are not committed; run acquisition first")
     lock = load_acquisition_lock(paths.acquisition_lock)
     if not lock.records:
         pytest.skip("nothing acquired yet (run scripts/fetch_twse_openapi.py)")
