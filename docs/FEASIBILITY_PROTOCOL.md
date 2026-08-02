@@ -1,6 +1,6 @@
 # FEASIBILITY PROTOCOL (pre-registered)
 
-`protocol_version: 1.0.0-draft`
+`protocol_version: 1.0.0`
 `status: DRAFT — 尚未 freeze`
 `authored: 2026-07-31`
 

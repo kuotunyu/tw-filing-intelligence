@@ -35,8 +35,10 @@ from __future__ import annotations
 import json
 import re
 import statistics
+import subprocess
 import time
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -46,20 +48,44 @@ import typer
 from twfi.answer.generate import Generation, GenerationConfig, generate
 from twfi.answer.prompt import DEFAULT_VARIANT, PROMPT_VARIANTS, build_prompt, parse_answer
 from twfi.console import use_utf8_output
-from twfi.eval.answers import normalise_text, refusal_rates, score_answer
+from twfi.errors import EvaluationError, ProtocolLockError, ResultIntegrityError
+from twfi.eval.answers import is_refusal, normalise_text, refusal_rates, score_answer
+from twfi.eval.artifacts import build_error_analysis, build_summary, graded_record
+from twfi.eval.citations import CitationGrader
 from twfi.eval.gates import wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
+from twfi.eval.locked_run import (
+    begin_locked_run,
+    locked_request_problems,
+    resource_measurements,
+)
+from twfi.eval.protocol_lock import assert_lock_valid
+from twfi.eval.results import PROBE_RUN, verify
 from twfi.index.embeddings import load_vectors
 from twfi.index.lexical import load_index
 from twfi.index.rerank import load_cross_encoder, rerank_hits
 from twfi.index.retrieve import Retriever, covered_targets, hit_rank, reciprocal_rank
+from twfi.index.scope import company_document_scope
+from twfi.io.acquire import expected_artifacts
 from twfi.io.hashing import sha256_text_file
 from twfi.io.jsonl import dump_lines, read_lines
-from twfi.io.manifest import load_acquisition_lock
+from twfi.io.manifest import (
+    load_acquisition_lock,
+    load_document_manifest,
+    load_structured_manifest,
+    verify_acquisition,
+)
 from twfi.numeric.route import answer_numerically
 from twfi.numeric.store import NumericStore
 from twfi.paths import repo_paths
-from twfi.protocol import COVERAGE_AT, MRR_AT, RECALL_AT, TOP_K_RERANK, TOP_K_RETRIEVE
+from twfi.protocol import (
+    COVERAGE_AT,
+    FACTOR_IDS,
+    MRR_AT,
+    RECALL_AT,
+    TOP_K_RERANK,
+    TOP_K_RETRIEVE,
+)
 from twfi.router.classify import classify, confusion_matrix, route_accuracy
 
 if TYPE_CHECKING:
@@ -253,10 +279,171 @@ def _answer_reached_the_prompt(record: GoldRecord, prompt: str) -> bool | None:
     return all(figure in seen for figure in wanted)
 
 
+def _locked_data_problems(paths: Any, lock: Any) -> list[str]:
+    """Gate G1 preflight, before the irreversible run marker is written."""
+    documents = load_document_manifest(paths.documents_manifest)
+    structured = load_structured_manifest(paths.structured_manifest)
+    required_ids = {
+        artifact.id for artifact in expected_artifacts(documents, structured) if artifact.required
+    }
+    required_ids.update(dataset.dataset_id for dataset in structured.automated())
+    return verify_acquisition(lock, paths.root, expected_ids=required_ids)
+
+
+def _gpu_preflight(config: GenerationConfig) -> list[str]:
+    """Confirm local inference and reject a competing GPU workload."""
+    query = [
+        "nvidia-smi",
+        "--query-compute-apps=process_name,used_memory",
+        "--format=csv,noheader,nounits",
+    ]
+    observed = subprocess.run(query, capture_output=True, text=True, check=False)
+    if observed.returncode != 0:
+        return ["nvidia-smi is unavailable; the locked run cannot prove it is using the GPU"]
+    problems: list[str] = []
+    for line in observed.stdout.splitlines():
+        name, separator, memory = line.partition(",")
+        if not separator or "ollama" in name.casefold():
+            continue
+        if name.strip().casefold().endswith(("python.exe", "python")):
+            problems.append(f"foreign GPU process is active: {name.strip()}")
+            continue
+        try:
+            held = int(memory.strip())
+        except ValueError:
+            continue
+        if held > 2_500:
+            problems.append(f"foreign GPU process {name.strip()} holds {held} MiB")
+    if problems:
+        return problems
+    readiness = generate("只回答 READY。", config)
+    if not readiness.ok:
+        return [f"generation model preflight failed: {readiness.error}"]
+    after = subprocess.run(query, capture_output=True, text=True, check=False)
+    if "ollama" not in after.stdout.casefold():
+        return ["the generation preflight completed but no Ollama GPU process is visible"]
+    return []
+
+
+def _run_no_evidence_probes(
+    paths: Any, config: GenerationConfig, prompt_variant: str
+) -> list[dict[str, Any]]:
+    """Run G8 with retrieval deliberately cleared, keeping it outside accuracy denominators."""
+    probes = load_gold(paths.locked_probes.read_text(encoding="utf-8").splitlines())
+    output: list[dict[str, Any]] = []
+    for record in probes:
+        decision = classify(record.question)
+        prompt = build_prompt(record.question, [], variant=prompt_variant)
+        completion = generate(prompt, config)
+        draft = parse_answer(completion.text)
+        refused = is_refusal(draft.answer)
+        output.append(
+            {
+                "question_id": record.question_id,
+                "factor": "F7",
+                "category": "probe",
+                "answerable": False,
+                "gold_route": "unanswerable",
+                "route": "unanswerable" if refused else decision.route,
+                "correct": refused,
+                "refused": refused,
+                "cited_ok": None,
+                "question": record.question,
+                "predicted": draft.answer,
+                "expected_answer": record.answer,
+                "route_decision": decision.to_json(),
+                "retrieval": {"seconds": 0.0, "evidence_cleared": True},
+                "generation": completion.to_json(),
+            }
+        )
+    return output
+
+
+def _write_locked_artifacts(
+    *,
+    paths: Any,
+    rows: list[dict[str, Any]],
+    gold: list[GoldRecord],
+    probes: list[dict[str, Any]],
+    lock_sha256: str,
+    data_reproducible: bool,
+) -> tuple[Path, tuple[Any, ...]]:
+    """Write raw records first, then a summary derived exclusively from those records."""
+    by_id = {record.question_id: record for record in gold}
+    official: dict[str, list[dict[str, Any]]] = {factor: [] for factor in FACTOR_IDS}
+    for row in rows:
+        question_id = str(row.get("question_id", ""))
+        if question_id not in by_id:
+            raise ResultIntegrityError(f"no locked gold record for ladder row {question_id!r}")
+        record = graded_record(row, by_id[question_id])
+        official[record["factor"]].append(record)
+    official[PROBE_RUN] = probes
+
+    for run, records in official.items():
+        dump_lines(paths.runs / run / "records.jsonl", records)
+
+    budget_path = paths.runs / "resource_budget.json"
+    try:
+        budget = json.loads(budget_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ResultIntegrityError(f"cannot read {budget_path}: {exc}") from exc
+    if not isinstance(budget, dict):
+        raise ResultIntegrityError(f"{budget_path} must hold a JSON object")
+    resources = resource_measurements(official["F7"], budget)
+    resources_path = paths.runs / "resources.json"
+    resources_path.write_text(
+        json.dumps(resources, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    summary = build_summary(
+        official,
+        protocol_lock_sha256=lock_sha256,
+        resources=resources,
+        data_reproducible=data_reproducible,
+    )
+    problems = verify(
+        summary,
+        official,
+        expected_lock_sha256=lock_sha256,
+        resources=resources,
+    )
+    if not problems:
+        summary = build_summary(
+            official,
+            protocol_lock_sha256=lock_sha256,
+            resources=resources,
+            data_reproducible=data_reproducible,
+            results_reproducible=True,
+        )
+        problems = verify(
+            summary,
+            official,
+            expected_lock_sha256=lock_sha256,
+            resources=resources,
+        )
+
+    paths.summary_json.parent.mkdir(parents=True, exist_ok=True)
+    paths.summary_json.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    dump_lines(paths.error_analysis_jsonl, build_error_analysis(official["F7"]))
+    verification = {
+        "summary": str(paths.summary_json),
+        "raw": str(paths.runs),
+        "records_per_run": {run: len(records) for run, records in official.items()},
+        "reproducible": not problems,
+        "problems": [problem.to_json() for problem in problems],
+    }
+    (paths.feasibility / "results_verification.json").write_text(
+        json.dumps(verification, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return paths.summary_json, problems
+
+
 @app.command()
 def main(
     gold_set: Annotated[
-        str, typer.Option("--set", help="dev only until the protocol is frozen.")
+        str, typer.Option("--set", help="dev, or locked after the irreversible freeze.")
     ] = "dev",
     factor: Annotated[list[str] | None, typer.Option("--factor", help="Rungs to run.")] = None,
     depth: Annotated[int, typer.Option(help="Candidates each side fetches before fusion.")] = 100,
@@ -271,16 +458,19 @@ def main(
             help="Store for F4. numeric.duckdb is gold-keyed; numeric_broad.duckdb is the "
             "whole-corpus ingest, which is what F4 would face in production."
         ),
-    ] = "numeric.duckdb",
+    ] = "numeric_broad.duckdb",
+    confirmed_locked: Annotated[
+        bool,
+        typer.Option(
+            "--i-understand-this-is-the-only-locked-run",
+            help="Required for --set locked after every preflight passes.",
+        ),
+    ] = False,
 ) -> None:
     """Run each requested rung over the gold set and score every answer."""
     paths = repo_paths()
-    if gold_set != "dev":
-        typer.echo(
-            "refusing: only dev may be run before the freeze (protocol 1.3, step 7). The locked "
-            "run happens after scripts/freeze_protocol.py, and this script does not write "
-            "results/feasibility/ in any case."
-        )
+    if gold_set not in {"dev", "locked"}:
+        typer.echo(f"unknown --set {gold_set!r}; expected 'dev' or 'locked'")
         raise typer.Exit(code=2)
     if prompt_variant not in PROMPT_VARIANTS:
         typer.echo(f"unknown --prompt {prompt_variant!r}; have {sorted(PROMPT_VARIANTS)}")
@@ -294,7 +484,8 @@ def main(
         typer.echo(f"cannot run {unknown}: {missing or 'no such rung'}")
         raise typer.Exit(code=2)
 
-    source = paths.dev_gold
+    is_locked = gold_set == "locked"
+    source = paths.locked_gold if is_locked else paths.dev_gold
     records: list[GoldRecord] = list(load_gold(source.read_text(encoding="utf-8").splitlines()))
     if limit:
         records = records[:limit]
@@ -315,6 +506,71 @@ def main(
         )
         raise typer.Exit(code=2)
 
+    database = paths.duckdb / numeric_db
+    if any(LADDER[name].get("numeric") for name in wanted) and not database.is_file():
+        typer.echo(f"{database} does not exist; run load_historical.py first")
+        raise typer.Exit(code=2)
+
+    lock = load_acquisition_lock(paths.acquisition_lock)
+    config = GenerationConfig()
+    locked_lock_sha256 = ""
+    if is_locked:
+        preflight = locked_request_problems(
+            factors=wanted,
+            limit=limit,
+            prompt_variant=prompt_variant,
+            numeric_db=numeric_db,
+        )
+        if not confirmed_locked:
+            preflight.append(
+                "--i-understand-this-is-the-only-locked-run is required after reviewing preflight"
+            )
+        try:
+            assert_lock_valid(paths.root, paths.protocol_lock_json)
+        except ProtocolLockError as exc:
+            preflight.append(str(exc))
+        locked_lock_sha256 = (
+            sha256_text_file(paths.protocol_lock_json) if paths.protocol_lock_json.is_file() else ""
+        )
+        preflight.extend(_locked_data_problems(paths, lock))
+        budget_path = paths.runs / "resource_budget.json"
+        if not budget_path.is_file():
+            preflight.append(f"missing G10 measurement: {budget_path}")
+        marker = paths.runs / "locked_run_started.json"
+        if marker.exists():
+            preflight.append(
+                f"the locked run already started; preserve and inspect the marker at {marker}"
+            )
+        if preflight:
+            typer.echo(f"{len(preflight)} locked-run preflight problem(s); nothing started:")
+            for problem in preflight:
+                typer.echo(f"  - {problem}")
+            raise typer.Exit(code=2)
+        gpu_problems = _gpu_preflight(config)
+        if gpu_problems:
+            typer.echo("locked-run GPU/model preflight failed; nothing started:")
+            for problem in gpu_problems:
+                typer.echo(f"  - {problem}")
+            raise typer.Exit(code=3)
+        try:
+            begin_locked_run(
+                marker,
+                {
+                    "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+                    "protocol_lock_sha256": locked_lock_sha256,
+                    "factors": wanted,
+                    "questions": len(records),
+                    "prompt_variant": prompt_variant,
+                    "numeric_db": numeric_db,
+                },
+            )
+        except EvaluationError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=2) from exc
+        typer.echo(
+            f"locked run started; wrote irreversible marker {marker.relative_to(paths.root)}"
+        )
+
     embed = _cpu_embedder()
     retrievers = _retrievers(paths, embed, depth, needed)
     score_pairs = None
@@ -324,20 +580,21 @@ def main(
 
     store = None
     if any(LADDER[name].get("numeric") for name in wanted):
-        database = paths.duckdb / numeric_db
-        if not database.is_file():
-            typer.echo(f"{database} does not exist; run load_historical.py --set dev first")
-            raise typer.Exit(code=2)
         store = NumericStore(database)
         typer.echo(f"numeric store: {numeric_db}, {store.count():,} figure(s)")
 
-    lock = load_acquisition_lock(paths.acquisition_lock)
+    citation_grader = CitationGrader(
+        {
+            acquired.id: acquired.local_path(paths.root)
+            for acquired in lock.records
+            if acquired.kind == "document"
+        }
+    )
     crop_dir = paths.root / "data" / "cache" / "crops"
     # Detected once per document and reused across rungs: detect_figures walks every page, and
     # doing it per question would dominate the run.
     figures_by_doc: dict[str, tuple[Any, ...]] = {}
 
-    config = GenerationConfig()
     rows: list[dict[str, Any]] = []
     summary: list[dict[str, Any]] = []
 
@@ -354,7 +611,13 @@ def main(
         started_rung = time.perf_counter()
         for position, record in enumerate(records, start=1):
             retrieval_started = time.perf_counter()
-            shortlist = retriever.search(record.question, TOP_K_RETRIEVE, mode=rung["mode"])
+            document_scope = company_document_scope(record.question)
+            shortlist = retriever.search(
+                record.question,
+                TOP_K_RETRIEVE,
+                mode=rung["mode"],
+                allowed_doc_ids=document_scope,
+            )
             if rung["rerank"] and score_pairs is not None:
                 shortlist = rerank_hits(
                     record.question, shortlist, score_pairs=score_pairs, top_k=TOP_K_RETRIEVE
@@ -406,9 +669,9 @@ def main(
             elif chart is not None:
                 completion = Generation(
                     text=chart.value,
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    seconds=0.0,
+                    prompt_tokens=chart.prompt_tokens,
+                    completion_tokens=chart.completion_tokens,
+                    seconds=chart.seconds,
                     model=chart.model,
                 )
                 draft = parse_answer(chart.value)
@@ -421,6 +684,15 @@ def main(
                 record,
                 predicted_unit=draft.unit,
                 predicted_period=draft.period,
+            )
+            citation = citation_grader.grade(
+                record=record,
+                predicted=draft.answer,
+                cited=draft.cited,
+                passages=passages,
+                refused=score.refused,
+                numeric=numeric if numeric is not None and numeric.ok else None,
+                chart=chart if chart is not None and chart.ok else None,
             )
             scores.append(score)
             refused.append(score.refused)
@@ -438,6 +710,11 @@ def main(
                     "predicted_unit": draft.unit,
                     "predicted_period": draft.period,
                     "cited": list(draft.cited),
+                    "cited_ok": citation.valid,
+                    "citation": {"kind": citation.kind, "detail": citation.detail},
+                    "retrieval_scope": sorted(document_scope)
+                    if document_scope is not None
+                    else None,
                     "answer_in_prompt": _answer_reached_the_prompt(record, prompt),
                     "numeric_route": numeric.to_json() if numeric is not None else None,
                     "chart_route": chart.to_json() if chart is not None else None,
@@ -526,9 +803,8 @@ def main(
         "questions": len(records),
         "summary": summary,
         "note": (
-            "Partial ladder: F4-F7 are not implemented, so this cannot support a GO decision and "
-            "results/feasibility/ is not written. Dev only; the locked run happens after the "
-            "freeze."
+            "Complete F0-F7 factor ladder. Development runs remain diagnostic; only the guarded "
+            "post-freeze locked run writes results/feasibility and supports a GO/NO-GO decision."
         ),
     }
     suffix = "" if prompt_variant == DEFAULT_VARIANT else f"_{prompt_variant}"
@@ -540,10 +816,32 @@ def main(
     dump_lines(paths.runs / f"ladder_{gold_set}{suffix}_rows.jsonl", rows)
     typer.echo("")
     typer.echo(f"wrote: {destination.relative_to(paths.root)}")
-    typer.echo(f"wrote: {(paths.runs / f'ladder_{gold_set}_rows.jsonl').relative_to(paths.root)}")
+    typer.echo(
+        f"wrote: {(paths.runs / f'ladder_{gold_set}{suffix}_rows.jsonl').relative_to(paths.root)}"
+    )
+
+    verification_problems: tuple[Any, ...] = ()
+    if is_locked:
+        typer.echo("")
+        typer.echo("running the five registered no-evidence probes with retrieval cleared ...")
+        probes = _run_no_evidence_probes(paths, config, prompt_variant)
+        summary_path, verification_problems = _write_locked_artifacts(
+            paths=paths,
+            rows=rows,
+            gold=records,
+            probes=probes,
+            lock_sha256=locked_lock_sha256,
+            data_reproducible=True,
+        )
+        typer.echo(f"wrote official locked artifacts and {summary_path.relative_to(paths.root)}")
+        if verification_problems:
+            typer.echo(
+                f"G9 failed: {len(verification_problems)} summary/artifact disagreement(s) "
+                "were preserved in results_verification.json"
+            )
 
     failures = [row for row in rows if row["generation"]["error"]]
-    if failures:
+    if failures or verification_problems:
         typer.echo("")
         typer.echo(f"{len(failures)} generation call(s) failed:")
         for row in failures[:5]:

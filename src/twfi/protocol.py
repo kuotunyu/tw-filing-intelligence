@@ -55,7 +55,7 @@ __all__ = [
     "consistency_problems",
 ]
 
-PROTOCOL_VERSION: Final = "1.0.0-draft"
+PROTOCOL_VERSION: Final = "1.0.0"
 
 Split = Literal["dev", "locked", "both"]
 DocType = Literal["annual_report", "financial_report", "xbrl"]

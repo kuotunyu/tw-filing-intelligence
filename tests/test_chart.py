@@ -211,6 +211,28 @@ def test_the_answer_cites_the_crop_it_read(filing: Path, figure: Figure, tmp_pat
     assert answer.bbox == figure.bbox.as_tuple()
 
 
+def test_the_chart_answer_preserves_generation_telemetry(
+    filing: Path, figure: Figure, tmp_path: Path
+) -> None:
+    def measured(_prompt: str, config: Any = None, *, images: Any = None) -> Generation:
+        return Generation(
+            text="值：35.2\n單位：%\n依據：圖中數值標籤",
+            prompt_tokens=17,
+            completion_tokens=9,
+            seconds=1.25,
+            model=getattr(config, "model", "fake"),
+        )
+
+    answer = answer_from_crop(
+        "年成長率？", filing, "TEST-DOC", figure, tmp_path, generate_fn=measured
+    )
+
+    assert answer.prompt_tokens == 17
+    assert answer.completion_tokens == 9
+    assert answer.seconds == 1.25
+    assert answer.to_json()["seconds"] == 1.25
+
+
 def test_the_question_reaches_the_model_and_nothing_else_does(
     filing: Path, figure: Figure, tmp_path: Path
 ) -> None:

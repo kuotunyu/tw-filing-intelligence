@@ -125,8 +125,19 @@ class Retriever:
             text=str(row.get("text", "")),
         )
 
-    def search(self, query: str, top_k: int, *, mode: Mode = "hybrid") -> list[Hit]:
+    def search(
+        self,
+        query: str,
+        top_k: int,
+        *,
+        mode: Mode = "hybrid",
+        allowed_doc_ids: Collection[str] | None = None,
+    ) -> list[Hit]:
         """Retrieve, by whichever mode the factor under test uses.
+
+        When ``allowed_doc_ids`` is supplied, both component rankings are filtered before
+        truncation and before fusion.  Filtering a completed top-k would let another company's
+        high-scoring chunks consume the candidate budget and leave an empty in-scope result.
 
         Raises:
             ValueError: If ``top_k`` is not positive, or the mode needs an index this
@@ -144,19 +155,31 @@ class Retriever:
                 "fall back to lexical, which would report a hybrid number for a lexical run"
             )
 
+        scope = frozenset(allowed_doc_ids) if allowed_doc_ids is not None else None
+        deep = len(self.chunks) if scope is not None else top_k
+
+        def in_scope(index: int) -> bool:
+            return scope is None or str(self.chunks[index].get("doc_id", "")) in scope
+
         if mode == "lexical":
             assert self.bm25 is not None
-            return [self._hit(index, score) for index, score in self.bm25.search(query, top_k)]
+            ranking = [
+                (index, score) for index, score in self.bm25.search(query, deep) if in_scope(index)
+            ]
+            return [self._hit(index, score) for index, score in ranking[:top_k]]
         if mode == "dense":
-            return [self._hit(index, score) for index, score in self._dense(query, top_k)]
+            ranking = [
+                (index, score) for index, score in self._dense(query, deep) if in_scope(index)
+            ]
+            return [self._hit(index, score) for index, score in ranking[:top_k]]
 
         assert self.bm25 is not None
         # Each side fetches at least top_k, and usually more, so a document only one side found
         # can still reach the fused answer. The pool does not depend on top_k, which is what
         # makes recall at two cutoffs comparable.
-        deep = max(top_k, self.fetch_depth or top_k)
-        lexical_ranking = [index for index, _ in self.bm25.search(query, deep)]
-        dense_ranking = [index for index, _ in self._dense(query, deep)]
+        deep = len(self.chunks) if scope is not None else max(top_k, self.fetch_depth or top_k)
+        lexical_ranking = [index for index, _ in self.bm25.search(query, deep) if in_scope(index)]
+        dense_ranking = [index for index, _ in self._dense(query, deep) if in_scope(index)]
         fused = reciprocal_rank_fusion([lexical_ranking, dense_ranking], self.rrf, top_k=top_k)
         return [self._hit(index, score) for index, score in fused]
 

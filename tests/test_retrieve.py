@@ -129,6 +129,21 @@ def test_the_three_modes_are_one_code_path_with_one_input_switched() -> None:
         assert all(isinstance(hit, Hit) for hit in hits)
 
 
+@pytest.mark.parametrize("mode", ["lexical", "dense", "hybrid"])
+def test_company_scope_is_applied_before_top_k_and_fusion(mode: str) -> None:
+    """An out-of-company hit must not consume the only answer slot."""
+    retriever = full()
+
+    hits = retriever.search(
+        "中華電信合併資產總額",
+        1,
+        mode=mode,  # type: ignore[arg-type]
+        allowed_doc_ids={"2412-FY2023-AR"},
+    )
+
+    assert [hit.doc_id for hit in hits] == ["2412-FY2023-AR"]
+
+
 def test_hybrid_can_rank_differently_from_either_side() -> None:
     """If it could not, fusing would be pointless and the F2 comparison empty."""
     retriever = full()
