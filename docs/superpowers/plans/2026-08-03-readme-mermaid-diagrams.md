@@ -1,80 +1,57 @@
-# README Mermaid 圖表 Implementation Plan
+# README Mermaid 清楚度修正 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 README 加入三張經實際 render 驗證的 Mermaid 圖，清楚說明 offline data preparation、query-time routes 與 pre-registered evaluation。
+**Goal:** 將容易混淆的 Mermaid 資料準備圖重構成四張不需猜測來源、箭頭或術語的圖，並修正 locked numeric store 的實際資料來源。
 
-**Architecture:** 每張圖只處理一個視角，使用 GitHub 原生 `flowchart` 與一致的高對比樣式。README 直接保存 Mermaid source，不提交衍生 PNG / SVG；系統行為與數字只取自現有 code、Protocol 1.0.0 與 frozen results。
+**Architecture:** PDF evidence preparation 與 numeric source reality 分開；query flow 與 evaluation flow 改成白話中文動作句。每張圖前先說明它回答的問題，Mermaid source 直接放在 README，不提交衍生圖檔。
 
-**Tech Stack:** GitHub Flavored Markdown、Mermaid flowchart、Mermaid CLI、PowerShell、pytest、Ruff、mypy
+**Tech Stack:** GitHub Flavored Markdown、Mermaid 11 flowchart、Mermaid CLI、PowerShell、pytest、Ruff、mypy
 
 ## Global Constraints
 
-- README 以正體中文為主，technical terms 保留原文。
+- README 以正體中文為主，technical terms 保留原文但同段解釋用途。
 - README 與 Mermaid labels 不使用 emoji 或裝飾性 Unicode symbols。
 - 必須保留「不是投資建議」與「不是 production 系統」。
-- 不修改 `docs/FEASIBILITY_PROTOCOL.md`、locked data 或 `results/feasibility/`。
-- `NO_GO` 是有效研究結論，不得畫成 pipeline error。
+- 不修改 frozen protocol、locked data 或 `results/feasibility/`。
+- 不得暗示 OpenAPI / XBRL 提供本次 FY2023–FY2024 locked numeric store。
+- `NO_GO` 是有效研究結論，不畫成 pipeline error。
 - Commit 作者只能是 `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，不得加入 `Co-authored-by:`。
-- 不提交 `.mmd`、PNG 或 SVG；Mermaid 驗證產物只放暫存目錄並在驗證後移除。
+- 不提交暫存 `.mmd`、PNG 或 SVG。
 
 ---
 
-### Task 1: 產生並驗證三張 Mermaid 圖
+### Task 1: 建立並驗證四張修正版 Mermaid 圖
 
 **Files:**
-- Create temporarily: `.tmp-mermaid/offline-preparation.mmd`
+- Create temporarily: `.tmp-mermaid/pdf-evidence.mmd`
+- Create temporarily: `.tmp-mermaid/numeric-sources.mmd`
 - Create temporarily: `.tmp-mermaid/query-flow.mmd`
 - Create temporarily: `.tmp-mermaid/evaluation-flow.mmd`
 - Do not commit: `.tmp-mermaid/`
 
 **Interfaces:**
-- Consumes: `docs/superpowers/specs/2026-08-03-readme-mermaid-diagrams-design.md`、`src/twfi/`、`docs/FEASIBILITY_PROTOCOL.md`、`results/feasibility/summary.json`
-- Produces: 三段通過 Mermaid CLI render 的 source code，供 Task 2 原樣嵌入 README
+- Consumes: `docs/FEASIBILITY_REPORT.md:126`、`docs/FEASIBILITY_REPORT.md:130`、`scripts/run_eval.py`、`src/twfi/`
+- Produces: 四段通過 Mermaid CLI render 且經視覺檢查的 source code
 
-- [ ] **Step 1: 建立 offline data preparation 圖**
+- [ ] **Step 1: 建立 PDF evidence preparation 圖**
 
 ```mermaid
 flowchart TD
-    subgraph Sources["公開資料來源"]
-        direction LR
-        PDF["MOPS filings<br/>PDF"]
-        Structured["TWSE OpenAPI / XBRL"]
-    end
-
-    subgraph Provenance["取得與 provenance"]
-        direction LR
-        Manifest["Manifest<br/>official URL + metadata"]
-        Hash["SHA-256 verification"]
-        Usable{"Machine-usable?"}
-        Recorded["保留 provenance<br/>不進 evaluation corpus"]
-        Schema["Schema validation<br/>row normalization"]
-    end
-
-    subgraph Preparation["Document preparation"]
-        direction LR
-        Layout["Layout-aware parsing"]
-        Chunks["Section-aware chunks"]
-        Tables["Table extraction"]
-        Figures["Figure detection"]
-    end
-
-    subgraph Evidence["Evidence stores"]
-        direction LR
-        Search[("BM25 + dense index<br/>caption 僅供 retrieval")]
-        DB[("DuckDB<br/>validated structured rows")]
-        Crops[("Original crop pixels")]
-    end
-
-    PDF --> Manifest --> Hash --> Usable
-    Usable -->|"否"| Recorded
-    Usable -->|"是"| Layout
-    Layout --> Chunks --> Search
-    Layout --> Tables -->|"validated rows"| DB
-    Layout --> Figures
-    Figures -->|"caption"| Search
-    Figures --> Crops
-    Structured --> Schema --> DB
+    PDF["MOPS PDF"] --> Record["記錄來源與檔案指紋<br/>官方 URL / file size / SHA-256"]
+    Record --> Readable{"PDF 文字層可解析？"}
+    Readable -->|"否"| Keep["保留失敗紀錄與 SHA-256"]
+    Keep --> Exclude["不作為評估題目的<br/>答案證據來源"]
+    Readable -->|"是"| Parse["解析版面、表格與圖像位置"]
+    Parse --> Chunks["段落與章節 chunks"]
+    Chunks --> Index[("BM25 + dense index")]
+    Parse --> Rows["可分類的表格／文字 rows"]
+    Rows --> Validate["驗證年度、單位、合併或個別、來源"]
+    Validate --> DB[("DuckDB")]
+    Parse --> Figures["Figure crops"]
+    Figures --> Caption["模型產生的圖片描述<br/>caption 只協助找頁"]
+    Caption --> Index
+    Figures --> Pixels["Original crop pixels<br/>交給 VLM 讀值"]
 
     classDef source fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
     classDef process fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
@@ -82,69 +59,96 @@ flowchart TD
     classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
     classDef excluded fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
 
-    class PDF,Structured source
-    class Manifest,Hash,Schema,Layout,Chunks,Tables,Figures process
-    class Usable decision
-    class Search,DB,Crops store
-    class Recorded excluded
+    class PDF source
+    class Record,Parse,Chunks,Rows,Validate,Figures,Caption,Pixels process
+    class Readable decision
+    class Index,DB store
+    class Keep,Exclude excluded
 ```
 
-- [ ] **Step 2: 建立 query-time answer flow 圖**
+- [ ] **Step 2: 建立 locked numeric source reality 圖**
 
 ```mermaid
 flowchart TD
-    Query(["使用者問題"]) --> Scope["Company scope<br/>document scope"]
-    Scope --> Router["Typed bounded router<br/>最多一次 correction"]
+    Question["本次 locked numeric route<br/>實際查哪一份歷史資料？"]
 
-    subgraph Routes["Evidence routes"]
-        direction LR
-        Narrative["Narrative route"] --> Hybrid["BM25 + dense retrieval"] --> Rerank["Cross-encoder reranking"] --> Generate["Grounded generation"]
-        Numeric["Numeric route"] --> DuckDB[("DuckDB")] --> SQL["Templated SQL<br/>禁止 free-form SQL"] --> Calc["Deterministic calculation<br/>formula + operands"]
-        Chart["Chart route"] --> Caption["Caption-assisted retrieval<br/>caption 不可作為答案"] --> Crop["Original crop pixels"] --> VLM["VLM reading"]
-    end
+    Question -->|"實際使用"| Filing["MOPS filing line stream"]
+    Filing --> Rebuild["重建可分類的 FY2023–FY2024 rows"]
+    Rebuild --> Broad[("numeric_broad.duckdb")]
+    Broad --> Used["本次 locked numeric route 使用"]
 
-    Router -->|"narrative / cross-modal"| Narrative
-    Router -->|"numeric"| Numeric
-    Router -->|"chart / table"| Chart
+    Question -->|"未使用"| OpenAPI["TWSE OpenAPI"]
+    OpenAPI --> Snapshot["只有 FY2026Q1 snapshot"]
+    Snapshot --> NoOverlap["與 FY2023–FY2024 無交集<br/>未進 locked store"]
 
-    Generate --> Contract["Answer + citation contract"]
-    Calc --> Contract
-    VLM --> Contract
-    Contract --> Valid{"Evidence 與 citation<br/>可驗證且無來源衝突?"}
-    Valid -->|"是"| Answer["Grounded answer<br/>citation / formula / operands"]
-    Valid -->|"否"| Refusal["Structured refusal"]
+    Question -->|"未取得"| XBRL["XBRL"]
+    XBRL --> Missing["本輪未取得<br/>未進 locked store"]
+
+    classDef question fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
+    classDef used fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
+    classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
+    classDef unused fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
+
+    class Question question
+    class Filing,Rebuild,Used used
+    class Broad store
+    class OpenAPI,Snapshot,NoOverlap,XBRL,Missing unused
+```
+
+- [ ] **Step 3: 建立白話 query flow 圖**
+
+```mermaid
+flowchart TD
+    Query(["使用者問題"]) --> Scope["步驟 1：限定公司、年度與文件"]
+    Scope --> Router["步驟 2：判斷題型並選回答路徑<br/>router 最多修正一次"]
+
+    Router -->|"敘述／跨頁"| Narrative["找出相關文字"]
+    Narrative --> Rerank["依相關性重新排序"]
+    Rerank --> Generate["LLM 只根據 evidence 回答"]
+
+    Router -->|"數值／跨期"| Numeric["查 DuckDB"]
+    Numeric --> SQL["使用固定 SQL template<br/>不讓 LLM 自由寫 SQL"]
+    SQL --> Calc["由程式計算<br/>formula + operands"]
+
+    Router -->|"圖表／表格"| Chart["用 caption 找到相關頁"]
+    Chart --> Crop["回到 original crop pixels"]
+    Crop --> VLM["VLM 從原圖讀值"]
+
+    Generate --> Check["步驟 3：驗證 evidence、citation 與來源衝突"]
+    Calc --> Check
+    VLM --> Check
+    Check --> Valid{"證據足夠且引用可驗證？"}
+    Valid -->|"是"| Answer["輸出答案、引用<br/>以及必要的計算過程"]
+    Valid -->|"否"| Refusal["拒答並說明缺少什麼證據"]
 
     classDef input fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
     classDef control fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
     classDef route fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
     classDef success fill:#C6F6D5,stroke:#2F855A,stroke-width:2px,color:#173F2A
     classDef refusal fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
 
     class Query input
-    class Scope,Router,Contract,Valid control
-    class Narrative,Hybrid,Rerank,Generate,Numeric,SQL,Calc,Chart,Caption,Crop,VLM route
-    class DuckDB store
+    class Scope,Router,Check,Valid control
+    class Narrative,Rerank,Generate,Numeric,SQL,Calc,Chart,Crop,VLM route
     class Answer success
     class Refusal refusal
 ```
 
-- [ ] **Step 3: 建立 pre-registered evaluation 圖**
+- [ ] **Step 4: 建立白話 evaluation flow 圖**
 
 ```mermaid
 flowchart TD
-    Dev["DEV-only decisions<br/>gold / models / tolerance"] --> Register["固定 F0-F7 與 G1-G10 gates"]
-    Register --> Freeze["freeze_protocol.py"]
-    Freeze --> Lock["Protocol 1.0.0 lock<br/>7 artifact hashes"]
-    Lock -.-> Rule["凍結後不得修改<br/>locked set / thresholds / models"]
-    Lock --> Eval["唯一一次 locked evaluation<br/>執行 F0-F7"]
-    Eval --> Recompute["verify_results.py<br/>由 raw artifacts 重算"]
-    Recompute --> Verified{"重算一致?"}
+    Dev["只在 DEV 階段調整<br/>題目、models、tolerance"] --> Register["先固定 F0–F7<br/>與 G1–G10 gates"]
+    Register --> Freeze["freeze_protocol.py<br/>寫入 7 個 artifact hashes"]
+    Freeze --> Rule["從此不得修改<br/>locked set / thresholds / models"]
+    Rule --> Eval["唯一一次 LOCKED evaluation<br/>執行 F0–F7"]
+    Eval --> Recompute["verify_results.py<br/>從 raw records 重算結果"]
+    Recompute --> Verified{"重算結果一致？"}
     Verified -->|"否"| Stop["停止發布<br/>結果不可採信"]
-    Verified -->|"是"| Gate["run_gate.py<br/>依 frozen gates 判定"]
-    Gate --> Decision{"Mechanical decision"}
-    Decision -->|"通過全部 hard gates"| Go["GO"]
-    Decision -->|"僅 soft gate 未通過"| Conditional["CONDITIONAL_GO"]
+    Verified -->|"是"| Gate["run_gate.py<br/>依凍結的 G1–G10 判定"]
+    Gate --> Decision{"依規則自動判定"}
+    Decision -->|"全部 hard gates 通過"| Go["GO"]
+    Decision -->|"只有 soft gate 未通過"| Conditional["CONDITIONAL_GO"]
     Decision -->|"任一 hard gate 未通過"| NoGo["NO_GO<br/>本次結果"]
     NoGo --> Result["F0 17/33<br/>F7 6/33<br/>hard gain -27.8pp"]
 
@@ -157,7 +161,7 @@ flowchart TD
     classDef actual fill:#D6E4FF,stroke:#364FC7,stroke-width:3px,color:#172B4D
 
     class Dev,Register dev
-    class Freeze,Lock,Rule frozen
+    class Freeze,Rule frozen
     class Eval,Recompute,Gate process
     class Verified,Decision decision
     class Stop invalid
@@ -165,76 +169,125 @@ flowchart TD
     class NoGo,Result actual
 ```
 
-- [ ] **Step 4: 用 Mermaid CLI render 三張圖**
+- [ ] **Step 5: 用 Mermaid CLI render 並目視檢查四張圖**
 
 Run:
 
 ```powershell
-mmdc -i .tmp-mermaid/offline-preparation.mmd -o $env:TEMP/twfi-offline.svg -b transparent
-mmdc -i .tmp-mermaid/query-flow.mmd -o $env:TEMP/twfi-query.svg -b transparent
-mmdc -i .tmp-mermaid/evaluation-flow.mmd -o $env:TEMP/twfi-evaluation.svg -b transparent
-Get-Item $env:TEMP/twfi-offline.svg, $env:TEMP/twfi-query.svg, $env:TEMP/twfi-evaluation.svg | Select-Object Name,Length
+npx --yes @mermaid-js/mermaid-cli -i .tmp-mermaid/pdf-evidence.mmd -o "$env:TEMP/twfi-pdf-evidence.png" -b white -w 1800
+npx --yes @mermaid-js/mermaid-cli -i .tmp-mermaid/numeric-sources.mmd -o "$env:TEMP/twfi-numeric-sources.png" -b white -w 1800
+npx --yes @mermaid-js/mermaid-cli -i .tmp-mermaid/query-flow.mmd -o "$env:TEMP/twfi-query-flow.png" -b white -w 1800
+npx --yes @mermaid-js/mermaid-cli -i .tmp-mermaid/evaluation-flow.mmd -o "$env:TEMP/twfi-evaluation-flow.png" -b white -w 1800
+Get-Item "$env:TEMP/twfi-pdf-evidence.png","$env:TEMP/twfi-numeric-sources.png","$env:TEMP/twfi-query-flow.png","$env:TEMP/twfi-evaluation-flow.png" | Select-Object Name,Length
 ```
 
-Expected: 三個 `mmdc` command 均 exit 0，三個 SVG 的 `Length` 均大於 0。
+Expected: 四個 render command 都 exit 0；四個 PNG 非空；目視確認來源與去向不需跨線推測。
 
 ---
 
-### Task 2: 將已驗證圖表整合進 README
+### Task 2: 將四張圖與白話導讀整合進 README
 
 **Files:**
 - Modify: `README.md`
 
 **Interfaces:**
-- Consumes: Task 1 三段已通過 render 的 Mermaid source
-- Produces: GitHub 可直接渲染、正體中文主體且無 emoji 的 README
+- Consumes: Task 1 四段已驗證 Mermaid source
+- Produces: 正體中文主體、無 emoji、資料來源準確的 GitHub README
 
-- [ ] **Step 1: 取代現有 ASCII 系統框架**
+- [ ] **Step 1: 重寫系統設計的資料準備段落**
 
-在 `## 系統設計` 下依序加入小標題 `### Offline data preparation` 與 `### Query-time answer flow`，嵌入 Task 1 的前兩段 Mermaid source。保留五條 route 說明，但刪除原本的 `text` code block。
+將 `### Offline data preparation` 改為 `### PDF 如何變成可查詢證據`，在圖前加入：
 
-- [ ] **Step 2: 加入研究流程圖**
+```markdown
+這張圖只回答一件事：一份 PDF 進入專案後，哪些內容會進 search index、DuckDB 或 VLM。
+```
 
-在 `## 事前註冊實驗` 的說明文字後、F0–F7 table 前加入 `### Pre-registered evaluation`，嵌入 Task 1 的第三段 Mermaid source。
+以 Task 1 Step 1 的圖取代原圖。
 
-- [ ] **Step 3: 檢查 README invariants**
+- [ ] **Step 2: 加入 numeric source reality**
+
+新增 `### 本次實驗的歷史數值來自哪裡`，在圖前加入：
+
+```markdown
+本次 locked run 沒有用 OpenAPI 或 XBRL 補齊 FY2023–FY2024 歷史數值；numeric route 查的是專案從 filing line stream 重建的 rows。
+```
+
+圖後加入：
+
+```markdown
+因此本輪只能稱為「已驗證結構化資料」，不能稱為「官方結構化歷史資料」。每筆 row 仍保留 `source_kind` 與 `source_ref`，可追回原始文件位置。
+```
+
+- [ ] **Step 3: 重寫 query flow 與導讀**
+
+將標題改為 `### 問題如何選路徑並產生答案`，圖前加入：
+
+```markdown
+問題先限制到指定公司、年度與文件，再依題型選回答路徑；不論走哪條路，最後都必須通過證據與引用驗證，否則拒答。
+```
+
+以 Task 1 Step 3 的圖取代現圖。
+
+- [ ] **Step 4: 重寫 evaluation flow 與導讀**
+
+將標題改為 `### 事前註冊如何防止看到結果後再調整`，圖前加入：
+
+```markdown
+只有 DEV 階段可以調整設定；protocol freeze 之後，只能執行 locked evaluation、從 raw records 重算，並依事先固定的 gates 判定。
+```
+
+以 Task 1 Step 4 的圖取代現圖。
+
+- [ ] **Step 5: 檢查讀者不需猜測的文案 invariants**
+
+Run:
+
+```powershell
+rg -n "這張圖只回答一件事|沒有用 OpenAPI 或 XBRL|只有 FY2026Q1|XBRL.*未取得|已驗證結構化資料|問題先限制到指定公司|只有 DEV 階段可以調整" README.md
+rg -n "Machine-usable|Document preparation|Company scope|Mechanical decision|Offline data preparation|Query-time answer flow|Pre-registered evaluation" README.md
+```
+
+Expected: 第一個 command 找到所有明確說明；第二個 command exit 1 且沒有輸出。
+
+---
+
+### Task 3: 完整驗證、提交與推送
+
+**Files:**
+- Modify: `README.md`
+- Preserve ignored: `interview.md`
+
+**Interfaces:**
+- Consumes: 完成版 README
+- Produces: 通過本機 checks 與 GitHub Actions 的 `main`
+
+- [ ] **Step 1: 從完成版 README 抽出四張 Mermaid 並重新 render**
+
+Run:
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+.venv/Scripts/python.exe C:/Users/3Hml/.agents/skills/design-doc-mermaid/scripts/extract_mermaid.py README.md --output-dir .tmp-mermaid/extracted --prefix readme
+$outputs = @()
+Get-ChildItem .tmp-mermaid/extracted -Filter *.mmd | Sort-Object Name | ForEach-Object {
+    $output = Join-Path $env:TEMP ("twfi-" + $_.BaseName + ".svg")
+    npx --yes @mermaid-js/mermaid-cli -i $_.FullName -o $output -b transparent
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $outputs += Get-Item $output
+}
+$outputs | Select-Object Name,Length
+if ($outputs.Count -ne 4 -or ($outputs | Where-Object Length -le 0)) { exit 1 }
+```
+
+Expected: extractor 找到四張圖；四張皆 exit 0 且輸出非空。
+
+- [ ] **Step 2: 執行 README 與 repository checks**
 
 Run:
 
 ```powershell
 rg -n "不是投資建議|不是 production 系統|NO_GO|F0 17/33|F7 6/33|-27.8pp" README.md
 rg -n -P "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}⑤]" README.md
-```
-
-Expected: 第一個 command 找到所有必要文字；第二個 command exit 1 且沒有輸出，代表無 emoji。
-
-- [ ] **Step 4: 從完成版 README 再次驗證 Mermaid**
-
-Run:
-
-```powershell
-python C:/Users/3Hml/.agents/skills/design-doc-mermaid/scripts/extract_mermaid.py README.md --validate
-```
-
-Expected: 找到三張 Mermaid 圖且三張 validation 全部通過。
-
----
-
-### Task 3: Repository 品質驗證、提交與推送
-
-**Files:**
-- Modify: `README.md`
-- Preserve untracked/ignored: `interview.md`
-
-**Interfaces:**
-- Consumes: 完成版 README
-- Produces: 通過 local checks 與 GitHub Actions 的 `main`
-
-- [ ] **Step 1: 執行完整本機驗證**
-
-Run:
-
-```powershell
 .venv/Scripts/python.exe -m pytest
 .venv/Scripts/python.exe -m ruff check .
 .venv/Scripts/python.exe -m ruff format --check .
@@ -243,47 +296,26 @@ git diff --check
 git check-ignore -v interview.md
 ```
 
-Expected: pytest 0 failures、Ruff / format / mypy exit 0、`git diff --check` 無輸出、`interview.md` 由 `.git/info/exclude` 排除。
+Expected: README 必要文字存在、emoji scan exit 1、pytest 0 failures、Ruff / format / mypy exit 0、`git diff --check` 無輸出、`interview.md` 仍被排除。
 
-- [ ] **Step 2: 確認提交範圍與作者**
+- [ ] **Step 3: 提交並推送**
+
+```powershell
+git add -- README.md docs/superpowers/plans/2026-08-03-readme-mermaid-diagrams.md
+git commit -m "釐清 Mermaid 架構圖"
+git push origin main
+```
+
+- [ ] **Step 4: 等待 CI 並稽核 GitHub**
 
 Run:
 
 ```powershell
-git status --short
-git diff --stat
-git config user.name
-git config user.email
-```
-
-Expected: 只包含 plan 與 README 文件變更；作者為 `kuotunyu` 與 GitHub noreply email，沒有 PDF、`.env`、rendered images 或 `interview.md`。
-
-- [ ] **Step 3: 提交 README 實作**
-
-```powershell
-git add -- README.md
-git commit -m "加入 Mermaid 架構與研究流程圖"
-```
-
-- [ ] **Step 4: 推送 main 並等待 CI**
-
-```powershell
-git push origin main
 $runId = gh run list --workflow ci.yml --limit 1 --json databaseId --jq '.[0].databaseId'
 gh run watch $runId --exit-status --interval 5
-```
-
-Expected: push 成功；最新 CI conclusion 為 `success`。
-
-- [ ] **Step 5: GitHub 端最終稽核**
-
-Run:
-
-```powershell
 git ls-remote --heads origin
 gh api repos/kuotunyu/tw-filing-intelligence/contributors --paginate --jq '.[].login'
-gh api repos/kuotunyu/tw-filing-intelligence/contents/README.md --jq '.sha'
 git status --short --branch
 ```
 
-Expected: 遠端只有 `main`；Contributors 只有 `kuotunyu`；README SHA 對應目前 `main`；工作區乾淨並追蹤 `origin/main`。
+Expected: CI `success`、遠端只有 `main`、Contributors 只有 `kuotunyu`、工作區乾淨。
