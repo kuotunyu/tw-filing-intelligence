@@ -7,15 +7,23 @@
 
 ## 0. 五分鐘之內要知道的事
 
-### 0.1 現在有東西正在跑
+### 0.1 背景工作狀態
 
 | 項目 | 狀態 | 你要做什麼 |
 |---|---|---|
-| **`scripts/build_captions.py`** | **背景執行中**，約 228/1,375 完成 | 讓它跑完（約 1 小時），或 `Ctrl-C` 中斷——**它是可續跑的**，重跑只會補做沒做完的 |
+| **`scripts/build_captions.py`** | ✅ **已完成**（實際約 1 小時）。**1,337 / 1,359 成功，22 筆 `ReadTimeout` 失敗** | 失敗的 22 筆可救：**再執行一次**就只會重跑那 22 筆，不會重做已成功的 |
 | **`ollama serve`** (PID 22716) | **我啟動的**，先前是關閉狀態 | 需要它才能跑 F5/F6/F7 與任何生成。不需要時可自行關閉 |
+
+產出：`data/index/candidate_captioned/chunks.jsonl` = **6,133 chunks**（原 4,796 + 1,337 captions）。
 
 **caption 建置中斷不會損壞任何東西。** 進度寫在 `data/cache/captions.jsonl`，
 每產生一筆就 append 一次。重跑會自動跳過已成功的、**重試失敗的**。
+
+> ⚠️ **下一步是耗時工作，先決定用哪個裝置。**
+> `build_index.py --parser candidate_captioned` 要對 6,133 個 chunk 做 embedding。
+> **CPU 約 3 小時以上**（D-034：4,796 chunk 在 24 執行緒 CPU 上約 2.6 小時），
+> `--device cuda` 快很多但**跑之前必須先 `nvidia-smi`**（`CLAUDE.md` 規則 8），
+> 而且 ollama 目前佔著約 24 GB VRAM ——**要用 GPU 就得先停掉 ollama**。
 
 ### 0.2 工作區狀態
 
