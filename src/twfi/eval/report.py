@@ -11,9 +11,9 @@ easy and specifically fatal:
   interval, and :func:`build` raises if asked to print one that cannot.
 * **A missing limitations section.** Protocol 4 requires specific admissions -- that the
   sample supports direction and not effect size, that the chart questions come from one
-  company's two pages, that the numeric route's coverage was arranged. A report is not
-  allowed to be silent about any of them, so each is a required section and its absence is
-  an error rather than an omission someone might notice.
+  company's two pages, and that the broad numeric store is filtered rather than complete.
+  A report is not allowed to be silent about any of them, so each is a required section and
+  its absence is an error rather than an omission someone might notice.
 * **A hidden negative result.** CLAUDE.md rule 3: NO_GO and CONDITIONAL_GO go in the report
   unaltered. So the verdict is written from ``GO_NO_GO.json`` and the gate table lists every
   gate that failed with its observed values. There is no code path that prints a verdict the
@@ -66,11 +66,16 @@ REQUIRED_LIMITATIONS: Final[tuple[tuple[str, str], ...]] = (
     # Added 2026-08-02 from measurement, before the freeze. `numeric_coverage` says what the store
     # holds; this says whether what it holds is right, which is a different claim and the one a
     # report is likelier to drop. Ingesting the whole corpus rather than the cells gold names
-    # (D-044) showed the account name is not a key: 34% of locked keys carry conflicting values
-    # -- 2882 is 94%, its notes repeating 資產總計 for every subsidiary -- and the store keeps
-    # whichever page was read last. Dev is at 0% after reading consolidated-vs-parent-only off the
-    # page heading, so a dev figure does not license a claim about locked.
+    # (D-044/D-052) showed the account name is not a key: 40% of locked keys carry conflicting
+    # values -- 2882 is 94%, its notes repeating 資產總計 for every subsidiary. Each source_ref is
+    # now preserved so require() refuses those candidates rather than letting the last page win.
+    # Dev is at 0% after reading consolidated-vs-parent-only off the page heading, so a dev figure
+    # does not license a claim about locked.
     ("numeric_ambiguity", "That an account name is not a unique key in a filing"),
+    # D-048/D-050 were approved by delegating judgement to the implementer after dev results had
+    # already been seen, not by an independent reviewer blind to those results. The protocol says
+    # this disclosure must survive into the report so readers can discount the evidence.
+    ("approval_process", "That final pre-freeze approval was not independent or blind"),
 )
 
 

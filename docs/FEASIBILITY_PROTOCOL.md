@@ -384,6 +384,9 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
    只有後者能回答這個問題。
 3. 這與 `CLAUDE.md` 規則 4（gold 不得由 candidate 產生）是同一條原則的另一面：
    **candidate 的輸入也不得由 gold 產生。**
+4. 每個抽取位置都以獨立的 `source_ref` 保留；同一 company / period / statement /
+   basis / account / source_kind 的不同頁面，**不得先以 `INSERT OR REPLACE` 覆寫**後才查詢。
+   若一個查詢 key 留有多個候選，numeric route 必須拒答並列出候選，不得讓頁面順序決定答案。
 
 > **誠實揭露**：寫下這段時 dev 上兩個 store 的數字都已經量過
 > （gold-keyed 7/15、broad 11/15，見 D-044）。

@@ -22,7 +22,7 @@ from typing import Any, Literal, Self
 
 import duckdb
 
-from twfi.errors import NumericRouteError
+from twfi.errors import ConfigError, NumericRouteError
 from twfi.numeric.amounts import canonical_unit
 
 __all__ = [
@@ -47,6 +47,15 @@ Statement = Literal["income", "balance", "ratio", "monthly_revenue"]
 Basis = Literal["consolidated", "parent_only"]
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+_LINE_ITEM_PRIMARY_KEY = (
+    "company_code",
+    "period",
+    "statement",
+    "basis",
+    "account",
+    "source_kind",
+    "source_ref",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +111,18 @@ class NumericStore:
     def __init__(self, database: Path | str = ":memory:") -> None:
         self._connection = duckdb.connect(str(database))
         self._connection.execute(_SCHEMA_PATH.read_text(encoding="utf-8"))
+        primary_key = tuple(
+            str(row[1])
+            for row in self._connection.execute("PRAGMA table_info('fin_line_item')").fetchall()
+            if bool(row[5])
+        )
+        if primary_key != _LINE_ITEM_PRIMARY_KEY:
+            self.close()
+            raise ConfigError(
+                f"numeric database {database} uses the legacy fin_line_item primary key "
+                f"{primary_key!r}; rebuild it so different source_ref pages cannot overwrite "
+                "one another"
+            )
 
     def __enter__(self) -> Self:
         return self
@@ -126,11 +147,11 @@ class NumericStore:
         return len(rows)
 
     def add_line_items(self, items: Iterable[LineItem]) -> int:
-        """Insert figures, replacing any with the same key from the same source.
+        """Insert figures, replacing only an exact reload of the same source reference.
 
-        Two sources may legitimately disagree about the same account and period -- that
-        is what the cross-document questions are about -- so the primary key includes
-        ``source_kind`` and both rows survive.
+        Two sources -- or two pages from the same filing -- may legitimately disagree about
+        the same account and period. The primary key includes both ``source_kind`` and
+        ``source_ref`` so all of them survive until :meth:`require` can refuse the ambiguity.
         """
         rows = [
             (
@@ -234,7 +255,7 @@ class NumericStore:
         if source_kind is not None:
             sql += " AND source_kind = ?"
             params.append(source_kind)
-        sql += " ORDER BY source_kind"
+        sql += " ORDER BY source_kind, source_ref"
         return [_row_to_item(row) for row in self._connection.execute(sql, params).fetchall()]
 
     def require(

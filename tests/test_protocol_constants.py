@@ -355,6 +355,14 @@ def test_the_fixed_hyperparameters_match_the_document(protocol_doc: str) -> None
     assert f"RRF `k={RRF_K}`" in protocol_doc
 
 
+def test_broad_numeric_rows_keep_page_provenance_until_ambiguity_is_checked(
+    protocol_doc: str,
+) -> None:
+    assert "`source_ref`" in protocol_doc
+    assert "不得先以 `INSERT OR REPLACE` 覆寫" in protocol_doc
+    assert "numeric route 必須拒答" in protocol_doc
+
+
 def test_the_rrf_constant_matches_the_fusion_default() -> None:
     """The protocol fixes k=60; the fusion module must not carry a different default."""
     from twfi.index.fusion import RrfConfig

@@ -86,6 +86,26 @@ def test_report_generator_supplies_every_required_limitation() -> None:
     assert all(STUDY_LIMITATIONS[key].strip() for key in required)
 
 
+def test_report_requires_the_non_independent_approval_disclosure() -> None:
+    assert "approval_process" in {key for key, _heading in REQUIRED_LIMITATIONS}
+
+
+def test_numeric_coverage_limitation_describes_the_registered_broad_store() -> None:
+    limitation = STUDY_LIMITATIONS["numeric_coverage"]
+
+    assert "numeric_broad.duckdb" in limitation
+    assert "不看 gold" in limitation
+    assert "只涵蓋 **gold 有問到的 account**" not in limitation
+
+
+def test_numeric_ambiguity_limitation_uses_the_preserved_source_ref_measurement() -> None:
+    limitation = STUDY_LIMITATIONS["numeric_ambiguity"]
+
+    assert "46/115（40.0%）" in limitation
+    assert "32/34（94.1%）" in limitation
+    assert "source_ref" in limitation
+
+
 def test_report_uses_the_lock_digest_that_g9_verified_in_summary() -> None:
     digest = "a" * 64
     lock_payload = {"protocol_version": "1.0.0", "frozen_at": "now", "entries": []}

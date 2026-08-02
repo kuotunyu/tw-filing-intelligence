@@ -53,13 +53,12 @@ LIMITATIONS: dict[str, str] = {
         "它們的增益**不得**被描述為 chart-reading 能力（D-021）。"
     ),
     "numeric_coverage": (
-        "numeric store 只涵蓋 **gold 有問到的 account**，因為載入 2,895 頁的所有表格超出本輪範圍。"
-        "「numeric route 拿得到它需要的數值」**不是覆蓋率的發現，是安排的結果**。"
-        "而且實測（D-028）：20 個 gold 指名的 cell 只成功載入 2 個 —— "
-        "locked 的財務報告書頁面上，表格結構壞到讓這條路幾乎不通"
-        "（附註被合併成一張表、列標籤與數值脫節、表頭碎裂且合併年度、旋轉頁）。"
-        "抽取器產出什麼就載什麼；**與 gold 相符從不作為載入條件**，"
-        "否則 F4 會因為建構方式而正確。"
+        "locked numeric route 使用 `numeric_broad.duckdb`：`load_all_rows.py` 逐頁走訪所有"
+        "可用 filing，**不看 gold** 的答案、頁碼或 structured key，並載入抽取器找到的可分類"
+        "科目。因此 F4 的可用數字不是由題目清單安排出來。這仍不是完整的財報資料庫：只有"
+        "科目可分類、欄位能對應單一會計年度，且頁面有單位或可由前頁繼承時才會載入；受損"
+        "文字層、碎裂表頭、合併年度、旋轉頁與列標籤脫節都會形成覆蓋缺口。DEV 上 broad store"
+        "的 F4 為 11/15，只是凍結前的開發觀察，不能代替 locked 結果或一般化覆蓋率。"
     ),
     "structured_source": (
         "TWSE OpenAPI 只提供當期快照，與本研究的文件年度（FY2023／FY2024）交集為空，"
@@ -87,10 +86,18 @@ LIMITATIONS: dict[str, str] = {
         "統計顯著性證據。"
     ),
     "numeric_ambiguity": (
-        "全語料抽取顯示 account name 不是 filing 內的唯一鍵：locked structured keys 約 34%"
-        "存在衝突值，國泰金控約 94%，因附註會為不同子公司重複相同科目。DEV 在加入"
-        "consolidated/parent-only basis 後觀察到 0% 衝突，不能據此保證 locked。numeric route"
-        "的數字應解讀為目前 row disambiguation 策略下的驗證結果，不是通用財報資料庫的正確性。"
+        "全語料抽取顯示 account name 不是 filing 內的唯一鍵：locked 三家按正式 key 分組有"
+        "46/115（40.0%）存在衝突值，國泰金控為 32/34（94.1%），因附註會為不同子公司重複"
+        "相同科目。DEV 在加入"
+        "consolidated/parent-only basis 後觀察到 0% 衝突，不能據此保證 locked。store 會保留"
+        "每個 `source_ref`；同一 key 有多個候選時 numeric route 拒答，不讓最後讀到的頁面覆蓋"
+        "先前來源。這是安全但會降低覆蓋率的失效模式，不是通用財報資料庫的正確性證明。"
+    ),
+    "approval_process": (
+        "D-048（numeric store）、D-049（company scope）與 D-050（正式版號）的最終批准方式，"
+        "是使用者在 development 結果已可見後委任實作者判斷，**不是**由未看過結果的獨立審查者"
+        "盲評。採用 broad store 與全階一致 scope 的理由在數字反轉時仍成立，但這無法恢復"
+        "『先決定再看數字』的獨立性；讀者應據此降低對 F4 與整體 confirmatory 解讀的信任。"
     ),
 }
 

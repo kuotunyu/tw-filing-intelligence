@@ -8,9 +8,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from scripts.run_eval import _git_preflight
+from scripts.run_eval import _git_preflight, _numeric_store_problems
 
-from twfi.errors import EvaluationError
+from twfi.errors import ConfigError, EvaluationError
 from twfi.eval.locked_run import (
     begin_locked_run,
     locked_request_problems,
@@ -108,3 +108,17 @@ def test_git_preflight_requires_one_clean_committed_state(tmp_path: Path) -> Non
     tracked.write_text("changed\n", encoding="utf-8")
     _, problems = _git_preflight(tmp_path)
     assert any("not clean" in problem for problem in problems)
+
+
+def test_numeric_store_schema_is_checked_before_the_locked_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class LegacyStore:
+        def __init__(self, _database: Path) -> None:
+            raise ConfigError("legacy schema; rebuild it")
+
+    monkeypatch.setattr("scripts.run_eval.NumericStore", LegacyStore)
+
+    problems = _numeric_store_problems(tmp_path / "numeric_broad.duckdb")
+
+    assert problems == ["numeric store preflight failed: legacy schema; rebuild it"]

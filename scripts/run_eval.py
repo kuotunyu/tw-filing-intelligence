@@ -47,7 +47,7 @@ import typer
 from twfi.answer.generate import GenerationConfig, generate
 from twfi.answer.prompt import DEFAULT_VARIANT, PROMPT_VARIANTS, build_prompt, parse_answer
 from twfi.console import use_utf8_output
-from twfi.errors import EvaluationError, ProtocolLockError, ResultIntegrityError
+from twfi.errors import ConfigError, EvaluationError, ProtocolLockError, ResultIntegrityError
 from twfi.eval.answers import is_refusal, normalise_text, refusal_rates, score_answer
 from twfi.eval.artifacts import build_error_analysis, build_summary, graded_record
 from twfi.eval.citations import CitationGrader
@@ -288,6 +288,16 @@ def _locked_data_problems(paths: Any, lock: Any) -> list[str]:
     }
     required_ids.update(dataset.dataset_id for dataset in structured.automated())
     return verify_acquisition(lock, paths.root, expected_ids=required_ids)
+
+
+def _numeric_store_problems(database: Path) -> list[str]:
+    """Open and validate the derived store before the irreversible marker exists."""
+    try:
+        store = NumericStore(database)
+    except ConfigError as exc:
+        return [f"numeric store preflight failed: {exc}"]
+    store.close()
+    return []
 
 
 def _gpu_preflight(config: GenerationConfig) -> list[str]:
@@ -565,6 +575,7 @@ def main(
             sha256_text_file(paths.protocol_lock_json) if paths.protocol_lock_json.is_file() else ""
         )
         preflight.extend(_locked_data_problems(paths, lock))
+        preflight.extend(_numeric_store_problems(database))
         budget_path = paths.runs / "resource_budget.json"
         if not budget_path.is_file():
             preflight.append(f"missing G10 measurement: {budget_path}")

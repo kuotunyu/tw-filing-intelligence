@@ -2515,4 +2515,36 @@ D-004 照原表。
 D-048 numeric store 用 broad、D-049 company scope 套用 F0–F7、
 D-050 `protocol_version` 定為 `1.0.0`。
 
-無未決問題。**尚未執行的是實作**：D-048／D-049／D-050／D-051 的 code 部分。
+無未決問題。D-048／D-049／D-050／D-051 的 code 已完成；其後的資料完整性修正見 D-052。
+
+---
+
+## D-052 `source_ref` 必須是 numeric row 的 identity；歧義要留下來拒答，不能在寫入時消失
+
+- **發現方式**：在 freeze 前做 locked-run 下游稽核時，比對 `load_all_rows.py --dry-run`
+  與實際 DuckDB。ingestion 找到 **769** 筆，但舊 schema 最後只保留 **207** 筆，
+  可見的多候選 key 反而是 **0**。原因是 `fin_line_item` 主鍵有 `source_kind`，卻沒有
+  `source_ref`；同一 filing 不同頁面的同名科目會在 `INSERT OR REPLACE` 時讓最後一頁勝出，
+  `NumericStore.require()` 根本沒有機會看到多候選並拒答。這直接反駁 D-048 所依賴的
+  「歧義會安全拒答」實作假設。
+
+- **決策與實作**：把 `source_ref` 納入主鍵。同一 `source_ref` 的精確重載仍可覆寫，
+  不同頁面則全部保留；`find()` 依 `source_kind, source_ref` 穩定排序，`require()` 遇到
+  多候選就拒答並列出來源。舊 schema 會明確要求 rebuild，且 locked-run preflight 會在
+  建立不可逆 marker **之前**開啟並驗證 numeric store。
+
+- **重建後的可重算量測**：769 次載入形成 **703 個唯一 provenance row**（66 次是同一
+  `source_ref` 的精確重複）、207 個正式 logical key、56 個多候選 key、46 個不同值衝突。
+  locked 三家公司為 **46/115（40.0%）**；國泰金為 **32/34（94.1%）**；DEV 兩家公司仍為
+  **0/92（0%）**。舊文件的「locked 約 34%」因此由最終報告更正為 40.0%。
+
+- **為什麼 freeze 前必須修**：這不是根據 locked 問答表現調參；locked evaluation 尚未開始，
+  marker 也不存在。它是 provenance 在進入評分前被主鍵丟失的資料完整性錯誤。若不修，
+  F4/F7 會以頁面順序任意選值，locked 結果不可解讀。protocol §2.4 已補入不可覆寫規則，
+  report 也強制揭露 40.0% 歧義與「非獨立盲評」的批准方式。
+
+- **驗證**：新增同來源不同頁保留、legacy schema 拒絕、marker 前 preflight、protocol 與 report
+  回歸測試；全套 **1615 passed / 1 skipped**，coverage **94.35%**，ruff、format、mypy 全綠，
+  `freeze_protocol.py --dry-run` 通過，負向 locked-run 測試 exit 2 且沒有建立 marker。
+
+- **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。
