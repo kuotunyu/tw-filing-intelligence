@@ -11,6 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from scripts.make_report import LIMITATIONS as STUDY_LIMITATIONS
+from scripts.make_report import _report_lock_sha256
 
 from twfi.eval.report import (
     REQUIRED_LIMITATIONS,
@@ -75,6 +77,20 @@ def test_a_complete_report_builds() -> None:
     text = report()
     assert "# 可行性報告" in text
     assert "不是投資建議" in text, "CLAUDE.md rule 10 requires this on any output"
+
+
+def test_report_generator_supplies_every_required_limitation() -> None:
+    required = {key for key, _heading in REQUIRED_LIMITATIONS}
+
+    assert required <= set(STUDY_LIMITATIONS)
+    assert all(STUDY_LIMITATIONS[key].strip() for key in required)
+
+
+def test_report_uses_the_lock_digest_that_g9_verified_in_summary() -> None:
+    digest = "a" * 64
+    lock_payload = {"protocol_version": "1.0.0", "frozen_at": "now", "entries": []}
+
+    assert _report_lock_sha256({"protocol_lock_sha256": digest}, lock_payload) == digest
 
 
 def test_two_runs_produce_the_same_bytes() -> None:

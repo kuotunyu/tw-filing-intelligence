@@ -74,6 +74,24 @@ LIMITATIONS: dict[str, str] = {
         "表格抽取採 pdfplumber 兩種 strategy 的聯集（D-027），"
         "該選擇是在 dev 上量測後決定的，理由是沒有任一 strategy 支配另一個。"
     ),
+    "text_layer": (
+        "兩份 development filing 的原生文字層都受損：2412-FY2023-AR 有 17.9% 字元解碼為"
+        "錯誤字集、48% 頁面受影響；1301-FY2023-AR 分別為 15.4% 與 43%。因此 DEV 上選出的"
+        "閾值、chunking 與路由行為同時反映系統能力和受損文字層，不能直接推論到文字層完整的"
+        "一般年報。locked 結果會誠實保留這個 domain shift，而不是把它解讀成純模型效果。"
+    ),
+    "dev_clustering": (
+        "DEV 的 15 題只涵蓋 4 個不同的 (document, page-set) 證據目標，其中一個 chunk 承載"
+        "8 題；DEV-0011 的註冊答案又不在文件中，所以 retrieval 指標存在已知上限。這些題目"
+        "高度相關，DEV 差異只能用來選定方向與發現接線錯誤，不能當作獨立樣本的效果量或"
+        "統計顯著性證據。"
+    ),
+    "numeric_ambiguity": (
+        "全語料抽取顯示 account name 不是 filing 內的唯一鍵：locked structured keys 約 34%"
+        "存在衝突值，國泰金控約 94%，因附註會為不同子公司重複相同科目。DEV 在加入"
+        "consolidated/parent-only basis 後觀察到 0% 衝突，不能據此保證 locked。numeric route"
+        "的數字應解讀為目前 row disambiguation 策略下的驗證結果，不是通用財報資料庫的正確性。"
+    ),
 }
 
 
@@ -85,6 +103,12 @@ def _read(path: Path) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _report_lock_sha256(summary: dict[str, Any], lock: dict[str, Any]) -> str | None:
+    """Use G9's digest of the lock file; support legacy self-identifying locks second."""
+    value = summary.get("protocol_lock_sha256") or lock.get("protocol_sha256") or lock.get("sha256")
+    return str(value).strip() or None
 
 
 @app.command()
@@ -123,10 +147,7 @@ def main(
             summary=summary,
             composition=composition(records),
             limitations=LIMITATIONS,
-            protocol_lock_sha256=str(
-                lock.get("protocol_sha256") or lock.get("sha256") or ""
-            ).strip()
-            or None,
+            protocol_lock_sha256=_report_lock_sha256(summary, lock),
             findings=list(summary.get("findings", ())),
         )
     except MissingContent as exc:

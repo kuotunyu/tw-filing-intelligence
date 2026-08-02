@@ -325,6 +325,31 @@ def _gpu_preflight(config: GenerationConfig) -> list[str]:
     return []
 
 
+def _git_preflight(root: Path) -> tuple[str, list[str]]:
+    """Tie the one-shot result to one committed, clean code state."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=False
+    )
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    problems: list[str] = []
+    if head.returncode != 0 or not head.stdout.strip():
+        problems.append("cannot identify the Git commit that would produce the locked result")
+    if status.returncode != 0:
+        problems.append("cannot verify that the Git worktree is clean")
+    elif status.stdout.strip():
+        problems.append(
+            "the Git worktree is not clean; commit the protocol lock and all code before the "
+            "one-shot run:\n" + status.stdout.rstrip()
+        )
+    return head.stdout.strip(), problems
+
+
 def _run_no_evidence_probes(
     paths: Any, config: GenerationConfig, prompt_variant: str
 ) -> list[dict[str, Any]]:
@@ -367,6 +392,7 @@ def _write_locked_artifacts(
     gold: list[GoldRecord],
     probes: list[dict[str, Any]],
     lock_sha256: str,
+    code_commit: str,
     data_reproducible: bool,
 ) -> tuple[Path, tuple[Any, ...]]:
     """Write raw records first, then a summary derived exclusively from those records."""
@@ -402,6 +428,7 @@ def _write_locked_artifacts(
         resources=resources,
         data_reproducible=data_reproducible,
     )
+    summary["code_commit"] = code_commit
     problems = verify(
         summary,
         official,
@@ -416,6 +443,7 @@ def _write_locked_artifacts(
             data_reproducible=data_reproducible,
             results_reproducible=True,
         )
+        summary["code_commit"] = code_commit
         problems = verify(
             summary,
             official,
@@ -515,12 +543,15 @@ def main(
     lock = load_acquisition_lock(paths.acquisition_lock)
     config = GenerationConfig()
     locked_lock_sha256 = ""
+    locked_code_commit = ""
     if is_locked:
         preflight = locked_request_problems(
             factors=wanted,
             limit=limit,
             prompt_variant=prompt_variant,
             numeric_db=numeric_db,
+            depth=depth,
+            rerank_device=rerank_device,
         )
         if not confirmed_locked:
             preflight.append(
@@ -542,6 +573,8 @@ def main(
             preflight.append(
                 f"the locked run already started; preserve and inspect the marker at {marker}"
             )
+        locked_code_commit, git_problems = _git_preflight(paths.root)
+        preflight.extend(git_problems)
         if preflight:
             typer.echo(f"{len(preflight)} locked-run preflight problem(s); nothing started:")
             for problem in preflight:
@@ -559,10 +592,13 @@ def main(
                 {
                     "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
                     "protocol_lock_sha256": locked_lock_sha256,
+                    "code_commit": locked_code_commit,
                     "factors": wanted,
                     "questions": len(records),
                     "prompt_variant": prompt_variant,
                     "numeric_db": numeric_db,
+                    "fetch_depth": depth,
+                    "rerank_device": rerank_device,
                 },
             )
         except EvaluationError as exc:
@@ -820,6 +856,7 @@ def main(
             gold=records,
             probes=probes,
             lock_sha256=locked_lock_sha256,
+            code_commit=locked_code_commit,
             data_reproducible=True,
         )
         typer.echo(f"wrote official locked artifacts and {summary_path.relative_to(paths.root)}")

@@ -18,7 +18,13 @@ LOCKED_NUMERIC_DB = "numeric_broad.duckdb"
 
 
 def locked_request_problems(
-    *, factors: Sequence[str], limit: int, prompt_variant: str, numeric_db: str
+    *,
+    factors: Sequence[str],
+    limit: int,
+    prompt_variant: str,
+    numeric_db: str,
+    depth: int,
+    rerank_device: str,
 ) -> list[str]:
     """Name every way a requested run differs from the frozen full ladder."""
     problems: list[str] = []
@@ -32,6 +38,10 @@ def locked_request_problems(
         problems.append(
             f"the locked numeric route must use {LOCKED_NUMERIC_DB}, got {numeric_db!r}"
         )
+    if depth != 100:
+        problems.append(f"the locked pre-fusion fetch depth must be 100, got {depth}")
+    if rerank_device != "cuda":
+        problems.append(f"the locked reranker must run on cuda, got {rerank_device!r}")
     return problems
 
 
