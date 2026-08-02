@@ -25,15 +25,20 @@
 |---|---|---|---|---|
 | P0 | Repo scaffold ＋ 規劃文件 ＋ 專案 skills | ✗ | ✗ | 🟢 完成 |
 | P1 | 資料來源探勘與 manifest 定義 | ✗ | ✅ | 🟢 完成 |
-| P2 | 資料取得 ＋ provenance ＋ SHA-256 驗證 | ✗ | 部分 | 🟡 等使用者放檔 |
-| P3 | Parsing 層（baseline ＋ layout-aware） | ✗ | ✗ | 未開始 |
-| P4 | 結構化數值層（DuckDB ＋ deterministic SQL） | ✗ | ✗ | 未開始 |
-| P5 | Gold set 標註（DEV 15 ＋ LOCKED 36 ＋ 5 probes） | ✗ | ✗ | 未開始 |
-| P6 | Retrieval ＋ rerank ＋ index artifacts | ✅ | ✗ | 未開始 |
-| P7 | Chart route（caption index ＋ crop answering） | ✅ | ✗ | 未開始 |
-| P8 | Router ＋ answer/citation contract | ✅ | ✗ | 未開始 |
-| P9 | Eval harness ＋ metrics ＋ factor ladder | 部分 | ✗ | 未開始 |
-| P10 | Freeze → locked run → gate → report | ✅ | ✗ | 未開始 |
+| P2 | 資料取得 ＋ provenance ＋ SHA-256 驗證 | ✗ | 部分 | 🟢 完成（16 宣告／19 取得，全數 hash 相符） |
+| P3 | Parsing 層（baseline ＋ layout-aware） | ✗ | ✗ | 🟢 完成 |
+| P4 | 結構化數值層（DuckDB ＋ deterministic SQL） | ✗ | ✗ | 🟢 完成（D-032／D-042／D-044） |
+| P5 | Gold set 標註（DEV 15 ＋ LOCKED 33 ＋ 5 probes） | ✗ | ✗ | 🟢 完成 53/53，抽樣稽核通過 |
+| P6 | Retrieval ＋ rerank ＋ index artifacts | ✅ | ✗ | 🟢 完成（全程 CPU；D-034／D-036） |
+| P7 | Chart route（caption index ＋ crop answering） | ✅ | ✗ | 🟢 完成（`twfi/chart/`，18 測試） |
+| P8 | Router ＋ answer/citation contract | ✅ | ✗ | 🟢 完成（`twfi/router/`；D-043） |
+| P9 | Eval harness ＋ metrics ＋ factor ladder | 部分 | ✗ | 🟢 完成（F0–F7 皆可跑） |
+| P10 | Freeze → locked run → gate → report | ✅ | ✗ | 🔴 **唯一未完成**，見下方 |
+
+> ⚠️ **2026-08-02 更正**：這張表在 P3–P10 一路標著「未開始」，
+> 但 P3–P9 早已完成 —— 表沒有跟著更新。`CLAUDE.md` 要求每次進來先讀這張表，
+> 所以它等於在對每一個接手的 session 說謊。已依 `docs/PROGRESS.md` 的實況重寫。
+> **這張表與 PROGRESS 不一致時，以 PROGRESS 為準，並回頭修這裡。**
 
 ---
 

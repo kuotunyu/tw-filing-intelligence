@@ -3,20 +3,27 @@
     uv run python scripts/run_eval.py --set dev --factor F0 --factor F3
     uv run python scripts/run_eval.py --set dev            # every implemented rung
 
-**Only the rungs that exist.** Protocol 2 defines F0 through F7; F4 (numeric route), F5 and F6
-(chart) and F7 (typed routing) need modules this repository does not have yet, so this script
-runs F0 through F3 and *says* which rungs it skipped rather than reporting a partial ladder as a
-whole one. A ladder missing rungs cannot support a GO decision, and `results/feasibility/` is
-deliberately not written here -- that belongs to the locked run.
+**All eight rungs now exist.** `results/feasibility/` is still deliberately not written here --
+that belongs to the locked run.
 
-Every rung shares one prompt, one answer contract and one scorer (protocol 2.1). The only thing
-that differs between them is which chunks reach the prompt, which is the entire point of a
-factor-at-a-time design: any difference in the numbers is attributable to the factor named.
+Every rung shares one prompt, one answer contract and one scorer (protocol 2.1). Through F6 the
+only thing that differs is what evidence can reach the answer, which is the point of a
+factor-at-a-time design: any difference is attributable to the factor named.
 
     F0  baseline parser, lexical retrieval, top-5
     F1  layout parser, lexical retrieval, top-5
     F2  layout parser, hybrid retrieval (RRF), top-5 of 20
     F3  F2 plus the cross-encoder reranker
+    F4  F3 plus the deterministic numeric route
+    F5  F4 plus VLM chart captions in the index (a different index; see build_captions.py)
+    F6  F5 plus reading values off the original crop pixels
+    F7  F6 plus typed dispatch
+
+**F7 is the one rung that can lose ground, and that is what makes it a test.** F0-F6 only ever
+*add* a route and try each in a fixed order, so a new route can only help. F7 lets protocol 3.5's
+mapping decide which route runs, so a misrouted question now costs an answer instead of falling
+through to the next path. Reporting F7 below F6 is a finding about the router, not a regression
+to be tuned away.
 
 Writes `results/runs/ladder_<set>.json` with per-question rows -- answer, citations, latency,
 tokens, every scored verdict -- so a later session can re-derive any summary figure or pair a
@@ -30,6 +37,7 @@ import re
 import statistics
 import time
 from dataclasses import replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
@@ -47,6 +55,7 @@ from twfi.index.rerank import load_cross_encoder, rerank_hits
 from twfi.index.retrieve import Retriever, covered_targets, hit_rank, reciprocal_rank
 from twfi.io.hashing import sha256_text_file
 from twfi.io.jsonl import dump_lines, read_lines
+from twfi.io.manifest import load_acquisition_lock
 from twfi.numeric.route import answer_numerically
 from twfi.numeric.store import NumericStore
 from twfi.paths import repo_paths
@@ -72,14 +81,40 @@ LADDER: dict[str, dict[str, Any]] = {
         "numeric": True,
         "what": "+ numeric route",
     },
+    # F5 changes the *index*, not the answering path: chart captions become retrievable. It
+    # therefore reads a separately built index (scripts/build_captions.py) so that adding
+    # captions cannot silently invalidate the F0-F4 numbers, whose chunk digests are pinned.
+    "F5": {
+        "parser": "candidate_captioned",
+        "mode": "hybrid",
+        "rerank": True,
+        "numeric": True,
+        "what": "+ chart captions in index",
+    },
+    "F6": {
+        "parser": "candidate_captioned",
+        "mode": "hybrid",
+        "rerank": True,
+        "numeric": True,
+        "chart": True,
+        "what": "+ chart crop answering",
+    },
+    # F7 is the only rung that changes *which* route runs. Up to here every route that exists is
+    # tried in a fixed order; here protocol 3.5's mapping decides, which is what a typed router
+    # is for and also what makes it falsifiable -- a wrong route now costs an answer.
+    "F7": {
+        "parser": "candidate_captioned",
+        "mode": "hybrid",
+        "rerank": True,
+        "numeric": True,
+        "chart": True,
+        "dispatch": True,
+        "what": "+ typed dispatch",
+    },
 }
 
 #: Named so the output can say what is missing instead of implying the ladder is complete.
-NOT_IMPLEMENTED: dict[str, str] = {
-    "F5": "chart caption indexing",
-    "F6": "original-crop chart answering",
-    "F7": "typed bounded routing",
-}
+NOT_IMPLEMENTED: dict[str, str] = {}
 
 
 def _cpu_embedder() -> Callable[[str], np.ndarray]:
@@ -105,10 +140,78 @@ def _cpu_embedder() -> Callable[[str], np.ndarray]:
     return embed
 
 
-def _retrievers(paths: Any, embed: Callable[[str], np.ndarray], depth: int) -> dict[str, Any]:
+#: Protocol 2.5 caps a question at three crops. Reading more would let the chart route brute-force
+#: a page, which is a different system from the one being measured.
+MAX_CROPS = 3
+
+
+def _figures_for(paths: Any, lock: Any, doc_id: str) -> tuple[Any, ...]:
+    """Chart-shaped regions in one filing, detected once and cached by the caller.
+
+    Ruled tables are *not* excluded here. Protocol 3.5 maps `table_cell` to the chart route --
+    it is the "chart/table" rung and reads values out of rendered structures, tables included --
+    so filtering tables out would remove the very regions most dev questions need.
+    """
+    from twfi.parsing.figures import chart_candidates, detect_figures
+
+    acquired = lock.get(doc_id)
+    if acquired is None or not acquired.local_path(paths.root).is_file():
+        return ()
+    return chart_candidates(detect_figures(acquired.local_path(paths.root)), [])
+
+
+def _answer_from_chart(
+    question: str,
+    passages: list[Any],
+    figures_by_doc: dict[str, tuple[Any, ...]],
+    paths: Any,
+    lock: Any,
+    crop_dir: Path,
+    config: Any,
+) -> Any | None:
+    """Try to read the answer off a crop on one of the retrieved pages.
+
+    The crops are chosen by *retrieval*, not by the gold record: whichever pages the pipeline
+    surfaced are the pages this may look at. Picking the page from gold would be answering the
+    question with the answer key, the same trap `twfi.numeric.route` avoids.
+
+    Returns ``None`` when no retrieved page carries a readable region, which is a refusal by
+    absence rather than a guess.
+    """
+    from twfi.chart.crop_answer import answer_from_crop
+
+    wanted: list[tuple[str, Any]] = []
+    for hit in passages:
+        figures = figures_by_doc.setdefault(hit.doc_id, _figures_for(paths, lock, hit.doc_id))
+        wanted.extend((hit.doc_id, figure) for figure in figures if figure.page in set(hit.pages))
+        if len(wanted) >= MAX_CROPS:
+            break
+    for doc_id, figure in wanted[:MAX_CROPS]:
+        acquired = lock.get(doc_id)
+        if acquired is None:
+            continue
+        answer = answer_from_crop(
+            question,
+            acquired.local_path(paths.root),
+            doc_id,
+            figure,
+            crop_dir,
+            config=config,
+        )
+        if answer.ok:
+            return answer
+    return None
+
+
+def _retrievers(
+    paths: Any,
+    embed: Callable[[str], np.ndarray],
+    depth: int,
+    parsers: tuple[str, ...] = ("baseline", "candidate"),
+) -> dict[str, Any]:
     """One retriever per parser, refusing any index that cannot answer for itself."""
     built: dict[str, Any] = {}
-    for parser in ("baseline", "candidate"):
+    for parser in parsers:
         directory = paths.root / "data" / "index" / parser
         chunks = read_lines(directory / "chunks.jsonl")
         bm25, _ = load_index(directory, expect_documents=len(chunks))
@@ -196,10 +299,24 @@ def main(
     if limit:
         records = records[:limit]
     typer.echo(f"{len(records)} question(s); rungs {', '.join(wanted)}")
-    typer.echo(f"not implemented, so not run: {', '.join(sorted(NOT_IMPLEMENTED))}")
+    if NOT_IMPLEMENTED:
+        typer.echo(f"not implemented, so not run: {', '.join(sorted(NOT_IMPLEMENTED))}")
+
+    needed = tuple(dict.fromkeys(LADDER[name]["parser"] for name in wanted))
+    missing_index = [
+        parser
+        for parser in needed
+        if not (paths.root / "data" / "index" / parser / "chunks.jsonl").is_file()
+    ]
+    if missing_index:
+        typer.echo(
+            f"no index for {', '.join(missing_index)}; F5-F7 read the captioned index -- "
+            "run scripts/build_captions.py first"
+        )
+        raise typer.Exit(code=2)
 
     embed = _cpu_embedder()
-    retrievers = _retrievers(paths, embed, depth)
+    retrievers = _retrievers(paths, embed, depth, needed)
     score_pairs = None
     if any(LADDER[name]["rerank"] for name in wanted):
         typer.echo(f"loading the cross-encoder on {rerank_device} …")
@@ -213,6 +330,12 @@ def main(
             raise typer.Exit(code=2)
         store = NumericStore(database)
         typer.echo(f"numeric store: {numeric_db}, {store.count():,} figure(s)")
+
+    lock = load_acquisition_lock(paths.acquisition_lock)
+    crop_dir = paths.root / "data" / "cache" / "crops"
+    # Detected once per document and reused across rungs: detect_figures walks every page, and
+    # doing it per question would dominate the run.
+    figures_by_doc: dict[str, tuple[Any, ...]] = {}
 
     config = GenerationConfig()
     rows: list[dict[str, Any]] = []
@@ -243,15 +366,33 @@ def main(
             decisions.append(decision)
             kinds.append(record.question_type)
             prompt = build_prompt(record.question, passages, variant=prompt_variant)
-            # F4 tries the deterministic route first, on *every* question rather than on a
-            # hand-picked set: its parser needs a company, a period and a known account, so a
-            # narrative question refuses on its own. Choosing which types get the SQL path
-            # would be choosing where it wins.
+
+            # Through F6 every available route is tried in a fixed order, so a route can only
+            # add answers. F7 hands the choice to the router: `numeric` runs only for a question
+            # routed to numeric, `chart` only for one routed to chart. That is what makes the
+            # router falsifiable -- until now a misroute cost nothing.
+            dispatch = rung.get("dispatch", False)
+            may_try_numeric = rung.get("numeric") and store is not None
+            may_try_chart = rung.get("chart")
+            if dispatch:
+                may_try_numeric = may_try_numeric and decision.route == "numeric"
+                may_try_chart = may_try_chart and decision.route == "chart"
+
+            # F4 tries the deterministic route on *every* question rather than a hand-picked
+            # set: its parser needs a company, a period and a known account, so a narrative
+            # question refuses on its own. Choosing which types get the SQL path would be
+            # choosing where it wins.
             numeric = (
                 answer_numerically(record.question, store)
-                if rung.get("numeric") and store is not None
+                if may_try_numeric and store is not None
                 else None
             )
+            chart = None
+            if not (numeric is not None and numeric.ok) and may_try_chart:
+                chart = _answer_from_chart(
+                    record.question, passages, figures_by_doc, paths, lock, crop_dir, config
+                )
+
             if numeric is not None and numeric.ok:
                 completion = Generation(
                     text=numeric.as_text(),
@@ -262,6 +403,16 @@ def main(
                 )
                 draft = parse_answer(numeric.as_text())
                 draft = replace(draft, unit=numeric.unit, period=numeric.period)
+            elif chart is not None:
+                completion = Generation(
+                    text=chart.value,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    seconds=0.0,
+                    model=chart.model,
+                )
+                draft = parse_answer(chart.value)
+                draft = replace(draft, answer=chart.value, unit=chart.unit)
             else:
                 completion = generate(prompt, config)
                 draft = parse_answer(completion.text)
@@ -289,6 +440,7 @@ def main(
                     "cited": list(draft.cited),
                     "answer_in_prompt": _answer_reached_the_prompt(record, prompt),
                     "numeric_route": numeric.to_json() if numeric is not None else None,
+                    "chart_route": chart.to_json() if chart is not None else None,
                     "cited_pages": [
                         {"doc_id": hit.doc_id, "pages": list(hit.pages)}
                         for hit in draft.cited_hits(passages)

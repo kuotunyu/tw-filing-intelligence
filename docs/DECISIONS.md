@@ -2269,6 +2269,54 @@
 
 ---
 
+## D-046 F5／F6／F7 補齊：我先前「dev 量不到所以不做」的判斷是錯的
+
+- **⚠️ 先更正一個判斷錯誤。** 我在 Session 12 以「dev 兩份文件沒有圖表題，
+  chart route 只能在 locked 上觸發，freeze 前寫它等於交付無法驗證的元件」為由跳過 F5／F6。
+  **這個判斷有兩處錯：**
+  1. **⑤A 的完成定義第 5 條要求 baseline 與 candidate 都完整執行。**
+     量不到分數 ≠ 不用蓋。沒有 chart route，這個研究照定義**根本不算完成**，
+     locked run 也就沒有意義。元件正確性可以在 dev 的圖上驗，分數留給 locked。
+  2. **「dev 沒有圖表」是關於 gold 的敘述，不是關於文件的。**
+     實際偵測：2412 **301 個**、1301 **270 個**有數字標籤的圖表區域。
+     而且 protocol §3.5 把 `table_cell` 映到 **chart** route ——
+     那一階本來就是「chart／table」，讀的是**渲染後的結構**，表格也算。
+     所以 **F6 在 dev 上是量得到的**，只是不透過 chart 類題目。
+
+- **`twfi/chart/`（先前不存在）**：
+  - `caption.py`（F5）：VLM 產生 caption 進 index。為什麼要用 VLM ——
+    抽取式 caption 在三份年報（122／457／181 個圖）只抓到 **0、0、1** 個（D-006），
+    靠抽取建索引等於幾乎每張圖都找不到。
+    **prompt 明文禁止寫出數值**：caption 帶了數字就會被當成證據，
+    而那正是 §2.4 禁止的捷徑。
+  - `crop_answer.py`（F6）：從 original crop pixels 讀值，引用 crop。
+  - `generate()` 新增 `images` 參數，crop 以 base64 送進同一組凍結的 decoding 參數。
+
+- **「caption 不得作為數值來源」這條用型別擋，不是用註解擋。**
+  `answer_from_crop()` **沒有 caption 參數**，所以呼叫端傳不進去，
+  重構也沒辦法悄悄開始餵它。有一個測試直接斷言這個參數不存在。
+  寫在 docstring 裡的規則，只能撐到有人趕時間為止。
+
+- **F5 用另一個 index（`data/index/candidate_captioned/`）**。
+  把 caption 加進 `candidate/` 會改動 F0–F4 量測時的 chunk 集合，
+  而那些 run 釘了 `chunk_text_sha256` 就是為了防止這件事悄悄發生。
+
+- **F7 是唯一「可能倒退」的一階，而這正是它成為檢定的原因。**
+  F0–F6 只會**增加**路徑、依固定順序輪流嘗試，所以新路徑只可能加分。
+  F7 交給 §3.5 的映射決定跑哪一條，**走錯路線從此要付出一題的代價**。
+  **F7 低於 F6 是關於 router 的發現，不是要調掉的退步。**
+
+- **⚠️ 一個自己造的 bug，當場修掉**：caption cache 原本把**失敗**也算成「做過了」。
+  第一次跑因為 ollama 沒開，16 個 caption 全部失敗並被寫進 cache ——
+  再跑一次會直接跳過它們，等於把一次暫時性斷線**永久烤進索引裡**。
+  改成只有成功的 caption 才算完成，失敗的一律重試。
+
+- **狀態**：IN PROGRESS (2026-08-02)。`twfi/chart/` 18 個測試全過（全離線、fake backend、
+  無 GPU、無網路）。F5 的 caption 全量建置進行中（1,359 個區域，可續跑）。
+  尚未量測 F5／F6／F7 在 dev 上的分數。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
