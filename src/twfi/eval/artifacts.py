@@ -157,8 +157,11 @@ def build_summary(
             label="correct",
         ),
         "unanswerable": {
-            "n": len(unanswerable),
-            "over_answered": sum(not record.refused for record in unanswerable),
+            **_rate(
+                sum(not record.refused for record in unanswerable),
+                len(unanswerable),
+                label="over_answered",
+            ),
             "refusal_precision": _rate(
                 sum(not record.answerable for record in refusals),
                 len(refusals),

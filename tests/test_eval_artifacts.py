@@ -123,13 +123,18 @@ def test_summary_recomputes_exactly_from_every_factor_and_probe() -> None:
 
     assert verify(summary, runs, expected_lock_sha256=LOCK, resources=RESOURCES) == ()
     assert summary["factors"]["F7"]["overall_accuracy"]["correct"] == 3
+    assert summary["unanswerable"]["rate"] == 0.0
+    assert len(summary["unanswerable"]["ci95"]) == 2
     assert summary["checks"]["results_reproducible"] is False
 
 
 def test_numeric_metric_uses_the_handler_even_when_its_refusal_ends_unanswerable() -> None:
     runs: dict[str, list[dict[str, Any]]] = {}
     for factor in FACTOR_IDS:
-        runs[factor] = [_official("LOCK-0001", "numeric_calculation", factor)]
+        runs[factor] = [
+            _official("LOCK-0001", "numeric_calculation", factor),
+            _official("LOCK-0002", "unanswerable", factor),
+        ]
     runs["F7"][0].update(
         {"route": "unanswerable", "handled_route": "numeric", "correct": False, "refused": True}
     )

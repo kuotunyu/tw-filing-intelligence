@@ -35,6 +35,7 @@ disagreements with the first would be invisible. The record contract is on :clas
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -391,6 +392,57 @@ def _check_proportion(
             str(recomputed),
             "the summary figure is not what the graded records add up to",
         )
+    assert isinstance(claimed, Mapping)  # read_proportion accepted it above
+    expected_rate = round(recomputed.rate, 6)
+    claimed_rate = _finite_float(claimed.get("rate"))
+    if claimed_rate is None:
+        kind = "missing_summary_field" if "rate" not in claimed else "malformed"
+        return Problem(
+            f"{field}.rate",
+            kind,
+            "nothing" if "rate" not in claimed else repr(claimed.get("rate")),
+            f"{expected_rate:g}",
+            "the registered summary schema requires the recomputed rate",
+        )
+    if claimed_rate != expected_rate:
+        return Problem(
+            f"{field}.rate",
+            "mismatch",
+            f"{claimed_rate:g}",
+            f"{expected_rate:g}",
+            "the reported rate does not agree with its own verified counts",
+        )
+    expected_ci = [round(bound, 6) for bound in recomputed.interval()]
+    claimed_ci = claimed.get("ci95")
+    if "ci95" not in claimed:
+        return Problem(
+            f"{field}.ci95",
+            "missing_summary_field",
+            "nothing",
+            repr(expected_ci),
+            "the registered summary schema requires a Wilson 95% confidence interval",
+        )
+    if (
+        not isinstance(claimed_ci, list)
+        or len(claimed_ci) != 2
+        or any(_finite_float(bound) is None for bound in claimed_ci)
+    ):
+        return Problem(
+            f"{field}.ci95",
+            "malformed",
+            repr(claimed_ci),
+            repr(expected_ci),
+            "ci95 must be a two-number array containing finite Wilson interval bounds",
+        )
+    normalised_ci = [float(bound) for bound in claimed_ci]
+    if normalised_ci != expected_ci:
+        return Problem(
+            f"{field}.ci95",
+            "mismatch",
+            repr(claimed_ci),
+            repr(expected_ci),
+            "the reported interval is not the Wilson interval for the verified counts",
+        )
     return None
 
 
@@ -662,6 +714,9 @@ def _unanswerable_problems(
     # gates.py assembles the over-answer proportion out of two sibling keys; assembling it
     # the same way here is what keeps a payload that satisfies G9 readable to G7.
     claimed: Any = {"n": block.get("n"), "correct": block.get("over_answered")}
+    for key in ("rate", "ci95"):
+        if key in block:
+            claimed[key] = block[key]
     if claimed["n"] is None and claimed["correct"] is None:
         claimed = None
     problems: list[Problem] = []
@@ -744,6 +799,14 @@ def _as_float(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value)
+
+
+def _finite_float(value: Any) -> float | None:
+    """A finite JSON number; booleans and NaN/Infinity are not reported measurements."""
+    parsed = _as_float(value)
+    if parsed is None or not math.isfinite(parsed):
+        return None
+    return parsed
 
 
 def _coverage_problems(
