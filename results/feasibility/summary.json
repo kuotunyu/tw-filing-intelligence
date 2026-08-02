@@ -1,0 +1,751 @@
+{
+  "protocol_lock_sha256": "18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d",
+  "baseline": "F0",
+  "candidate": "F7",
+  "factors": {
+    "F0": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 17,
+        "rate": 0.515152,
+        "ci95": [
+          0.352184,
+          0.67496
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 2,
+          "rate": 1.0,
+          "ci95": [
+            0.34238,
+            1.0
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.489891
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 4,
+          "rate": 0.666667,
+          "ci95": [
+            0.299993,
+            0.903229
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 2,
+          "rate": 0.4,
+          "ci95": [
+            0.117621,
+            0.769276
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 4,
+          "rate": 1.0,
+          "ci95": [
+            0.510109,
+            1.0
+          ]
+        }
+      }
+    },
+    "F1": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 15,
+        "rate": 0.454545,
+        "ci95": [
+          0.298429,
+          0.620141
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 1,
+          "rate": 0.5,
+          "ci95": [
+            0.094531,
+            0.905469
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.489891
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 1,
+          "rate": 0.25,
+          "ci95": [
+            0.045587,
+            0.699358
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 4,
+          "rate": 0.666667,
+          "ci95": [
+            0.299993,
+            0.903229
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 2,
+          "rate": 0.4,
+          "ci95": [
+            0.117621,
+            0.769276
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 4,
+          "rate": 1.0,
+          "ci95": [
+            0.510109,
+            1.0
+          ]
+        }
+      }
+    },
+    "F2": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 14,
+        "rate": 0.424242,
+        "ci95": [
+          0.272356,
+          0.591927
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 1,
+          "rate": 0.5,
+          "ci95": [
+            0.094531,
+            0.905469
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 1,
+          "rate": 0.25,
+          "ci95": [
+            0.045587,
+            0.699358
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 3,
+          "rate": 0.5,
+          "ci95": [
+            0.187616,
+            0.812384
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 1,
+          "rate": 0.2,
+          "ci95": [
+            0.036224,
+            0.624465
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        }
+      }
+    },
+    "F3": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 19,
+        "rate": 0.575758,
+        "ci95": [
+          0.408073,
+          0.727644
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 1,
+          "rate": 0.5,
+          "ci95": [
+            0.094531,
+            0.905469
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 4,
+          "rate": 0.666667,
+          "ci95": [
+            0.299993,
+            0.903229
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 4,
+          "rate": 0.8,
+          "ci95": [
+            0.375535,
+            0.963776
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        }
+      }
+    },
+    "F4": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 19,
+        "rate": 0.575758,
+        "ci95": [
+          0.408073,
+          0.727644
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 1,
+          "rate": 0.5,
+          "ci95": [
+            0.094531,
+            0.905469
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 4,
+          "rate": 0.666667,
+          "ci95": [
+            0.299993,
+            0.903229
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 4,
+          "rate": 0.8,
+          "ci95": [
+            0.375535,
+            0.963776
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        }
+      }
+    },
+    "F5": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 20,
+        "rate": 0.606061,
+        "ci95": [
+          0.436834,
+          0.753169
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 1,
+          "rate": 0.5,
+          "ci95": [
+            0.094531,
+            0.905469
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 4,
+          "rate": 0.666667,
+          "ci95": [
+            0.299993,
+            0.903229
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 4,
+          "rate": 0.8,
+          "ci95": [
+            0.375535,
+            0.963776
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        }
+      }
+    },
+    "F6": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 18,
+        "rate": 0.545455,
+        "ci95": [
+          0.379859,
+          0.701571
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.65762
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.150039,
+            0.849961
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 3,
+          "rate": 0.5,
+          "ci95": [
+            0.187616,
+            0.812384
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 3,
+          "rate": 0.6,
+          "ci95": [
+            0.230724,
+            0.882379
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 4,
+          "rate": 0.8,
+          "ci95": [
+            0.375535,
+            0.963776
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 3,
+          "rate": 0.75,
+          "ci95": [
+            0.300642,
+            0.954413
+          ]
+        }
+      }
+    },
+    "F7": {
+      "overall_accuracy": {
+        "n": 33,
+        "correct": 6,
+        "rate": 0.181818,
+        "ci95": [
+          0.086108,
+          0.343882
+        ]
+      },
+      "by_category": {
+        "chart_value_trend": {
+          "n": 2,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.65762
+          ]
+        },
+        "cross_document": {
+          "n": 3,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.561497
+          ]
+        },
+        "cross_page": {
+          "n": 4,
+          "correct": 1,
+          "rate": 0.25,
+          "ci95": [
+            0.045587,
+            0.699358
+          ]
+        },
+        "cross_period_comparison": {
+          "n": 4,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.489891
+          ]
+        },
+        "narrative_fact": {
+          "n": 6,
+          "correct": 4,
+          "rate": 0.666667,
+          "ci95": [
+            0.299993,
+            0.903229
+          ]
+        },
+        "numeric_calculation": {
+          "n": 5,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.434482
+          ]
+        },
+        "table_cell": {
+          "n": 5,
+          "correct": 0,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.434482
+          ]
+        },
+        "unanswerable": {
+          "n": 4,
+          "correct": 1,
+          "rate": 0.25,
+          "ci95": [
+            0.045587,
+            0.699358
+          ]
+        }
+      }
+    }
+  },
+  "citation_validity": {
+    "n": 17,
+    "valid": 9,
+    "rate": 0.529412,
+    "ci95": [
+      0.309632,
+      0.738349
+    ]
+  },
+  "numeric_route_accuracy": {
+    "n": 12,
+    "correct": 0,
+    "rate": 0.0,
+    "ci95": [
+      0.0,
+      0.242494
+    ]
+  },
+  "route_accuracy": {
+    "n": 33,
+    "correct": 11,
+    "rate": 0.333333,
+    "ci95": [
+      0.197502,
+      0.503921
+    ]
+  },
+  "unanswerable": {
+    "n": 4,
+    "over_answered": 3,
+    "rate": 0.75,
+    "ci95": [
+      0.300642,
+      0.954413
+    ],
+    "refusal_precision": {
+      "n": 16,
+      "refused": 1,
+      "rate": 0.0625,
+      "ci95": [
+        0.011119,
+        0.283287
+      ]
+    }
+  },
+  "probes": {
+    "n": 5,
+    "refused": 5,
+    "rate": 1.0,
+    "ci95": [
+      0.565518,
+      1.0
+    ]
+  },
+  "resources": {
+    "retrieval_p95_s": 0.149,
+    "generation_p95_s": 2.957,
+    "vram_peak_gb": 20.09
+  },
+  "checks": {
+    "data_reproducible": true,
+    "results_reproducible": true
+  },
+  "code_commit": "595268f3a64ee9430efc397140c2f600c925436b"
+}

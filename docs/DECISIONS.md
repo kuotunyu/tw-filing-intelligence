@@ -2549,8 +2549,6 @@ D-050 `protocol_version` 定為 `1.0.0`。
 
 - **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。
 
----
-
 ## D-053 Protocol 文件必須先明示 FINAL，freeze 才能把它鎖住
 
 - **發現方式**：最後一次 freeze dry-run 稽核時，`protocol_version` 已是
@@ -2566,3 +2564,23 @@ D-050 `protocol_version` 定為 `1.0.0`。
   locked 問答結果；這是修正 freeze 狀態機的一致性，沒有更改題目、評分、門檻或模型。
 
 - **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。
+
+---
+
+## D-054 唯一 locked run 完成；機械判定為 NO_GO
+
+- **Freeze**：Protocol 1.0.0 於 `2026-08-02T15:20:15+00:00` 凍結 7 個 artifact。
+  protocol lock SHA-256 為
+  `18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d`。
+- **唯一執行**：locked marker 於 `2026-08-02T15:21:14+00:00` 建立，綁定 code commit
+  `595268f3a64ee9430efc397140c2f600c925436b`、F0–F7、33 題、strict prompt、
+  `numeric_broad.duckdb`、depth 100 與 CUDA reranker。本輪成功完成，沒有重跑。
+- **主要結果**：F0–F7 依序為 17/33、15/33、14/33、19/33、19/33、20/33、
+  18/33、6/33。F7 相對 F0 整體為 **-33.3pp**，pooled hard categories 為
+  **-27.8pp**。G1/G8/G9/G10 通過；G2–G7 失敗；機械 verdict 為 **NO_GO**。
+- **可重建性**：G9 從 F0–F7 各 33 筆與 probes 5 筆 raw records 重算
+  `summary.json` 全部數字，包括 rate 與 Wilson 95% CI，0 problems。
+- **最小下一研究問題**：僅將 rule-based layout parser 替換為 learned layout model，
+  其餘設定固定，能否讓 pooled hard categories 相對 F0 達到註冊的 +15pp？
+- **狀態**：FINAL (2026-08-02)。負面結果已寫入 `docs/FEASIBILITY_REPORT.md`，
+  不修題、不改門檻、不刪除。

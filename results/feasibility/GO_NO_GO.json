@@ -1,0 +1,110 @@
+{
+  "verdict": "NO_GO",
+  "protocol_lock_sha256": "18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d",
+  "gates": [
+    {
+      "gate": "G1",
+      "name": "data reproducible",
+      "kind": "hard",
+      "passed": true,
+      "detail": "verify_manifests reported every SHA-256 matching",
+      "observed": []
+    },
+    {
+      "gate": "G2",
+      "name": "hard category gain",
+      "kind": "hard",
+      "passed": false,
+      "detail": "pooled gain -27.8pp is below 15.0pp",
+      "observed": [
+        "pooled hard set: F0 33.3% (6/18, 95% CI 16.3%-56.3%) -> F7 5.6% (1/18, 95% CI 1.0%-25.8%) (-27.8pp)",
+        "cross_document: F0 0.0% (0/3, 95% CI 0.0%-56.1%) -> F7 0.0% (0/3, 95% CI 0.0%-56.1%) (+0.0pp)",
+        "cross_page: F0 0.0% (0/4, 95% CI 0.0%-49.0%) -> F7 25.0% (1/4, 95% CI 4.6%-69.9%) (+25.0pp)",
+        "cross_period_comparison: F0 50.0% (2/4, 95% CI 15.0%-85.0%) -> F7 0.0% (0/4, 95% CI 0.0%-49.0%) (-50.0pp)",
+        "numeric_calculation: F0 40.0% (2/5, 95% CI 11.8%-76.9%) -> F7 0.0% (0/5, 95% CI 0.0%-43.4%) (-40.0pp)"
+      ]
+    },
+    {
+      "gate": "G3",
+      "name": "no overall regression",
+      "kind": "hard",
+      "passed": false,
+      "detail": "exceeds the 5.0pp allowance (change -33.3pp)",
+      "observed": [
+        "F0 51.5% (17/33, 95% CI 35.2%-67.5%)",
+        "F7 18.2% (6/33, 95% CI 8.6%-34.4%)"
+      ]
+    },
+    {
+      "gate": "G4",
+      "name": "citation validity",
+      "kind": "hard",
+      "passed": false,
+      "detail": "below the 90% threshold",
+      "observed": [
+        "52.9% (9/17, 95% CI 31.0%-73.8%)"
+      ]
+    },
+    {
+      "gate": "G5",
+      "name": "numeric route accuracy",
+      "kind": "hard",
+      "passed": false,
+      "detail": "below the 90% threshold",
+      "observed": [
+        "0.0% (0/12, 95% CI 0.0%-24.2%)"
+      ]
+    },
+    {
+      "gate": "G6",
+      "name": "route accuracy",
+      "kind": "hard",
+      "passed": false,
+      "detail": "below the 85% threshold",
+      "observed": [
+        "33.3% (11/33, 95% CI 19.8%-50.4%)"
+      ]
+    },
+    {
+      "gate": "G7",
+      "name": "does not over-answer",
+      "kind": "hard",
+      "passed": false,
+      "detail": "over-answer rate 75% exceeds 25%; refusal precision 6% is below 80%",
+      "observed": [
+        "over-answered 75.0% (3/4, 95% CI 30.1%-95.4%)",
+        "refusal precision 6.2% (1/16, 95% CI 1.1%-28.3%)"
+      ]
+    },
+    {
+      "gate": "G8",
+      "name": "refuses without evidence",
+      "kind": "hard",
+      "passed": true,
+      "detail": "5 of 5 probes refused; meets the required 4",
+      "observed": [
+        "100.0% (5/5, 95% CI 56.6%-100.0%)"
+      ]
+    },
+    {
+      "gate": "G9",
+      "name": "results reproducible",
+      "kind": "hard",
+      "passed": true,
+      "detail": "verify_results recomputed every summary figure from raw artifacts",
+      "observed": []
+    },
+    {
+      "gate": "G10",
+      "name": "resources feasible",
+      "kind": "soft",
+      "passed": true,
+      "detail": "within every limit",
+      "observed": [
+        "retrieval p95 0.149 (limit 3)",
+        "generation p95 2.957 (limit 60)",
+        "VRAM peak 20.09 (limit 22)"
+      ]
+    }
+  ]
+}

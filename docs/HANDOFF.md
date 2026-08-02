@@ -1,5 +1,10 @@
 # HANDOFF — ⑤A TW Filing Intelligence
 
+> ✅ **FINAL — 2026-08-02 23:45：專案已完成，不再有未完成 phase。** Protocol
+> 1.0.0 已 freeze，唯一 locked run 已完成，機械判定 **NO_GO**。F0 17/33，
+> F7 6/33；G1/G8/G9/G10 通過，G2–G7 失敗。請直接讀
+> [`FEASIBILITY_REPORT.md`](FEASIBILITY_REPORT.md)。下方為完工前的歷史交接紀錄，其「下一步」不再適用。
+
 > 寫於 2026-08-02 中午，交接給下一位接手者（人或 agent）。
 > 前一位負責人被解任，原因寫在最後一節「我犯過的錯」——**那一節是本文件最有價值的部分，請先讀它**。
 
@@ -32,19 +37,10 @@
 - `ruff check .` 與 `mypy src scripts` 全綠。
 - **沒有任何未完成的半套修改。** 你可以從乾淨狀態開始。
 
-### 0.3 唯一還沒完成的 phase
+### 0.3 最終狀態
 
-> ⚠️ **2026-08-02 下午更正（D-051）：下面這句話「只剩」兩個字是錯的，我讀 code 之後才發現。**
-> P9 的**元件**都完成且測試通過，但**鏈條中間是斷的**：ladder（上游）與
-> gate／verify／report（下游）都建好了，**沒有任何程式產生
-> `results/feasibility/summary.json`**，而下游三支都讀它。
-> 另外 **G4（citation validity，hard gate）沒有生產者** —— `cited_ok` 全 repo
-> 只有消費端與測試假資料。**兩塊都必須在 locked run 之前補完**（理由見 D-051：
-> 「怎樣算一次有效引用」是評分規則，看過 locked 輸出才定它就是在 locked 上調參）。
-
-~~**P0–P9 全部完成，只剩 P10：freeze → locked run → G1–G10 → 報告。**~~
-
-正確版本：**P0–P8 完成；P9 元件完成但缺兩塊接線；P10 未開始。**
+P9 的 summary/citation 接線、G9 重算與所有回歸測試已在 freeze 前完成；
+P10 的 freeze、唯一 locked run、G1–G10 與報告也已完成。沒有待執行的實作步驟。
 
 ---
 
@@ -85,21 +81,21 @@
 | P6 | Retrieval + rerank + index | 🟢 完成（全程 CPU） |
 | P7 | Chart route | 🟢 完成（caption 索引已建：`candidate_captioned` 6,133 chunks） |
 | P8 | Router + answer contract | 🟢 完成 |
-| P9 | Eval harness + factor ladder | 🟡 **元件完成、接線缺兩塊**（D-051：無 `summary.json` 生產者；G4 無生產者） |
-| **P10** | **freeze → locked run → gate → 報告** | 🔴 **未開始** |
+| P9 | Eval harness + factor ladder | 🟢 完成（summary/citation/G9 全部接線） |
+| **P10** | **freeze → locked run → gate → 報告** | 🟢 **完成（NO_GO）** |
 
-### 2.1 目前 dev 上的數字（**locked 一次都沒跑過，也不該跑**）
+### 2.1 Freeze 前最後一次 DEV rehearsal（歷史記錄）
 
 | 階 | 內容 | 答對 |
 |---|---|---|
-| F0 | baseline parser | 3/15 |
-| F1 | + layout parsing | 5/15 |
-| F2 | + hybrid retrieval | 3/15 |
-| F3 | + reranking | 4/15 |
+| F0 | baseline parser | 9/15 |
+| F1 | + layout parsing | 9/15 |
+| F2 | + hybrid retrieval | 7/15 |
+| F3 | + reranking | 7/15 |
 | F4 | + numeric route | **11/15** |
 | F5 | + chart captions in index | 11/15（dev 無圖表題，無變化屬預期） |
-| F6 | + chart crop answering | **9/15 ⚠️ 倒退** |
-| F7 | + typed dispatch | **7/15 ⚠️ 再倒退** |
+| F6 | + chart crop answering | **11/15** |
+| F7 | + typed dispatch | **3/15 ⚠️ 大幅倒退** |
 
 > ⚠️ **F6／F7 的倒退方式比分數重要，見 D-047。**
 > F6 在 **DEV-0010（註冊為 unanswerable）** 上，去讀了**台積電**年報的裁切圖，

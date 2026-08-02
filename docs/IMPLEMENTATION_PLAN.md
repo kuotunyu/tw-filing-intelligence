@@ -33,12 +33,15 @@
 | P7 | Chart route（caption index ＋ crop answering） | ✅ | ✗ | 🟢 完成（`twfi/chart/`，18 測試） |
 | P8 | Router ＋ answer/citation contract | ✅ | ✗ | 🟢 完成（`twfi/router/`；D-043） |
 | P9 | Eval harness ＋ metrics ＋ factor ladder | 部分 | ✗ | 🟢 完成（F0–F7 皆可跑） |
-| P10 | Freeze → locked run → gate → report | ✅ | ✗ | 🔴 **唯一未完成**，見下方 |
+| P10 | Freeze → locked run → gate → report | ✅ | ✗ | 🟢 **完成（NO_GO）** |
 
 > ⚠️ **2026-08-02 更正**：這張表在 P3–P10 一路標著「未開始」，
 > 但 P3–P9 早已完成 —— 表沒有跟著更新。`CLAUDE.md` 要求每次進來先讀這張表，
 > 所以它等於在對每一個接手的 session 說謊。已依 `docs/PROGRESS.md` 的實況重寫。
 > **這張表與 PROGRESS 不一致時，以 PROGRESS 為準，並回頭修這裡。**
+
+> ✅ **2026-08-02 最終更新**：P10 已完成。Protocol 1.0.0 freeze 後只執行一次
+> locked run；結果由 gate 程式判定為 **NO_GO**，見 `docs/FEASIBILITY_REPORT.md`。
 
 ---
 
