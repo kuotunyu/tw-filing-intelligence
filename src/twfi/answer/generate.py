@@ -15,11 +15,16 @@ fake.
 
 from __future__ import annotations
 
+import base64
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Sequence
+    from pathlib import Path
 
 __all__ = ["DECODING", "Generation", "GenerationConfig", "generate"]
 
@@ -73,28 +78,52 @@ class Generation:
         }
 
 
-def generate(prompt: str, config: GenerationConfig | None = None) -> Generation:
+def generate(
+    prompt: str,
+    config: GenerationConfig | None = None,
+    *,
+    images: Sequence[Path] | None = None,
+) -> Generation:
     """Run one completion locally and time it.
 
     Returns a :class:`Generation` carrying an ``error`` rather than raising, because a ladder run
     over dozens of questions must report which ones failed at the end instead of stopping at the
     first timeout -- and because a failed call and a wrong answer must not be counted as the
     same thing.
+
+    ``images`` are PNG crops sent to the same model at the same frozen decoding parameters. The
+    chart route (protocol 2.4) requires the final figure to come from the original crop pixels,
+    which means the pixels have to reach the model -- there is no text path that satisfies that.
+    An unreadable image is reported as an error rather than dropped, because a chart answered
+    without its chart is the failure this route exists to prevent.
     """
     settings = config or GenerationConfig()
     started = time.perf_counter()
+    payload_images: list[str] = []
+    for path in images or ():
+        try:
+            payload_images.append(base64.b64encode(path.read_bytes()).decode("ascii"))
+        except OSError as exc:
+            return Generation(
+                text="",
+                prompt_tokens=0,
+                completion_tokens=0,
+                seconds=time.perf_counter() - started,
+                model=settings.model,
+                error=f"cannot read crop {path}: {exc}",
+            )
     try:
         with httpx.Client(base_url=settings.base_url, timeout=settings.timeout_seconds) as client:
-            response = client.post(
-                "/api/generate",
-                json={
-                    "model": settings.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "think": False,
-                    "options": settings.options,
-                },
-            )
+            body: dict[str, Any] = {
+                "model": settings.model,
+                "prompt": prompt,
+                "stream": False,
+                "think": False,
+                "options": settings.options,
+            }
+            if payload_images:
+                body["images"] = payload_images
+            response = client.post("/api/generate", json=body)
             response.raise_for_status()
             payload = response.json()
     except (httpx.HTTPError, ValueError) as exc:
