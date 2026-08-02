@@ -21,6 +21,7 @@ from twfi.eval.report import (
     format_proportion,
     gate_table,
 )
+from twfi.protocol import FACTOR_IDS
 
 GATES: list[dict[str, Any]] = [
     {"gate": "G1", "name": "data reproducible", "kind": "hard", "passed": True, "detail": "ok"},
@@ -48,8 +49,28 @@ SUMMARY: dict[str, Any] = {
     "baseline": "F0",
     "candidate": "F7",
     "factors": {
-        "F0": {"overall_accuracy": {"n": 33, "correct": 12}},
-        "F7": {"overall_accuracy": {"n": 33, "correct": 21}},
+        factor: {
+            "overall_accuracy": {"n": 33, "correct": 12 + index},
+            "by_category": {
+                "table_cell": {"n": 3, "correct": min(3, 1 + index // 3)},
+                "unanswerable": {"n": 4, "correct": min(4, 1 + index // 2)},
+            },
+        }
+        for index, factor in enumerate(FACTOR_IDS)
+    },
+    "citation_validity": {"n": 33, "valid": 27},
+    "numeric_route_accuracy": {"n": 10, "correct": 8},
+    "route_accuracy": {"n": 33, "correct": 28},
+    "unanswerable": {
+        "n": 4,
+        "over_answered": 1,
+        "refusal_precision": {"n": 5, "refused": 4},
+    },
+    "probes": {"n": 5, "refused": 4},
+    "resources": {
+        "retrieval_p95_s": 1.2,
+        "generation_p95_s": 20.0,
+        "vram_peak_gb": 20.09,
     },
 }
 
@@ -163,9 +184,11 @@ def test_a_bare_rate_cannot_be_printed() -> None:
 
 
 def test_a_summary_with_a_bare_rate_refuses_to_become_a_report() -> None:
+    factors = dict(SUMMARY["factors"])
+    factors["F0"] = {"overall_accuracy": {"rate": 0.36}}
     broken = {
         **SUMMARY,
-        "factors": {"F0": {"overall_accuracy": {"rate": 0.36}}, "F7": SUMMARY["factors"]["F7"]},
+        "factors": factors,
     }
     with pytest.raises(MissingContent, match="denominator"):
         report(summary=broken)
@@ -173,8 +196,28 @@ def test_a_summary_with_a_bare_rate_refuses_to_become_a_report() -> None:
 
 def test_every_printed_rate_carries_n_and_an_interval() -> None:
     text = report()
-    assert "(12/33" in text and "(21/33" in text
+    assert "(12/33" in text and "(19/33" in text
     assert text.count("95% CI") >= 2
+
+
+def test_report_prints_the_full_ladder_candidate_categories_and_gate_metrics() -> None:
+    text = report()
+
+    for factor in FACTOR_IDS:
+        assert f"| {factor} |" in text
+    for heading in (
+        "F7 category accuracy",
+        "citation validity",
+        "numeric route accuracy",
+        "route accuracy",
+        "over-answer rate",
+        "refusal precision",
+        "no-evidence probes refused",
+        "retrieval_p95_s",
+        "generation_p95_s",
+        "vram_peak_gb",
+    ):
+        assert heading in text
 
 
 def test_the_overlap_warning_is_not_conditional() -> None:

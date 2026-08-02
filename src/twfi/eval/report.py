@@ -32,6 +32,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
 from twfi.eval.gates import read_proportion
+from twfi.protocol import FACTOR_IDS
 
 __all__ = [
     "REQUIRED_LIMITATIONS",
@@ -227,13 +228,64 @@ def build(
     parts.append(gate_table(gates) + "\n")
 
     parts.append("## 主要比較\n")
+    parts.append(f"Registered baseline: `{baseline}`；candidate: `{candidate}`。\n")
     overall_lines = ["| factor | overall answer accuracy |", "|---|---|"]
-    for factor in (baseline, candidate):
+    for factor in FACTOR_IDS:
         block = factors.get(factor)
+        if not isinstance(block, Mapping):
+            raise MissingContent(f"summary.factors.{factor} is missing from the full ladder")
         payload = block.get("overall_accuracy") if isinstance(block, Mapping) else None
         rendered = format_proportion(payload, where=f"factors.{factor}.overall_accuracy")
         overall_lines.append(f"| {factor} | {rendered} |")
     parts.append("\n".join(overall_lines) + "\n")
+
+    candidate_block = factors.get(candidate)
+    categories = (
+        candidate_block.get("by_category") if isinstance(candidate_block, Mapping) else None
+    )
+    if not isinstance(categories, Mapping) or not categories:
+        raise MissingContent(f"summary.factors.{candidate}.by_category is missing")
+    parts.append(f"### {candidate} category accuracy\n")
+    category_lines = ["| category | accuracy |", "|---|---|"]
+    for category in sorted(categories):
+        rendered = format_proportion(
+            categories[category], where=f"factors.{candidate}.by_category.{category}"
+        )
+        category_lines.append(f"| {category} | {rendered} |")
+    parts.append("\n".join(category_lines) + "\n")
+
+    unanswerable = summary.get("unanswerable")
+    if not isinstance(unanswerable, Mapping):
+        raise MissingContent("summary.unanswerable is missing")
+    metric_payloads = (
+        ("citation validity", summary.get("citation_validity")),
+        ("numeric route accuracy", summary.get("numeric_route_accuracy")),
+        ("route accuracy", summary.get("route_accuracy")),
+        (
+            "over-answer rate",
+            {"n": unanswerable.get("n"), "correct": unanswerable.get("over_answered")},
+        ),
+        ("refusal precision", unanswerable.get("refusal_precision")),
+        ("no-evidence probes refused", summary.get("probes")),
+    )
+    parts.append("### Candidate gate proportions\n")
+    metric_lines = ["| metric | observed |", "|---|---|"]
+    for label, payload in metric_payloads:
+        metric_lines.append(f"| {label} | {format_proportion(payload, where=label)} |")
+    parts.append("\n".join(metric_lines) + "\n")
+
+    resources = summary.get("resources")
+    if not isinstance(resources, Mapping):
+        raise MissingContent("summary.resources is missing")
+    parts.append("### Resource measurements\n")
+    resource_lines = ["| metric | observed |", "|---|---|"]
+    for key in ("retrieval_p95_s", "generation_p95_s", "vram_peak_gb"):
+        value = resources.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise MissingContent(f"summary.resources.{key} is missing or not numeric")
+        resource_lines.append(f"| {key} | {float(value):g} |")
+    parts.append("\n".join(resource_lines) + "\n")
+
     parts.append(
         "每個比率都附 n、分子與 Wilson 95% 信賴區間。**區間重疊代表這份樣本無法分辨兩者** ——\n"
         "這一句不因結果好壞而刪除。\n"
