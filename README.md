@@ -1,136 +1,80 @@
-# TW Filing Intelligence — Feasibility Study (⑤A)
+# TW Filing Intelligence
 
-**這是一份可行性驗證（feasibility study），不是產品，也不是 production 系統。**
+[![CI](https://github.com/kuotunyu/tw-filing-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/kuotunyu/tw-filing-intelligence/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kuotunyu/tw-filing-intelligence)](https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.0)
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
 
-本 repository 用來回答一個research question：
+針對臺灣上市公司公開財報打造的 multimodal RAG / VLM 可行性研究。專案以事前註冊的 Protocol 1.0.0，驗證 MOPS PDF、TWSE OpenAPI 與 XBRL 能否支撐可追溯、可拒答、可重現的 filing intelligence 系統。
 
-> 臺灣上市公司的**公開**資訊（MOPS 年報 / 財務報告 PDF、TWSE OpenAPI、XBRL）
-> 是否足以支撐一個真正有差異化、且**可被驗證**的
-> multimodal filing intelligence 系統？
+研究已完整結案，唯一一次 locked evaluation 由程式依預先凍結的 gate 判定為 [`NO_GO`](docs/FEASIBILITY_REPORT.md)。候選系統沒有通過；評估機制成功辨識了它。
 
-驗證方式是一個**事前註冊（pre-registered）**的實驗：先把評分協議與 GO／NO-GO 門檻寫死並
-hash 凍結，再跑 baseline 與 candidate，最後由程式依門檻自動產生 `GO / CONDITIONAL_GO / NO_GO`。
+## 研究規模
 
----
+| 項目 | 規模 |
+|---|---:|
+| 公司與產業 | 5 家公司、4 個產業 |
+| 文件範圍 | FY2023–FY2024，宣告 10 份、機器可用 8 份 |
+| Gold set | 53 筆：DEV 15、LOCKED 33、no-evidence probes 5 |
+| Factor ladder | F0–F7，共 8 組受控實驗 |
+| 品質驗證 | 1,632 tests、94.27% coverage、strict mypy、Ruff |
 
-## ⚠️ 免責聲明
+兩份不可用文件均為真實資料品質問題：PDF 缺少可用的 ToUnicode mapping。它們被保留在 manifest 與 provenance 中，沒有為了提高結果而替換樣本。
 
-- **本專案不是投資建議工具。** 所有輸出僅為文件檢索與資訊擷取的技術驗證結果，
-  不構成任何證券、金融商品之推薦、要約或投資建議。
-- **本專案不是 production 系統。** 沒有 SLA、沒有認證授權、沒有多租戶隔離、
-  沒有經過安全稽核，不應用於任何實際決策流程。
-- 所有數字都可能錯誤。任何財務數字請以
-  [公開資訊觀測站](https://mops.twse.com.tw/) 之原始文件為準。
-- 本 repository **不重新散布**原始年報／財報 PDF。只提交 manifest、來源 URL、
-  SHA-256 與重建腳本。
+## 系統設計
 
----
-
-## 這個專案在驗證什麼
-
-四類問題各自對應一條 route，四類都必須被量測：
-
-| 類別 | 問題形態 | Route |
-|---|---|---|
-| Narrative | 公司策略、風險因素、營運變化、年報文字敘述 | narrative |
-| Structured numeric | 營收／獲利／資產／負債、跨期變化、比率計算、單位／幣別／合併或個別 | numeric |
-| Table / chart | 表格欄位、圖表數值、圖例、座標、趨勢；caption 是否幫助檢索 | chart |
-| Cross-doc / unanswerable | 跨頁、跨年度、PDF↔結構化資料交叉驗證、文件中不存在的資訊、資料衝突與拒答 | cross_modal / unanswerable |
-
-核心設計原則（也是本專案的差異化主張）：
-
-1. **可靠的結構化數值不丟進 embedding 讓 LLM 猜** — 走 DuckDB + deterministic SQL，
-   並輸出 formula 與 operands。
-2. **chart caption 只用於 index／retrieval** — 最終數值答案必須回到
-   原始 crop pixels 或可靠結構化資料。
-3. **typed bounded router**，保留 reason 與 confidence，最多一次 bounded correction，
-   **沒有無上限 agent loop**。
-4. **沒有證據就拒答**，且拒答行為本身被量測（refusal precision / recall）。
-
----
-
-## 現況
-
-> **Protocol 1.0.0 已 freeze，唯一一次 locked evaluation 已完成：機械判定為
-> [`NO_GO`](docs/FEASIBILITY_REPORT.md)。**
-> 負面結果依事前協議原樣保留，沒有調整題目、答案、tolerance、門檻或模型。
-
-Candidate F7 整體正確率為 **6/33（18.2%）**，baseline F0 為 **17/33（51.5%）**；
-hard-category pooled gain 為 **-27.8pp**。G1（資料可重建）、G8（no-evidence probes）、
-G9（結果可重算）、G10（資源）通過；G2–G7 的 hard gates 失敗。
-完整數字、Wilson 95% 信賴區間、限制與最小下一研究問題見
-[`docs/FEASIBILITY_REPORT.md`](docs/FEASIBILITY_REPORT.md)。
-
-| | Phase | 狀態 |
-|---|---|---|
-| 🟢 | P0 protocol／gate／toolchain | 完成 |
-| 🟢 | P1 來源探勘 | 完成 |
-| 🟢 | P2 資料取得 ＋ SHA-256 provenance | 完成（宣告 10 份，可用 8 份） |
-| 🟢 | P3 Parsing（layout／table／figure） | 完成 |
-| 🟢 | P4 數值層（DuckDB ＋ deterministic SQL） | 完成 |
-| 🟢 | P5 Gold set 人工標註 | 完成（53/53，抽樣稽核通過） |
-| 🟢 | P6–P9 retrieval／chart／router／eval | 完成 |
-| 🟢 | P10 freeze → locked run → gate → report | 完成（**NO_GO**） |
-
-**「可用 8 份」不是失敗，是量測結果。** 兩份不可用的都是鴻海（2317）年報：
-FY2023 只有 148/707 頁（21%）能抽出可讀文字，FY2024 是 **0%** —— 字型沒有
-ToUnicode mapping，PDF 看得到字但抽不出字。
-
-這兩份**留在宣告清單裡**而不是被悄悄換掉。「臺灣公開文件有多少比例真的機器可讀」
-本身就是研究問題的一部分；出題時只從可用文件取材，但把不可用的刪掉會讓事前註冊
-失去意義，也會把一個真實的負面發現粉飾掉。
-
-歷史進度與接手紀錄見 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
-
-| 文件 | 內容 |
-|---|---|
-| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 實作計畫、phase 切分、每個 phase 的完成條件 |
-| [`docs/FEASIBILITY_PROTOCOL.md`](docs/FEASIBILITY_PROTOCOL.md) | **事前凍結**的評分協議與 GO／NO-GO gate |
-| [`docs/FEASIBILITY_REPORT.md`](docs/FEASIBILITY_REPORT.md) | 唯一 locked run 的完整結果、限制與 NO_GO 判定 |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | 固定下來的模型、parser、資料選擇與其 revision |
-| [`docs/DATA_PROVENANCE.md`](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權、什麼不進 git |
-| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 進度日誌（每個 session 更新） |
-
-結果產物：
-
-```
-results/feasibility/protocol_lock.json    # 凍結協議與 7 個 artifact hash
-results/feasibility/summary.json          # F0–F7 與 candidate gates 指標
-results/feasibility/error_analysis.jsonl  # 逐題 failure analysis
-results/feasibility/results_verification.json # G9 raw-artifact 重算結果
-results/feasibility/GO_NO_GO.json         # 由程式依事前 gate 自動產生
-docs/FEASIBILITY_REPORT.md                # 最終報告
+```text
+MOPS PDF ──> layout / table / figure parsing ──> BM25 + dense retrieval ─┐
+                                                                         ├─> typed router ─> grounded answer
+TWSE OpenAPI / XBRL ──> DuckDB ──> deterministic SQL ────────────────────┘
 ```
 
----
+- Narrative route：hybrid retrieval、cross-encoder reranking、可定位 citation。
+- Numeric route：可靠數值不交給 embedding 猜測；使用 DuckDB、deterministic SQL，並保留 formula 與 operands。
+- Chart route：caption 只參與 indexing / retrieval；答案必須回到 crop pixels 或可靠結構化資料。
+- Router：typed、bounded，最多一次 correction，沒有無上限 agent loop。
+- Refusal：證據不足時拒答，並量測 refusal precision / recall。
 
-## Quickstart
+## 事前註冊實驗
 
-需求：Windows / Linux、**Python 3.13**、[uv](https://docs.astral.sh/uv/)。
-（3.13 是硬需求，不是偏好——原因見 [`docs/DECISIONS.md`](docs/DECISIONS.md) D-001：
-repo 路徑含非 ASCII 字元，Python ≤3.12 會以系統 locale 讀 `.pth` 而爆
-`UnicodeDecodeError`。）
-GPU 只有在 index build 與 generation 階段需要（RTX 4090 24GB 為目標環境）；
-測試與資料驗證全部 CPU 且離線。
+評分規則、tolerance、GO / NO-GO gates 與七個關鍵 artifact hash 在 locked run 前完成凍結。執行後不改題目、不調門檻、不挑結果。
+
+| Factor | Locked accuracy | 主要變因 |
+|---|---:|---|
+| F0 | 51.5%（17/33） | baseline |
+| F1 | 45.5%（15/33） | layout-aware parsing |
+| F2 | 42.4%（14/33） | hybrid retrieval |
+| F3 | 57.6%（19/33） | cross-encoder reranking |
+| F4 | 57.6%（19/33） | page-neighbor expansion |
+| F5 | 60.6%（20/33） | table / chart evidence |
+| F6 | 54.5%（18/33） | typed dispatch |
+| F7 | 18.2%（6/33） | full candidate |
+
+最終 candidate 相對 baseline 的 hard-category pooled gain 為 **-27.8pp**。G1、G8、G9、G10 通過；G2–G7 未通過，因此結論為 `NO_GO`。
+
+關鍵失敗訊號：
+
+- citation validity：52.9%（9/17）
+- numeric route accuracy：0%（0/12）
+- route accuracy：33.3%（11/33）
+- retrieval p95：0.149 秒
+- generation p95：2.957 秒
+- peak VRAM：20.09 GB
+
+負面結果不是未完成。這份研究完成了 protocol freeze、資料 provenance、locked evaluation、raw-artifact 重算與機械式 gate decision，並留下下一輪 Protocol 2.x 可直接驗證的 failure decomposition。
+
+## 重現方式
+
+需求：Python 3.13、[uv](https://docs.astral.sh/uv/)。離線測試與資料驗證只使用 CPU；index build 與 generation 才需要 GPU，目標環境為 RTX 4090 24GB。
 
 ```bash
 uv sync --extra dev
-```
-
-離線測試（不碰 MOPS／TWSE／模型／API、不需要 GPU、不讀 `.env`）：
-
-```bash
 uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src
 ```
 
-Lint / type check：
-
-```bash
-uv run ruff check . ; uv run ruff format --check . ; uv run mypy src
-```
-
-資料取得（會連外，有 rate limit；失敗時走人工放置 fallback）：
+重新取得公開資料：
 
 ```bash
 uv run python scripts/fetch_twse_openapi.py --manifest data/manifests/structured.yaml
@@ -138,16 +82,25 @@ uv run python scripts/fetch_documents.py --manifest data/manifests/documents.yam
 uv run python scripts/verify_manifests.py
 ```
 
----
+Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官方來源 URL、SHA-256 與重建腳本。
 
-## 專案獨立性
+## 研究文件
 
-本 repository 完全獨立：不 import 其他本機專案、沒有 submodule、沒有 local path
-dependency、沒有 symlink、不共用資料庫／cache／evaluation artifacts。
-所有程式碼、schema、manifest、測試、evaluation 與文件都存在本 repository 內。
+| 文件 | 內容 |
+|---|---|
+| [最終報告](docs/FEASIBILITY_REPORT.md) | 唯一 locked run、完整指標、限制與 `NO_GO` 判定 |
+| [評估協議](docs/FEASIBILITY_PROTOCOL.md) | 事前凍結的 Protocol 1.0.0 與 gates |
+| [實作計畫](docs/IMPLEMENTATION_PLAN.md) | phase、交付項目與完成條件 |
+| [資料 provenance](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權與 SHA-256 |
+| [決策紀錄](docs/DECISIONS.md) | 模型、parser、資料與實驗設計取捨 |
+| [威脅模型](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
 
-## License
+主要結果位於 `results/feasibility/`，包含 protocol lock、F0–F7 summary、逐題 error analysis、重算驗證與最終 gate decision。
 
-程式碼採 [MIT](LICENSE)。
-**License 不涵蓋**臺灣證券交易所／公開資訊觀測站之原始文件與資料；
-那些內容依其原始授權條款，且本 repository 不重新散布。
+## 使用範圍
+
+本專案**不是投資建議**，所有輸出僅為文件檢索與資訊擷取的技術驗證，不構成證券或金融商品的推薦、要約或決策依據。任何財務數字均應回到[公開資訊觀測站](https://mops.twse.com.tw/)原始文件核對。
+
+本專案**不是 production 系統**，不提供 SLA、認證授權、多租戶隔離或安全稽核，不應直接用於實際決策流程。
+
+程式碼採 [MIT License](LICENSE)。授權不涵蓋 TWSE / MOPS 原始文件與資料；相關內容仍依原始來源條款使用。
