@@ -44,6 +44,9 @@ def graded_record(row: Mapping[str, Any], gold: GoldRecord) -> dict[str, Any]:
         raise ResultIntegrityError(f"{gold.question_id}: route decision is missing")
     if "cited_ok" not in row:
         raise ResultIntegrityError(f"{gold.question_id}: citation was not graded")
+    handled = row.get("handled_route")
+    if not isinstance(handled, str) or not handled:
+        raise ResultIntegrityError(f"{gold.question_id}: handled route is missing")
 
     payload = dict(row)
     payload["route_decision"] = decision
@@ -55,6 +58,7 @@ def graded_record(row: Mapping[str, Any], gold: GoldRecord) -> dict[str, Any]:
             "answerable": gold.answerable,
             "gold_route": ROUTE_BY_QUESTION_TYPE[gold.question_type],
             "route": "unanswerable" if refused else chosen,
+            "handled_route": handled,
             "correct": correct,
             "refused": refused,
             "cited_ok": row["cited_ok"],
@@ -131,7 +135,7 @@ def build_summary(
         for record in candidate
         if record.category in NUMERIC_ROUTE_CATEGORIES
         and record.answerable
-        and record.route == "numeric"
+        and record.handled_route == "numeric"
     ]
     unanswerable = [record for record in candidate if record.category == "unanswerable"]
     refusals = [record for record in candidate if record.refused]
@@ -212,6 +216,7 @@ def build_error_analysis(records: Sequence[Mapping[str, Any]]) -> list[dict[str,
                     "gold": payload.get("gold"),
                     "citation": payload.get("citation"),
                     "route": record.route,
+                    "handled_route": record.handled_route,
                     "gold_route": record.gold_route,
                 }
             )

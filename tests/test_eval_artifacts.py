@@ -49,6 +49,7 @@ def _ladder_row(*, refused: bool = False) -> dict[str, Any]:
         "predicted": "無法回答" if refused else "42",
         "cited_ok": None if refused else True,
         "route": {"route": "chart", "reason": "printed", "confidence": 0.6},
+        "handled_route": "chart",
         "score": {"correct": True, "refused": refused},
         "retrieval": {"recall_at_5": True, "seconds": 0.2},
         "generation": {"seconds": 1.0, "error": ""},
@@ -72,6 +73,7 @@ def _official(
         "answerable": not unanswerable,
         "gold_route": ROUTE_BY_QUESTION_TYPE[category],
         "route": actual,
+        "handled_route": actual,
         "correct": correct,
         "refused": unanswerable and correct,
         "cited_ok": None if unanswerable else correct,
@@ -122,6 +124,32 @@ def test_summary_recomputes_exactly_from_every_factor_and_probe() -> None:
     assert verify(summary, runs, expected_lock_sha256=LOCK, resources=RESOURCES) == ()
     assert summary["factors"]["F7"]["overall_accuracy"]["correct"] == 3
     assert summary["checks"]["results_reproducible"] is False
+
+
+def test_numeric_metric_uses_the_handler_even_when_its_refusal_ends_unanswerable() -> None:
+    runs: dict[str, list[dict[str, Any]]] = {}
+    for factor in FACTOR_IDS:
+        runs[factor] = [_official("LOCK-0001", "numeric_calculation", factor)]
+    runs["F7"][0].update(
+        {"route": "unanswerable", "handled_route": "numeric", "correct": False, "refused": True}
+    )
+    runs["probes"] = [
+        {
+            **_official("PROBE-0001", "unanswerable", "F7"),
+            "category": "probe",
+            "answerable": False,
+        }
+    ]
+
+    summary = build_summary(
+        runs,
+        protocol_lock_sha256=LOCK,
+        resources=RESOURCES,
+        data_reproducible=True,
+    )
+
+    assert summary["numeric_route_accuracy"]["n"] == 1
+    assert summary["numeric_route_accuracy"]["correct"] == 0
 
 
 def test_p95_uses_a_conservative_nearest_rank() -> None:

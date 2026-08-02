@@ -37,7 +37,6 @@ import re
 import statistics
 import subprocess
 import time
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -45,13 +44,14 @@ from typing import TYPE_CHECKING, Annotated, Any
 import numpy as np
 import typer
 
-from twfi.answer.generate import Generation, GenerationConfig, generate
+from twfi.answer.generate import GenerationConfig, generate
 from twfi.answer.prompt import DEFAULT_VARIANT, PROMPT_VARIANTS, build_prompt, parse_answer
 from twfi.console import use_utf8_output
 from twfi.errors import EvaluationError, ProtocolLockError, ResultIntegrityError
 from twfi.eval.answers import is_refusal, normalise_text, refusal_rates, score_answer
 from twfi.eval.artifacts import build_error_analysis, build_summary, graded_record
 from twfi.eval.citations import CitationGrader
+from twfi.eval.dispatch import complete_answer
 from twfi.eval.gates import wilson_interval
 from twfi.eval.gold import GoldRecord, load_gold
 from twfi.eval.locked_run import (
@@ -345,6 +345,7 @@ def _run_no_evidence_probes(
                 "answerable": False,
                 "gold_route": "unanswerable",
                 "route": "unanswerable" if refused else decision.route,
+                "handled_route": decision.route,
                 "correct": refused,
                 "refused": refused,
                 "cited_ok": None,
@@ -656,29 +657,16 @@ def main(
                     record.question, passages, figures_by_doc, paths, lock, crop_dir, config
                 )
 
-            if numeric is not None and numeric.ok:
-                completion = Generation(
-                    text=numeric.as_text(),
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    seconds=0.0,
-                    model="deterministic-sql",
-                )
-                draft = parse_answer(numeric.as_text())
-                draft = replace(draft, unit=numeric.unit, period=numeric.period)
-            elif chart is not None:
-                completion = Generation(
-                    text=chart.value,
-                    prompt_tokens=chart.prompt_tokens,
-                    completion_tokens=chart.completion_tokens,
-                    seconds=chart.seconds,
-                    model=chart.model,
-                )
-                draft = parse_answer(chart.value)
-                draft = replace(draft, answer=chart.value, unit=chart.unit)
-            else:
-                completion = generate(prompt, config)
-                draft = parse_answer(completion.text)
+            answer = complete_answer(
+                prompt,
+                config,
+                dispatch=dispatch,
+                decision_route=decision.route,
+                numeric=numeric,
+                chart=chart,
+            )
+            completion = answer.completion
+            draft = answer.draft
             score = score_answer(
                 draft.answer,
                 record,
@@ -731,6 +719,7 @@ def main(
                     },
                     "generation": completion.to_json(),
                     "route": decision.to_json(),
+                    "handled_route": answer.handled_route,
                     "score": score.to_json(),
                 }
             )

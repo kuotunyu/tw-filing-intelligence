@@ -62,6 +62,7 @@ def record(
         "answerable": not unanswerable,
         "gold_route": ROUTE_BY_QUESTION_TYPE[category],
         "route": ROUTE_BY_QUESTION_TYPE[category],
+        "handled_route": ROUTE_BY_QUESTION_TYPE[category],
         "correct": correct,
         # Protocol 4 grades an unanswerable item correct exactly when it was refused.
         "refused": unanswerable and correct,
@@ -79,6 +80,7 @@ def probe(question_id: str, *, refused: bool = True) -> dict[str, Any]:
         "answerable": False,
         "gold_route": "unanswerable",
         "route": "unanswerable",
+        "handled_route": "unanswerable",
         "correct": refused,
         "refused": refused,
         "cited_ok": None,

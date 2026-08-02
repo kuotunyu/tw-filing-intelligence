@@ -105,13 +105,21 @@ REQUIRED_RECORD_FIELDS: Final[tuple[str, ...]] = (
     "answerable",
     "gold_route",
     "route",
+    "handled_route",
     "correct",
     "refused",
     "cited_ok",
 )
 
 _BOOLEAN_FIELDS: Final[tuple[str, ...]] = ("answerable", "correct", "refused")
-_TEXT_FIELDS: Final[tuple[str, ...]] = ("question_id", "factor", "category", "gold_route", "route")
+_TEXT_FIELDS: Final[tuple[str, ...]] = (
+    "question_id",
+    "factor",
+    "category",
+    "gold_route",
+    "route",
+    "handled_route",
+)
 _QUESTION_TYPES: Final[frozenset[str]] = frozenset(get_args(QuestionType))
 _ROUTES: Final[frozenset[str]] = frozenset(get_args(Route))
 
@@ -184,7 +192,13 @@ class RawRecord:
         the protocol rather than taken on trust -- a run that recorded its own answer here
         would score its route accuracy against itself.
     ``route``
-        The route the router actually chose, one of the six in :data:`twfi.protocol.Route`.
+        The pipeline's effective final label, one of the six in :data:`twfi.protocol.Route`.
+        A refusal is labelled ``unanswerable`` so G6 measures the route the pipeline ended on.
+    ``handled_route``
+        The answer backend that handled the selected path before the effective refusal label.
+        This differs from ``route`` when, for example, the numeric backend refuses: G5 must
+        count that attempted numeric item as an incorrect numeric result instead of removing
+        it from the denominator merely because its final label is ``unanswerable``.
     ``correct``
         The graded verdict under protocol 4's overall-accuracy definition: numeric tolerance
         for numeric items, exact match or token-F1 >= 0.8 for prose, and *correct refusal*
@@ -208,6 +222,7 @@ class RawRecord:
     answerable: bool
     gold_route: str
     route: str
+    handled_route: str
     correct: bool
     refused: bool
     cited_ok: bool | None
@@ -257,7 +272,7 @@ def read_record(payload: Any, *, where: str) -> RawRecord | str:
             f"{where}.category is {payload['category']!r}, which is neither one of the eight "
             f"question types nor {PROBE_CATEGORY!r}"
         )
-    for name in ("route", "gold_route"):
+    for name in ("route", "gold_route", "handled_route"):
         if payload[name] not in _ROUTES:
             return f"{where}.{name} is not one of the six routes: {payload[name]!r}"
     return RawRecord(
@@ -267,6 +282,7 @@ def read_record(payload: Any, *, where: str) -> RawRecord | str:
         answerable=bool(payload["answerable"]),
         gold_route=str(payload["gold_route"]),
         route=str(payload["route"]),
+        handled_route=str(payload["handled_route"]),
         correct=bool(payload["correct"]),
         refused=bool(payload["refused"]),
         cited_ok=None if cited_ok is None else bool(cited_ok),
@@ -306,7 +322,7 @@ def _numeric_route_accuracy(records: Sequence[RawRecord]) -> Proportion | None:
     kept = [
         r
         for r in records
-        if r.category in NUMERIC_ROUTE_CATEGORIES and r.answerable and r.route == "numeric"
+        if r.category in NUMERIC_ROUTE_CATEGORIES and r.answerable and r.handled_route == "numeric"
     ]
     if not kept:
         return None
