@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-08-02T15:21:14+00:00",
+  "protocol_lock_sha256": "18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d",
+  "code_commit": "595268f3a64ee9430efc397140c2f600c925436b",
+  "factors": [
+    "F0",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7"
+  ],
+  "questions": 33,
+  "prompt_variant": "strict",
+  "numeric_db": "numeric_broad.duckdb",
+  "fetch_depth": 100,
+  "rerank_device": "cuda"
+}

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 
+import duckdb
 import pytest
 
-from twfi.errors import NumericRouteError, TemplateMissError, UnitMismatchError
+from twfi.errors import ConfigError, NumericRouteError, TemplateMissError, UnitMismatchError
 from twfi.numeric.calculator import Operand, difference, growth_rate, ratio
 from twfi.numeric.sql_tools import (
     TEMPLATES,
@@ -35,6 +37,7 @@ def item(
     basis: str = "consolidated",
     schema: str = "general",
     source_kind: str = "openapi_current",
+    source_ref: str | None = None,
     uniform: bool = True,
     note: str | None = None,
 ) -> LineItem:
@@ -49,7 +52,7 @@ def item(
         unit=unit,
         currency=currency,
         source_kind=source_kind,  # type: ignore[arg-type]
-        source_ref=f"{source_kind}:{company}:{period}:{account}",
+        source_ref=source_ref or f"{source_kind}:{company}:{period}:{account}",
         unit_is_uniform=uniform,
         unit_note=note,
     )
@@ -111,6 +114,49 @@ def test_reloading_the_same_source_replaces_rather_than_duplicates(store) -> Non
     found = store.find("2330", "營業收入", "FY2024")
     assert len(found) == 1
     assert found[0].value == Decimal(9999)
+
+
+def test_two_pages_from_the_same_source_survive_and_force_a_refusal(store) -> None:
+    store.add_line_items(
+        [
+            item(source_kind="extracted_text_row", source_ref="2330-AR|p10", value="1"),
+            item(source_kind="extracted_text_row", source_ref="2330-AR|p20", value="2"),
+        ]
+    )
+
+    assert len(store.find("2330", "營業收入", "FY2024")) == 2
+    with pytest.raises(NumericRouteError, match="will not choose between them"):
+        store.require("2330", "營業收入", "FY2024")
+
+
+def test_a_legacy_database_that_discards_source_refs_is_refused(tmp_path: Path) -> None:
+    database = tmp_path / "legacy.duckdb"
+    connection = duckdb.connect(str(database))
+    connection.execute(
+        """
+        CREATE TABLE fin_line_item (
+            company_code TEXT NOT NULL,
+            period TEXT NOT NULL,
+            statement TEXT NOT NULL,
+            basis TEXT NOT NULL,
+            industry_schema TEXT NOT NULL,
+            account TEXT NOT NULL,
+            value DECIMAL(38, 6),
+            unit TEXT,
+            currency TEXT,
+            unit_is_uniform BOOLEAN NOT NULL DEFAULT TRUE,
+            unit_note TEXT,
+            source_kind TEXT NOT NULL,
+            source_url TEXT,
+            source_ref TEXT NOT NULL,
+            PRIMARY KEY (company_code, period, statement, basis, account, source_kind)
+        )
+        """
+    )
+    connection.close()
+
+    with pytest.raises(ConfigError, match="rebuild"):
+        NumericStore(database)
 
 
 def test_sources_are_recorded(store) -> None:

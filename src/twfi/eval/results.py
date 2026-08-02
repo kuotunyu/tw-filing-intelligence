@@ -35,6 +35,7 @@ disagreements with the first would be invisible. The record contract is on :clas
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,13 +106,21 @@ REQUIRED_RECORD_FIELDS: Final[tuple[str, ...]] = (
     "answerable",
     "gold_route",
     "route",
+    "handled_route",
     "correct",
     "refused",
     "cited_ok",
 )
 
 _BOOLEAN_FIELDS: Final[tuple[str, ...]] = ("answerable", "correct", "refused")
-_TEXT_FIELDS: Final[tuple[str, ...]] = ("question_id", "factor", "category", "gold_route", "route")
+_TEXT_FIELDS: Final[tuple[str, ...]] = (
+    "question_id",
+    "factor",
+    "category",
+    "gold_route",
+    "route",
+    "handled_route",
+)
 _QUESTION_TYPES: Final[frozenset[str]] = frozenset(get_args(QuestionType))
 _ROUTES: Final[frozenset[str]] = frozenset(get_args(Route))
 
@@ -184,7 +193,13 @@ class RawRecord:
         the protocol rather than taken on trust -- a run that recorded its own answer here
         would score its route accuracy against itself.
     ``route``
-        The route the router actually chose, one of the six in :data:`twfi.protocol.Route`.
+        The pipeline's effective final label, one of the six in :data:`twfi.protocol.Route`.
+        A refusal is labelled ``unanswerable`` so G6 measures the route the pipeline ended on.
+    ``handled_route``
+        The answer backend that handled the selected path before the effective refusal label.
+        This differs from ``route`` when, for example, the numeric backend refuses: G5 must
+        count that attempted numeric item as an incorrect numeric result instead of removing
+        it from the denominator merely because its final label is ``unanswerable``.
     ``correct``
         The graded verdict under protocol 4's overall-accuracy definition: numeric tolerance
         for numeric items, exact match or token-F1 >= 0.8 for prose, and *correct refusal*
@@ -208,6 +223,7 @@ class RawRecord:
     answerable: bool
     gold_route: str
     route: str
+    handled_route: str
     correct: bool
     refused: bool
     cited_ok: bool | None
@@ -257,7 +273,7 @@ def read_record(payload: Any, *, where: str) -> RawRecord | str:
             f"{where}.category is {payload['category']!r}, which is neither one of the eight "
             f"question types nor {PROBE_CATEGORY!r}"
         )
-    for name in ("route", "gold_route"):
+    for name in ("route", "gold_route", "handled_route"):
         if payload[name] not in _ROUTES:
             return f"{where}.{name} is not one of the six routes: {payload[name]!r}"
     return RawRecord(
@@ -267,6 +283,7 @@ def read_record(payload: Any, *, where: str) -> RawRecord | str:
         answerable=bool(payload["answerable"]),
         gold_route=str(payload["gold_route"]),
         route=str(payload["route"]),
+        handled_route=str(payload["handled_route"]),
         correct=bool(payload["correct"]),
         refused=bool(payload["refused"]),
         cited_ok=None if cited_ok is None else bool(cited_ok),
@@ -306,7 +323,7 @@ def _numeric_route_accuracy(records: Sequence[RawRecord]) -> Proportion | None:
     kept = [
         r
         for r in records
-        if r.category in NUMERIC_ROUTE_CATEGORIES and r.answerable and r.route == "numeric"
+        if r.category in NUMERIC_ROUTE_CATEGORIES and r.answerable and r.handled_route == "numeric"
     ]
     if not kept:
         return None
@@ -374,6 +391,57 @@ def _check_proportion(
             str(parsed),
             str(recomputed),
             "the summary figure is not what the graded records add up to",
+        )
+    assert isinstance(claimed, Mapping)  # read_proportion accepted it above
+    expected_rate = round(recomputed.rate, 6)
+    claimed_rate = _finite_float(claimed.get("rate"))
+    if claimed_rate is None:
+        kind = "missing_summary_field" if "rate" not in claimed else "malformed"
+        return Problem(
+            f"{field}.rate",
+            kind,
+            "nothing" if "rate" not in claimed else repr(claimed.get("rate")),
+            f"{expected_rate:g}",
+            "the registered summary schema requires the recomputed rate",
+        )
+    if claimed_rate != expected_rate:
+        return Problem(
+            f"{field}.rate",
+            "mismatch",
+            f"{claimed_rate:g}",
+            f"{expected_rate:g}",
+            "the reported rate does not agree with its own verified counts",
+        )
+    expected_ci = [round(bound, 6) for bound in recomputed.interval()]
+    claimed_ci = claimed.get("ci95")
+    if "ci95" not in claimed:
+        return Problem(
+            f"{field}.ci95",
+            "missing_summary_field",
+            "nothing",
+            repr(expected_ci),
+            "the registered summary schema requires a Wilson 95% confidence interval",
+        )
+    if (
+        not isinstance(claimed_ci, list)
+        or len(claimed_ci) != 2
+        or any(_finite_float(bound) is None for bound in claimed_ci)
+    ):
+        return Problem(
+            f"{field}.ci95",
+            "malformed",
+            repr(claimed_ci),
+            repr(expected_ci),
+            "ci95 must be a two-number array containing finite Wilson interval bounds",
+        )
+    normalised_ci = [float(bound) for bound in claimed_ci]
+    if normalised_ci != expected_ci:
+        return Problem(
+            f"{field}.ci95",
+            "mismatch",
+            repr(claimed_ci),
+            repr(expected_ci),
+            "the reported interval is not the Wilson interval for the verified counts",
         )
     return None
 
@@ -646,6 +714,9 @@ def _unanswerable_problems(
     # gates.py assembles the over-answer proportion out of two sibling keys; assembling it
     # the same way here is what keeps a payload that satisfies G9 readable to G7.
     claimed: Any = {"n": block.get("n"), "correct": block.get("over_answered")}
+    for key in ("rate", "ci95"):
+        if key in block:
+            claimed[key] = block[key]
     if claimed["n"] is None and claimed["correct"] is None:
         claimed = None
     problems: list[Problem] = []
@@ -728,6 +799,14 @@ def _as_float(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value)
+
+
+def _finite_float(value: Any) -> float | None:
+    """A finite JSON number; booleans and NaN/Infinity are not reported measurements."""
+    parsed = _as_float(value)
+    if parsed is None or not math.isfinite(parsed):
+        return None
+    return parsed
 
 
 def _coverage_problems(

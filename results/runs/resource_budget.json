@@ -1,0 +1,90 @@
+{
+  "vram_at_rest_mib": 1681,
+  "vram_total_mib": 24139,
+  "decoding": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 20260731,
+    "num_predict": 512,
+    "num_ctx": 8192
+  },
+  "scope": "dev filings and synthetic prompts only; locked is not read before the freeze",
+  "generation_short": {
+    "model": "qwen3.6:27b",
+    "label": "short prompts",
+    "n": 5,
+    "prompt_tokens": [
+      59,
+      74,
+      66,
+      56,
+      46
+    ],
+    "output_tokens": [
+      25,
+      10,
+      84,
+      34,
+      2
+    ],
+    "cold_seconds": 23.54,
+    "warm_seconds": [
+      1.61,
+      3.59,
+      1.95,
+      1.21
+    ],
+    "warm_median_seconds": 1.78,
+    "warm_max_seconds": 3.59,
+    "vram_resident_mib": 19361,
+    "note": "n too small for a p95; max reported. G10's p95 comes from the locked run."
+  },
+  "generation": {
+    "model": "qwen3.6:27b",
+    "label": "retrieved context, 512-token answer",
+    "n": 3,
+    "prompt_tokens": [
+      3557,
+      3557,
+      3557
+    ],
+    "output_tokens": [
+      512,
+      512,
+      512
+    ],
+    "cold_seconds": 15.84,
+    "warm_seconds": [
+      14.37,
+      14.66
+    ],
+    "warm_median_seconds": 14.51,
+    "warm_max_seconds": 14.66,
+    "vram_resident_mib": 19379,
+    "note": "n too small for a p95; max reported. G10's p95 comes from the locked run."
+  },
+  "embedding": {
+    "model": "BAAI/bge-m3",
+    "reranker": "BAAI/bge-reranker-v2-m3",
+    "chunks": 500,
+    "seconds": 2.68,
+    "chunks_per_second": 186.3,
+    "rerank_seconds_16_pairs": 0.125,
+    "batch_size": 16,
+    "vram_with_embedder_mib": 21541,
+    "vram_resident_mib": 22254,
+    "vram_all_three_gb": 21.73,
+    "corpus_chunks_total": 8859,
+    "projected_full_index_minutes": 0.8
+  },
+  "vram_peak_observed_mib": 22254,
+  "vram_peak_observed_gb": 21.73,
+  "vram_own_footprint_mib": 20573,
+  "vram_own_footprint_gb": 20.09,
+  "g10_vram_limit_gb": 22.0,
+  "g10_measures": "vram_own_footprint_gb",
+  "g10_limit_note": "The 22 GB limit already excludes desktop usage (protocol 3.6), so the gate is judged on this process's own footprint. vram_peak_observed_gb is total card occupancy including the 1681 MiB of unrelated processes present during this run.",
+  "vram_headroom_gb": 1.91,
+  "vram_headroom_total_card_gb": 0.27
+}

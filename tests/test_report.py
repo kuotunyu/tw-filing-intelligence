@@ -11,6 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from scripts.make_report import LIMITATIONS as STUDY_LIMITATIONS
+from scripts.make_report import _error_findings, _next_question, _report_lock_sha256
 
 from twfi.eval.report import (
     REQUIRED_LIMITATIONS,
@@ -19,6 +21,7 @@ from twfi.eval.report import (
     format_proportion,
     gate_table,
 )
+from twfi.protocol import FACTOR_IDS
 
 GATES: list[dict[str, Any]] = [
     {"gate": "G1", "name": "data reproducible", "kind": "hard", "passed": True, "detail": "ok"},
@@ -46,8 +49,28 @@ SUMMARY: dict[str, Any] = {
     "baseline": "F0",
     "candidate": "F7",
     "factors": {
-        "F0": {"overall_accuracy": {"n": 33, "correct": 12}},
-        "F7": {"overall_accuracy": {"n": 33, "correct": 21}},
+        factor: {
+            "overall_accuracy": {"n": 33, "correct": 12 + index},
+            "by_category": {
+                "table_cell": {"n": 3, "correct": min(3, 1 + index // 3)},
+                "unanswerable": {"n": 4, "correct": min(4, 1 + index // 2)},
+            },
+        }
+        for index, factor in enumerate(FACTOR_IDS)
+    },
+    "citation_validity": {"n": 33, "valid": 27},
+    "numeric_route_accuracy": {"n": 10, "correct": 8},
+    "route_accuracy": {"n": 33, "correct": 28},
+    "unanswerable": {
+        "n": 4,
+        "over_answered": 1,
+        "refusal_precision": {"n": 5, "refused": 4},
+    },
+    "probes": {"n": 5, "refused": 4},
+    "resources": {
+        "retrieval_p95_s": 1.2,
+        "generation_p95_s": 20.0,
+        "vram_peak_gb": 20.09,
     },
 }
 
@@ -63,6 +86,7 @@ def report(**overrides: Any) -> str:
         "limitations": LIMITATIONS,
         "protocol_lock_sha256": "0" * 64,
         "findings": ["表格抽取在 locked 財報頁上 20 個目標只載入 2 個。"],
+        "next_question": "能否只修正引用選擇，讓 G4 達到門檻？",
     }
     base.update(overrides)
     return build(**base)
@@ -75,6 +99,75 @@ def test_a_complete_report_builds() -> None:
     text = report()
     assert "# 可行性報告" in text
     assert "不是投資建議" in text, "CLAUDE.md rule 10 requires this on any output"
+
+
+def test_report_generator_supplies_every_required_limitation() -> None:
+    required = {key for key, _heading in REQUIRED_LIMITATIONS}
+
+    assert required <= set(STUDY_LIMITATIONS)
+    assert all(STUDY_LIMITATIONS[key].strip() for key in required)
+
+
+def test_report_requires_the_non_independent_approval_disclosure() -> None:
+    assert "approval_process" in {key for key, _heading in REQUIRED_LIMITATIONS}
+
+
+def test_numeric_coverage_limitation_describes_the_registered_broad_store() -> None:
+    limitation = STUDY_LIMITATIONS["numeric_coverage"]
+
+    assert "numeric_broad.duckdb" in limitation
+    assert "不看 gold" in limitation
+    assert "只涵蓋 **gold 有問到的 account**" not in limitation
+
+
+def test_numeric_ambiguity_limitation_uses_the_preserved_source_ref_measurement() -> None:
+    limitation = STUDY_LIMITATIONS["numeric_ambiguity"]
+
+    assert "46/115（40.0%）" in limitation
+    assert "32/34（94.1%）" in limitation
+    assert "source_ref" in limitation
+
+
+def test_chart_limitation_explains_why_the_challenger_was_cancelled() -> None:
+    limitation = STUDY_LIMITATIONS["chart_route"]
+
+    assert "challenger" in limitation
+    assert "cancelled" in limitation
+    assert "沒有比較結果" in limitation
+
+
+def test_dev_limitation_discloses_the_residual_page_budget_bias() -> None:
+    limitation = STUDY_LIMITATIONS["dev_clustering"]
+
+    assert "1.57" in limitation
+    assert "1.25" in limitation
+    assert "1.3–1.7" in limitation
+    assert "檢索能力" in limitation
+
+
+def test_text_layer_limitation_keeps_every_registered_warning() -> None:
+    limitation = STUDY_LIMITATIONS["text_layer"]
+
+    for phrase in ("95%", "96%", "17.9%", "15.4%", "48%", "43%"):
+        assert phrase in limitation
+    assert "不代表字元正確" in limitation
+    assert "150 頁" in limitation
+    assert "125 個打勾" in limitation
+    assert "71 個" in limitation
+
+
+def test_structured_source_limitation_names_the_locked_store_source_kind() -> None:
+    limitation = STUDY_LIMITATIONS["structured_source"]
+
+    assert "source_kind=extracted_text_row" in limitation
+    assert "source_kind=extracted_table" not in limitation
+
+
+def test_report_uses_the_lock_digest_that_g9_verified_in_summary() -> None:
+    digest = "a" * 64
+    lock_payload = {"protocol_version": "1.0.0", "frozen_at": "now", "entries": []}
+
+    assert _report_lock_sha256({"protocol_lock_sha256": digest}, lock_payload) == digest
 
 
 def test_two_runs_produce_the_same_bytes() -> None:
@@ -91,9 +184,11 @@ def test_a_bare_rate_cannot_be_printed() -> None:
 
 
 def test_a_summary_with_a_bare_rate_refuses_to_become_a_report() -> None:
+    factors = dict(SUMMARY["factors"])
+    factors["F0"] = {"overall_accuracy": {"rate": 0.36}}
     broken = {
         **SUMMARY,
-        "factors": {"F0": {"overall_accuracy": {"rate": 0.36}}, "F7": SUMMARY["factors"]["F7"]},
+        "factors": factors,
     }
     with pytest.raises(MissingContent, match="denominator"):
         report(summary=broken)
@@ -101,8 +196,28 @@ def test_a_summary_with_a_bare_rate_refuses_to_become_a_report() -> None:
 
 def test_every_printed_rate_carries_n_and_an_interval() -> None:
     text = report()
-    assert "(12/33" in text and "(21/33" in text
+    assert "(12/33" in text and "(19/33" in text
     assert text.count("95% CI") >= 2
+
+
+def test_report_prints_the_full_ladder_candidate_categories_and_gate_metrics() -> None:
+    text = report()
+
+    for factor in FACTOR_IDS:
+        assert f"| {factor} |" in text
+    for heading in (
+        "F7 category accuracy",
+        "citation validity",
+        "numeric route accuracy",
+        "route accuracy",
+        "over-answer rate",
+        "refusal precision",
+        "no-evidence probes refused",
+        "retrieval_p95_s",
+        "generation_p95_s",
+        "vram_peak_gb",
+    ):
+        assert heading in text
 
 
 def test_the_overlap_warning_is_not_conditional() -> None:
@@ -148,7 +263,31 @@ def test_a_failed_gate_appears_in_the_table() -> None:
 def test_no_go_carries_the_protocol_prohibition() -> None:
     text = report(verdict="NO_GO")
     assert "不得" in text
-    assert "最小的下一個研究問題" in text
+    assert "## 最小的下一個研究問題" in text
+    assert "能否只修正引用選擇" in text
+
+
+def test_a_non_go_report_without_one_next_question_is_refused() -> None:
+    with pytest.raises(MissingContent, match="next research question"):
+        report(verdict="NO_GO", next_question=None)
+
+
+def test_next_question_comes_from_the_first_failed_registered_gate() -> None:
+    assert "引用" in str(_next_question("NO_GO", GATES))
+    assert _next_question("GO", GATES) is None
+
+
+def test_error_analysis_becomes_a_counted_report_finding() -> None:
+    finding = _error_findings(
+        [
+            {"buckets": ["citation_invalid", "route_error"]},
+            {"buckets": ["citation_invalid"]},
+        ]
+    )
+
+    assert finding == [
+        "F7 error analysis（同一題可屬多個 bucket）：citation_invalid=2、route_error=1。"
+    ]
 
 
 def test_conditional_go_says_it_is_a_resource_result() -> None:

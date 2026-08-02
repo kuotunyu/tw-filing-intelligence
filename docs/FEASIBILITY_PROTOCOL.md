@@ -1,7 +1,7 @@
 # FEASIBILITY PROTOCOL (pre-registered)
 
-`protocol_version: 1.0.0-draft`
-`status: DRAFT — 尚未 freeze`
+`protocol_version: 1.0.0`
+`status: FINAL — 是否已 freeze 以 results/feasibility/protocol_lock.json 為準`
 `authored: 2026-07-31`
 
 > **這份文件是事前註冊協議。**
@@ -362,7 +362,7 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
   unanswerable`，並保留 `reason` 與 `confidence`。
   **最多一次 bounded correction**；無上限 agent loop 禁止。
 
-**numeric store 的來源（2026-08-02 補入，freeze 前；⚠️ 待使用者批准）**
+**numeric store 的來源（2026-08-02 補入，freeze 前；✅ 已定案，見 D-048）**
 
 本節原本沒有寫明 numeric route 讀哪一個 store，而實作上有兩個，
 且**選哪一個會改變 F4 的數字**。這個缺口必須在 freeze 前補上：
@@ -384,14 +384,56 @@ Baseline 與所有 candidate factor **共用同一份 answer contract 與 citati
    只有後者能回答這個問題。
 3. 這與 `CLAUDE.md` 規則 4（gold 不得由 candidate 產生）是同一條原則的另一面：
    **candidate 的輸入也不得由 gold 產生。**
+4. 每個抽取位置都以獨立的 `source_ref` 保留；同一 company / period / statement /
+   basis / account / source_kind 的不同頁面，**不得先以 `INSERT OR REPLACE` 覆寫**後才查詢。
+   若一個查詢 key 留有多個候選，numeric route 必須拒答並列出候選，不得讓頁面順序決定答案。
 
 > **誠實揭露**：寫下這段時 dev 上兩個 store 的數字都已經量過
 > （gold-keyed 7/15、broad 11/15，見 D-044）。
 > 依 §2.5 澄清段的同一個承諾，**已量到的數字不作為本段的理由** ——
 > 上面三點若把數字反過來也完全成立（broad store 較差時，
 > 它仍然是唯一能回答 RQ2 的那一個，而 gold-keyed 的高分仍然是安排出來的）。
-> 但「先決定再看數字」這個條件在事實上已經破了，
-> 所以本段**標為待使用者批准**，而不是由實作者逕行寫定。
+> 但「先決定再看數字」這個條件在事實上已經破了。
+
+> **批准方式的揭露（2026-08-02，D-048）**：本段由使用者**委任實作者判斷**而定案，
+> 不是由一位未看過數字的人獨立裁決。這個區別對本研究不利，所以寫在這裡而不是省略：
+> 一個「先決定再看數字」的承諾，最後由已經看過數字的一方自己批准自己的提案。
+> **report 必須揭露這一點**，讀者才能自行決定要給 F4 的 locked 數字多少信任。
+> 能補救的只有兩件事，兩件都已做到：理由段落**只用原則、不引數字**，
+> 且該理由在數字反過來時同樣成立。
+
+**檢索範圍限制：company scope（2026-08-02 補入，freeze 前；✅ 已定案，見 D-049）**
+
+- **規則**：若題目指名了一個或多個發行人，檢索候選池**只保留該發行人的 filing**；
+  題目未指名發行人時不作限制。判定依 `company_code`，該欄位每份文件都有。
+- **套用範圍：F0 到 F7 全部一致。** 這是 **harness 層的範圍限制，不是 ladder 的一階**。
+- **報告禁止把它當成增益來源。** 它不是被測的技術，沒有自己的 rung，
+  也不得被寫成任何一階的貢獻。
+
+理由（**與排名數字無關**）：
+
+1. **正確性。** 沒有它，chart route 會拿**別家公司**的文件回答本題，而且發生在
+   一題應該拒答的題目上（D-047：DEV-0010 讀了台積電年報的裁切圖，
+   捏出 6,037,249,300 並附上引用）。有引用的捏造是最壞的一類失效。
+2. **管線少用了它明明就有的中繼資料**，不是少了一個技巧。
+3. **不會弄壞任何已註冊的題目**：48 筆 gold 逐筆檢查，
+   **0 筆**的 `source_document` 離開它所指名的發行人。
+   三題 `cross_document` 是同一發行人的跨*文件*（2330 有 3 份、2882 有 2 份），不是跨公司。
+
+**為什麼套用到 F0（baseline）而不是只給 candidate**：
+
+- 只給 candidate，F1 的 delta 就變成「layout parsing ＋ company filter」兩者相加，
+  **factor-at-a-time 歸因會失效** —— 而那是本研究方法論上最重要的性質。
+- 套用到全部階，baseline 也會變強，candidate 對 baseline 的**領先幅度因此縮小**，
+  G2／G3 變得**更難**通過。依 §2.5 澄清段與 D-020 用過的同一條檢驗，
+  資料已存在之後，一個註冊選擇**只能往讓 GO 更難的方向移動**。
+- company scope 是任何系統都能做的範圍限制，不是 candidate 專屬技術，
+  所以把它交給 baseline 並不違反「baseline 刻意簡單」。
+
+> **誠實揭露**：本項最早是在 dev 排名診斷（D-045）中發現的，當時的理由是排名
+> （答案進前 5 由 5/12 → 7/12、最差名次 60 → 14）。**那些數字不是本段的理由**，
+> 上面三點不引用它們。與 D-048 相同，本項也是由使用者**委任實作者判斷**而定案，
+> report 必須一併揭露。
 
 ### 2.5 固定超參數（在 DEV 上決定，locked run 前寫死）
 

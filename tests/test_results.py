@@ -20,6 +20,7 @@ from typing import Any, Final
 import pytest
 
 from twfi.errors import ResultIntegrityError
+from twfi.eval.gates import wilson_interval
 from twfi.eval.results import (
     PROBE_RUN,
     RECORDS_FILENAME,
@@ -62,6 +63,7 @@ def record(
         "answerable": not unanswerable,
         "gold_route": ROUTE_BY_QUESTION_TYPE[category],
         "route": ROUTE_BY_QUESTION_TYPE[category],
+        "handled_route": ROUTE_BY_QUESTION_TYPE[category],
         "correct": correct,
         # Protocol 4 grades an unanswerable item correct exactly when it was refused.
         "refused": unanswerable and correct,
@@ -79,6 +81,7 @@ def probe(question_id: str, *, refused: bool = True) -> dict[str, Any]:
         "answerable": False,
         "gold_route": "unanswerable",
         "route": "unanswerable",
+        "handled_route": "unanswerable",
         "correct": refused,
         "refused": refused,
         "cited_ok": None,
@@ -100,6 +103,17 @@ def artifacts(**overrides: Any) -> dict[str, list[dict[str, Any]]]:
     return base
 
 
+def proportion(numerator: int, denominator: int, *, label: str) -> dict[str, Any]:
+    """The complete proportion schema required of the official summary."""
+    low, high = wilson_interval(numerator, denominator)
+    return {
+        "n": denominator,
+        label: numerator,
+        "rate": round(numerator / denominator, 6),
+        "ci95": [round(low, 6), round(high, 6)],
+    }
+
+
 def summary(**overrides: Any) -> dict[str, Any]:
     """The summary those artifacts actually support, written out by hand."""
     base: dict[str, Any] = {
@@ -108,24 +122,29 @@ def summary(**overrides: Any) -> dict[str, Any]:
         "candidate": "F7",
         "factors": {
             "F0": {
-                "overall_accuracy": {"n": 4, "correct": 2},
+                "overall_accuracy": proportion(2, 4, label="correct"),
                 "by_category": {
-                    "table_cell": {"n": 1, "correct": 1},
-                    "numeric_calculation": {"n": 1, "correct": 0},
-                    "cross_page": {"n": 1, "correct": 0},
-                    "unanswerable": {"n": 1, "correct": 1},
+                    "table_cell": proportion(1, 1, label="correct"),
+                    "numeric_calculation": proportion(0, 1, label="correct"),
+                    "cross_page": proportion(0, 1, label="correct"),
+                    "unanswerable": proportion(1, 1, label="correct"),
                 },
             },
             "F7": {
-                "overall_accuracy": {"n": 4, "correct": 4},
-                "by_category": {category: {"n": 1, "correct": 1} for _, category in ITEMS},
+                "overall_accuracy": proportion(4, 4, label="correct"),
+                "by_category": {
+                    category: proportion(1, 1, label="correct") for _, category in ITEMS
+                },
             },
         },
-        "citation_validity": {"n": 3, "valid": 3},
-        "numeric_route_accuracy": {"n": 1, "correct": 1},
-        "route_accuracy": {"n": 4, "correct": 4},
-        "unanswerable": {"n": 1, "over_answered": 0, "refusal_precision": {"n": 1, "refused": 1}},
-        "probes": {"n": 2, "refused": 2},
+        "citation_validity": proportion(3, 3, label="valid"),
+        "numeric_route_accuracy": proportion(1, 1, label="correct"),
+        "route_accuracy": proportion(4, 4, label="correct"),
+        "unanswerable": {
+            **proportion(0, 1, label="over_answered"),
+            "refusal_precision": proportion(1, 1, label="refused"),
+        },
+        "probes": proportion(2, 2, label="refused"),
         "resources": dict(RESOURCES),
         "checks": {"data_reproducible": True},
     }
@@ -216,6 +235,37 @@ def test_every_recomputed_metric_can_be_caught_when_wrong() -> None:
         broken[field] = payload
         caught.add(only(check(broken), field).kind)
     assert caught == {"mismatch"}
+
+
+def test_a_tampered_reported_rate_is_caught_even_when_counts_match() -> None:
+    payload = summary()
+    payload["citation_validity"]["rate"] = 0.5
+
+    problem = only(check(payload), "citation_validity.rate")
+
+    assert problem.kind == "mismatch"
+    assert problem.claimed == "0.5"
+    assert problem.recomputed == "1"
+
+
+def test_a_tampered_reported_interval_is_caught_even_when_counts_match() -> None:
+    payload = summary()
+    payload["factors"]["F7"]["overall_accuracy"]["ci95"] = [0.0, 1.0]
+
+    problem = only(check(payload), "factors.F7.overall_accuracy.ci95")
+
+    assert problem.kind == "mismatch"
+    assert problem.claimed == "[0.0, 1.0]"
+
+
+@pytest.mark.parametrize("key", ["rate", "ci95"])
+def test_a_summary_proportion_missing_a_registered_figure_fails(key: str) -> None:
+    payload = summary()
+    del payload["route_accuracy"][key]
+
+    problem = only(check(payload), f"route_accuracy.{key}")
+
+    assert problem.kind == "missing_summary_field"
 
 
 def test_an_over_answer_count_the_records_contradict_is_caught() -> None:

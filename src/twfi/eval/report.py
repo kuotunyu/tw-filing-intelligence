@@ -11,13 +11,16 @@ easy and specifically fatal:
   interval, and :func:`build` raises if asked to print one that cannot.
 * **A missing limitations section.** Protocol 4 requires specific admissions -- that the
   sample supports direction and not effect size, that the chart questions come from one
-  company's two pages, that the numeric route's coverage was arranged. A report is not
-  allowed to be silent about any of them, so each is a required section and its absence is
-  an error rather than an omission someone might notice.
+  company's two pages, and that the broad numeric store is filtered rather than complete.
+  A report is not allowed to be silent about any of them, so each is a required section and
+  its absence is an error rather than an omission someone might notice.
 * **A hidden negative result.** CLAUDE.md rule 3: NO_GO and CONDITIONAL_GO go in the report
   unaltered. So the verdict is written from ``GO_NO_GO.json`` and the gate table lists every
   gate that failed with its observed values. There is no code path that prints a verdict the
   gate evaluator did not produce.
+* **A promised but absent next question.** Protocol 4 allows a non-GO study to proceed only by
+  naming one independently testable question that addresses its main failure. Saying that such
+  a question appears "below" is not enough; :func:`build` requires and prints the actual text.
 
 Pure: it takes data and returns markdown. Nothing here reads a file or a clock, so the whole
 document is testable, and two runs over the same inputs produce the same bytes.
@@ -29,6 +32,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
 from twfi.eval.gates import read_proportion
+from twfi.protocol import FACTOR_IDS
 
 __all__ = [
     "REQUIRED_LIMITATIONS",
@@ -66,11 +70,16 @@ REQUIRED_LIMITATIONS: Final[tuple[tuple[str, str], ...]] = (
     # Added 2026-08-02 from measurement, before the freeze. `numeric_coverage` says what the store
     # holds; this says whether what it holds is right, which is a different claim and the one a
     # report is likelier to drop. Ingesting the whole corpus rather than the cells gold names
-    # (D-044) showed the account name is not a key: 34% of locked keys carry conflicting values
-    # -- 2882 is 94%, its notes repeating 資產總計 for every subsidiary -- and the store keeps
-    # whichever page was read last. Dev is at 0% after reading consolidated-vs-parent-only off the
-    # page heading, so a dev figure does not license a claim about locked.
+    # (D-044/D-052) showed the account name is not a key: 40% of locked keys carry conflicting
+    # values -- 2882 is 94%, its notes repeating 資產總計 for every subsidiary. Each source_ref is
+    # now preserved so require() refuses those candidates rather than letting the last page win.
+    # Dev is at 0% after reading consolidated-vs-parent-only off the page heading, so a dev figure
+    # does not license a claim about locked.
     ("numeric_ambiguity", "That an account name is not a unique key in a filing"),
+    # D-048/D-050 were approved by delegating judgement to the implementer after dev results had
+    # already been seen, not by an independent reviewer blind to those results. The protocol says
+    # this disclosure must survive into the report so readers can discount the evidence.
+    ("approval_process", "That final pre-freeze approval was not independent or blind"),
 )
 
 
@@ -161,6 +170,7 @@ def build(
     limitations: Mapping[str, str],
     protocol_lock_sha256: str | None,
     findings: Sequence[str] = (),
+    next_question: str | None,
 ) -> str:
     """Render the report, or raise :class:`MissingContent` naming what is absent.
 
@@ -172,6 +182,11 @@ def build(
         raise MissingContent(
             f"verdict {verdict!r} is not one the gate evaluator produces; the report may not "
             "state a verdict that run_gate did not reach"
+        )
+    if verdict != "GO" and not str(next_question or "").strip():
+        raise MissingContent(
+            "a non-GO report must state one smallest next research question; mentioning the "
+            "requirement without printing the question does not satisfy protocol 4"
         )
     for key, heading in REQUIRED_LIMITATIONS:
         if not str(limitations.get(key, "")).strip():
@@ -213,13 +228,64 @@ def build(
     parts.append(gate_table(gates) + "\n")
 
     parts.append("## 主要比較\n")
+    parts.append(f"Registered baseline: `{baseline}`；candidate: `{candidate}`。\n")
     overall_lines = ["| factor | overall answer accuracy |", "|---|---|"]
-    for factor in (baseline, candidate):
+    for factor in FACTOR_IDS:
         block = factors.get(factor)
+        if not isinstance(block, Mapping):
+            raise MissingContent(f"summary.factors.{factor} is missing from the full ladder")
         payload = block.get("overall_accuracy") if isinstance(block, Mapping) else None
         rendered = format_proportion(payload, where=f"factors.{factor}.overall_accuracy")
         overall_lines.append(f"| {factor} | {rendered} |")
     parts.append("\n".join(overall_lines) + "\n")
+
+    candidate_block = factors.get(candidate)
+    categories = (
+        candidate_block.get("by_category") if isinstance(candidate_block, Mapping) else None
+    )
+    if not isinstance(categories, Mapping) or not categories:
+        raise MissingContent(f"summary.factors.{candidate}.by_category is missing")
+    parts.append(f"### {candidate} category accuracy\n")
+    category_lines = ["| category | accuracy |", "|---|---|"]
+    for category in sorted(categories):
+        rendered = format_proportion(
+            categories[category], where=f"factors.{candidate}.by_category.{category}"
+        )
+        category_lines.append(f"| {category} | {rendered} |")
+    parts.append("\n".join(category_lines) + "\n")
+
+    unanswerable = summary.get("unanswerable")
+    if not isinstance(unanswerable, Mapping):
+        raise MissingContent("summary.unanswerable is missing")
+    metric_payloads = (
+        ("citation validity", summary.get("citation_validity")),
+        ("numeric route accuracy", summary.get("numeric_route_accuracy")),
+        ("route accuracy", summary.get("route_accuracy")),
+        (
+            "over-answer rate",
+            {"n": unanswerable.get("n"), "correct": unanswerable.get("over_answered")},
+        ),
+        ("refusal precision", unanswerable.get("refusal_precision")),
+        ("no-evidence probes refused", summary.get("probes")),
+    )
+    parts.append("### Candidate gate proportions\n")
+    metric_lines = ["| metric | observed |", "|---|---|"]
+    for label, payload in metric_payloads:
+        metric_lines.append(f"| {label} | {format_proportion(payload, where=label)} |")
+    parts.append("\n".join(metric_lines) + "\n")
+
+    resources = summary.get("resources")
+    if not isinstance(resources, Mapping):
+        raise MissingContent("summary.resources is missing")
+    parts.append("### Resource measurements\n")
+    resource_lines = ["| metric | observed |", "|---|---|"]
+    for key in ("retrieval_p95_s", "generation_p95_s", "vram_peak_gb"):
+        value = resources.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise MissingContent(f"summary.resources.{key} is missing or not numeric")
+        resource_lines.append(f"| {key} | {float(value):g} |")
+    parts.append("\n".join(resource_lines) + "\n")
+
     parts.append(
         "每個比率都附 n、分子與 Wilson 95% 信賴區間。**區間重疊代表這份樣本無法分辨兩者** ——\n"
         "這一句不因結果好壞而刪除。\n"
@@ -236,6 +302,10 @@ def build(
         for finding in findings:
             parts.append(f"- {finding}")
         parts.append("")
+
+    if verdict != "GO":
+        parts.append("## 最小的下一個研究問題\n")
+        parts.append(str(next_question).strip() + "\n")
 
     parts.append("## 限制\n")
     for key, heading in REQUIRED_LIMITATIONS:

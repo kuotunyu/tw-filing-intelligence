@@ -1,5 +1,10 @@
 # HANDOFF — ⑤A TW Filing Intelligence
 
+> ✅ **FINAL — 2026-08-02 23:45：專案已完成，不再有未完成 phase。** Protocol
+> 1.0.0 已 freeze，唯一 locked run 已完成，機械判定 **NO_GO**。F0 17/33，
+> F7 6/33；G1/G8/G9/G10 通過，G2–G7 失敗。請直接讀
+> [`FEASIBILITY_REPORT.md`](FEASIBILITY_REPORT.md)。下方為完工前的歷史交接紀錄，其「下一步」不再適用。
+
 > 寫於 2026-08-02 中午，交接給下一位接手者（人或 agent）。
 > 前一位負責人被解任，原因寫在最後一節「我犯過的錯」——**那一節是本文件最有價值的部分，請先讀它**。
 
@@ -32,9 +37,10 @@
 - `ruff check .` 與 `mypy src scripts` 全綠。
 - **沒有任何未完成的半套修改。** 你可以從乾淨狀態開始。
 
-### 0.3 唯一還沒完成的 phase
+### 0.3 最終狀態
 
-**P0–P9 全部完成，只剩 P10：freeze → locked run → G1–G10 → 報告。**
+P9 的 summary/citation 接線、G9 重算與所有回歸測試已在 freeze 前完成；
+P10 的 freeze、唯一 locked run、G1–G10 與報告也已完成。沒有待執行的實作步驟。
 
 ---
 
@@ -73,23 +79,23 @@
 | P4 | 數值層（DuckDB + deterministic SQL） | 🟢 完成 |
 | P5 | Gold set 標註 | 🟢 完成 53/53，抽樣稽核通過 |
 | P6 | Retrieval + rerank + index | 🟢 完成（全程 CPU） |
-| P7 | Chart route | 🟢 程式完成，**caption 索引建置中** |
+| P7 | Chart route | 🟢 完成（caption 索引已建：`candidate_captioned` 6,133 chunks） |
 | P8 | Router + answer contract | 🟢 完成 |
-| P9 | Eval harness + factor ladder | 🟢 F0–F7 皆可跑 |
-| **P10** | **freeze → locked run → gate → 報告** | 🔴 **未開始** |
+| P9 | Eval harness + factor ladder | 🟢 完成（summary/citation/G9 全部接線） |
+| **P10** | **freeze → locked run → gate → 報告** | 🟢 **完成（NO_GO）** |
 
-### 2.1 目前 dev 上的數字（**locked 一次都沒跑過，也不該跑**）
+### 2.1 Freeze 前最後一次 DEV rehearsal（歷史記錄）
 
 | 階 | 內容 | 答對 |
 |---|---|---|
-| F0 | baseline parser | 3/15 |
-| F1 | + layout parsing | 5/15 |
-| F2 | + hybrid retrieval | 3/15 |
-| F3 | + reranking | 4/15 |
+| F0 | baseline parser | 9/15 |
+| F1 | + layout parsing | 9/15 |
+| F2 | + hybrid retrieval | 7/15 |
+| F3 | + reranking | 7/15 |
 | F4 | + numeric route | **11/15** |
 | F5 | + chart captions in index | 11/15（dev 無圖表題，無變化屬預期） |
-| F6 | + chart crop answering | **9/15 ⚠️ 倒退** |
-| F7 | + typed dispatch | **7/15 ⚠️ 再倒退** |
+| F6 | + chart crop answering | **11/15** |
+| F7 | + typed dispatch | **3/15 ⚠️ 大幅倒退** |
 
 > ⚠️ **F6／F7 的倒退方式比分數重要，見 D-047。**
 > F6 在 **DEV-0010（註冊為 unanswerable）** 上，去讀了**台積電**年報的裁切圖，
@@ -106,28 +112,30 @@
 
 ---
 
-## 3. 下一步的確切指令
+## 3. 下一步
 
-```bash
-uv run python scripts/build_captions.py
-```
+> ✅ **本節原本列的四道指令在 2026-08-02 14:37 前已全部跑完**：
+> `build_captions.py`（1,337/1,359）→ `build_index.py --parser candidate_captioned`
+> → `build_bm25.py --parser candidate_captioned` → `run_eval.py --set dev
+> --numeric-db numeric_broad.duckdb`。產物是 `results/runs/ladder_dev.json` 與
+> `ladder_dev_rows.jsonl`（八階完整）。**不需要再跑一次。**
 
-跑完後（或若已跑完），依序：
+### 3.0 真正的下一步是寫 code，不是跑指令
 
-```bash
-uv run python scripts/build_index.py --parser candidate_captioned --device cpu
-```
+依 D-048／D-049／D-050／D-051，freeze 之前要動的 code：
 
-```bash
-uv run python scripts/build_bm25.py --parser candidate_captioned
-```
+1. **citation grader**（D-051 第 2 項）—— G4 的生產者。把
+   `verify_gold_answers.py` 的 `_pages_of`／`_appears`／`_words_in_crop`／`_inside`
+   搬進 `src/twfi/eval/`，改為套用在**預測**的引用上，輸出 `cited_ok`。
+   **必須在 locked run 之前**：這是評分規則。
+2. **ladder → `summary.json` ＋ `records.jsonl` 轉接器**（D-051 第 1、3 項），
+   含 G10 資源欄位改名對齊 `RESOURCE_KEYS`。
+3. **company scope**（D-049）—— 套用到 F0–F7 全部階。
+4. **三個一致性小修**：`protocol.py:58` 與 protocol md 第 3 行的版號同時改成 `1.0.0`
+   （D-050）；`run_eval.py:274` 的 `numeric_db` 預設改 broad（D-048）；
+   `run_eval.py:528` 那段自述「F4-F7 未實作」的假 note（D-051）。
 
-```bash
-uv run python scripts/run_eval.py --set dev --numeric-db numeric_broad.duckdb
-```
-
-最後這步會跑完整 F0–F7 並寫 `results/runs/ladder_dev.json`。
-**它不寫 `results/feasibility/`**——那是 locked run 的事。
+⚠️ **第 3 項一旦實作，2026-08-02 那份 dev ladder 數字全部作廢**，要在 dev 上重跑一次。
 
 ### 3.1 之後才是 P10
 
@@ -135,11 +143,30 @@ uv run python scripts/run_eval.py --set dev --numeric-db numeric_broad.duckdb
 uv run python scripts/freeze_protocol.py --dry-run
 ```
 
-目前唯一擋住 freeze 的是 `protocol_version` 還是 `1.0.0-draft`，其餘 precondition 全通過。
+實測（2026-08-02）：**只報 1 個問題**，就是 `protocol_version` 還是 `1.0.0-draft`，
+其餘 precondition 全通過。改完版號後這一項就會消失。
 
 ---
 
-## 4. 三件待裁決的事（**freeze 前必須決定**）
+## 4. 三件待裁決的事 → **✅ 2026-08-02 全部定案**
+
+| # | 決定 | 記錄 |
+|---|---|---|
+| 4.1 | numeric store 用 **`numeric_broad.duckdb`** | D-048 |
+| 4.2 | company scope **加入，且套用 F0–F7 全部階**（harness 層，不是 ladder 一階，不得當增益） | D-049 |
+| 4.3 | `protocol_version` 定為 **`1.0.0`** | D-050 |
+
+> ⚠️ **批准方式必須揭露，不得寫成「經使用者批准」帶過。**
+> 使用者是**委任實作者判斷**，不是自行裁決。委任沒有修復原本的瑕疵 ——
+> 最後仍是已經看過 dev 數字的一方批准了自己的提案。
+> 能補救而且做到的：三項理由**只用原則、不引數字**，且在數字反過來時同樣成立；
+> D-049 另外先驗證了 48 筆 gold 有 0 筆會被它弄壞。
+> **不能補救的：這不是獨立審查。report 必須說出來。** 見 D-050。
+
+**三項的 code 都還沒動**，所以 `freeze_protocol.py --dry-run` 仍會擋在 `1.0.0-draft`，
+且 `run_eval.py:274` 的 `numeric_db` 預設值仍是 gold-keyed。這是預期中的，不是遺漏。
+
+以下保留原始脈絡（前任寫的），因為理由的來源比結論重要：
 
 **這三件都有同一個瑕疵：都是在看過 dev 數字之後才想到的**，所以「先決定再看數字」在事實上已經破了。
 我把原則面的理由與數字分開寫，但沒有逕行寫定。**接手者請自行判斷，不要因為前人寫了就照收。**

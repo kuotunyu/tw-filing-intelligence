@@ -16,10 +16,13 @@ the row keys -- so whatever F4 scores against this store is a property of the pi
 of the question set.
 
 **It writes to a different database, and that is the point.** The primary key includes
-``source_kind``, and :func:`twfi.numeric.historical.find_in_text` already files its rows under
+``source_kind`` and ``source_ref``, and
+:func:`twfi.numeric.historical.find_in_text` already files its rows under
 ``extracted_text_row``. Loading these into ``numeric.duckdb`` would overwrite some gold-loaded
 figures outright and, for the rest, stand up a second candidate beside every ``extracted_table``
-row -- which is precisely when :meth:`NumericStore.require` refuses to choose. F4 would *drop*,
+row -- which is precisely when :meth:`NumericStore.require` refuses to choose. Different pages
+within one source also survive for the same reason: subsidiary notes must not silently replace
+the consolidated statement. F4 would *drop*,
 and the recorded D-042 number would silently stop describing the store it was measured on. So
 this builds ``numeric_broad.duckdb`` alongside, and the two are compared rather than merged.
 

@@ -53,7 +53,16 @@ models/
 *.onnx
 
 # ---- run artifacts ----
-results/runs/
+# Development runs and large diagnostics stay local. The small official locked records are
+# committed because G9 must reproduce summary.json after a fresh clone, not only on this PC.
+results/runs/**
+!results/runs/F[0-7]/
+!results/runs/F[0-7]/records.jsonl
+!results/runs/probes/
+!results/runs/probes/records.jsonl
+!results/runs/resources.json
+!results/runs/resource_budget.json
+!results/runs/locked_run_started.json
 results/**/raw_predictions/*.tmp
 *.log
 logs/
@@ -63,6 +72,7 @@ logs/
 !results/feasibility/error_analysis.jsonl
 !results/feasibility/GO_NO_GO.json
 !results/feasibility/protocol_lock.json
+!results/feasibility/results_verification.json
 
 # ---- OS / editor ----
 .DS_Store

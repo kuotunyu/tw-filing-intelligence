@@ -6,6 +6,8 @@ research or legal weight fail loudly when they drift.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -119,6 +121,27 @@ def test_gitignore_excludes_filings_and_weights(repo_root: Path) -> None:
     gitignore = (repo_root / ".gitignore").read_text(encoding="utf-8")
     for pattern in ("data/raw/", "*.pdf", "*.xbrl", "*.safetensors", "*.gguf", ".env"):
         assert pattern in gitignore, f"{pattern} must be git-ignored"
+
+
+def test_gitignore_keeps_only_the_official_locked_run_evidence(repo_root: Path) -> None:
+    git = shutil.which("git")
+    assert git is not None
+
+    def ignored(relative: str) -> bool:
+        result = subprocess.run(  # noqa: S603 - paths below are fixed test fixtures
+            [git, "check-ignore", "--no-index", "--quiet", relative],
+            cwd=repo_root,
+            check=False,
+        )
+        return result.returncode == 0
+
+    assert ignored("results/runs/ladder_dev.json")
+    assert not ignored("results/runs/F7/records.jsonl")
+    assert not ignored("results/runs/probes/records.jsonl")
+    assert not ignored("results/runs/resources.json")
+    assert not ignored("results/runs/resource_budget.json")
+    assert not ignored("results/runs/locked_run_started.json")
+    assert not ignored("results/feasibility/results_verification.json")
 
 
 def test_no_filings_are_stored_outside_generated_directories(repo_root: Path) -> None:

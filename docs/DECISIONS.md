@@ -2381,7 +2381,206 @@
 
 ---
 
+## D-048 numeric store 定案為 `numeric_broad.duckdb`
+
+- **決策**：locked run 的 numeric route 讀 `numeric_broad.duckdb`（`load_all_rows.py`
+  全語料逐頁抽取，**不看 gold**），不讀 `numeric.duckdb`（`load_historical.py`，
+  只載 gold `structured_source_key` 指名的格）。protocol §2.4 已從「待批准」改為定案。
+
+- **理由（只有原則，不引數字）**：gold-keyed store 的內容是 locked **答案卷**的函數。
+  用它跑出來的 F4 不是覆蓋率而是安排 —— 系統剛好拿到它將被問到的那幾格，
+  那個數字無法當成能力宣稱來讀。這與 `CLAUDE.md` 規則 4（gold 不得由 candidate 產生）
+  是同一條原則的另一面：**candidate 的輸入也不得由 gold 產生。**
+  這個論證在數字反過來時同樣成立。
+
+- **已知代價，不因此更動**：broad store 對 locked 三家仍有 34% 的 key 歧義
+  （2882 高達 94%）。但歧義的失效模式是**安全的那一種**：`require()` 遇到多候選就拒絕
+  並列出候選，不會硬選一個。歧義變成拒答，不會變成錯答。
+  已在 `REQUIRED_LIMITATIONS` 的 `numeric_ambiguity` 中，報告不寫這件事就產不出來。
+
+- **⚠️ 待辦（code，尚未執行）**：`scripts/run_eval.py:274` 的 `numeric_db` 預設值
+  目前是 `numeric.duckdb`，與本決策不一致。2026-08-02 那次 dev ladder 是靠命令列旗標
+  傳入 broad 才跑對的。**預設值必須改成 `numeric_broad.duckdb`**，否則 locked run
+  忘記加旗標就會安靜地跑錯 store。
+
+- **狀態**：ACCEPTED (2026-08-02)。**批准方式為使用者委任實作者判斷**，
+  不是未看過數字者的獨立裁決 —— 見下方 D-050 的共同揭露。
+
+---
+
+## D-049 company scope 加入管線，套用到 F0–F7 全部階，且不得被當成增益
+
+- **決策**：題目指名發行人時，檢索候選池只保留該發行人的 filing；未指名則不限制。
+  **套用到 F0 到 F7 全部階**，登記為 **harness 層的範圍限制，不是 ladder 的一階**。
+  報告不得把它寫成任何一階的貢獻。protocol §2.4 已補入。
+
+- **理由是正確性，不是排名。** 沒有它，chart route 會用別家公司的文件回答本題：
+  D-047 的 DEV-0010（註冊為 `unanswerable`）被 F6 用 `2330-FY2024-AR` 的裁切圖
+  答成 6,037,249,300，**並附上引用**。有引用的捏造是最壞的一類失效，
+  而它同時打壞 G7（不得強答）與 G4（citation validity）。
+  D-045 最初提出本項時的理由是排名（前 5 名 5/12 → 7/12），**那些數字不是本決策的理由**。
+
+- **先驗證了它不會弄壞題目**：48 筆 gold 逐筆檢查 `source_document` 的發行人，
+  **0 筆**離開它所指名的發行人。三題 `cross_document` 是同一發行人的跨*文件*
+  （2330 有 3 份 filing、2882 有 2 份），不是跨公司。這是下決策前做的，不是事後補的。
+
+- **為什麼連 baseline 也套用** —— 這是本決策裡唯一非顯然的部分：
+  1. 只給 candidate，F1 的 delta 就會是「layout parsing ＋ company filter」的和，
+     **factor-at-a-time 歸因失效**。而 ladder 的全部意義就是歸因。
+  2. 套用到全部階會讓 baseline 變強、candidate 的領先幅度縮小，
+     **G2／G3 因此更難通過**。資料已存在之後，一個註冊選擇只能往讓 GO 更難的方向移動
+     （D-020 對自己用過同一條檢驗）。
+  3. 範圍限制不是 candidate 專屬技術，交給 baseline 不違反「baseline 刻意簡單」。
+
+- **⚠️ 連帶後果**：本項一旦實作，**2026-08-02 那份 dev ladder（F0–F7）的數字全部作廢**，
+  必須在 dev 上重跑一次才能互相比較。重跑的是 dev，允許。
+
+- **狀態**：ACCEPTED (2026-08-02)。實作尚未進行。
+
+---
+
+## D-050 `protocol_version` 定為 `1.0.0`，且三項裁決的批准方式必須揭露
+
+- **決策**：freeze 時的 `protocol_version` 為 **`1.0.0`**，`-draft` 後綴移除。
+  draft 後綴的意義就是「尚未凍結」，凍結即移除，不需要新的版號語意。
+  freeze 前的多次修訂（D-012／D-013／D-020／D-021／D-048／D-049）都屬草擬期修改，
+  仍在 1.0.0 之內；freeze 之後任何修改只能開 2.x 並重跑全部 locked evaluation。
+
+- **⚠️ 待辦（code，尚未執行）**：版號寫在**兩處**，必須同一次原子性改掉：
+  `docs/FEASIBILITY_PROTOCOL.md` 第 3 行與 `src/twfi/protocol.py:58`。
+  本輪只做文件決策、未動 code，所以**兩處目前都仍是 `1.0.0-draft`**，
+  `freeze_protocol.py --dry-run` 也仍會擋在這裡 —— 這是預期中的，不是遺漏。
+
+- **三項裁決共同的批准方式揭露（D-048／D-049／D-050）**：
+  2026-08-02 使用者將這三項**委任實作者判斷**，而非自行裁決。
+  前任負責人刻意不寫定它們，理由是「都是看過 dev 數字之後才想到的，
+  所以『先決定再看數字』在事實上已破」。委任並沒有修復這個瑕疵：
+  **最後仍是已經看過數字的一方批准了自己的提案。**
+  - 能補救而且已經做到的：三項的理由段落**只用原則、不引數字**，
+    且每一條在數字反過來時同樣成立；D-049 另外先驗證了它不會弄壞任何題目。
+  - **不能補救的**：這不是獨立審查。**report 必須揭露這一點**，
+    不得寫成「經使用者批准」就帶過。讀者要能自行決定給這三項多少信任。
+
+- **狀態**：ACCEPTED (2026-08-02)。
+
+---
+
+## D-051 P10 之前還有兩塊 code 缺口，且必須在 locked run 之前補完
+
+讀 code（不是讀文件）盤點 P10 的實際前置條件時發現的。
+`docs/HANDOFF.md` 寫「P0–P9 全部完成，只剩 P10」，**「只剩」低估了**：
+ladder（上游）與 gate／verify／report（下游）都建好了，**中間的轉接器不存在**。
+
+1. **沒有任何程式產生 `results/feasibility/summary.json`。**
+   `run_gate.py:45`、`verify_results.py:58`、`make_report.py:98` 三支都讀它；
+   `run_eval.py` 明講不寫；全 repo 沒有第二個寫它的地方。
+   row 形狀也對不上：`run_eval.py` 沒有 import `twfi.eval.results`，
+   它寫出的 row 是巢狀的 `score`／`route`，而 `results.py:101` 的
+   `REQUIRED_RECORD_FIELDS` 要頂層的 `answerable`／`gold_route`／`correct`／
+   `refused`／`cited_ok`。
+2. **G4（citation validity ≥ 90%，hard gate）沒有生產者。**
+   `cited_ok` 在全 repo 只有消費端（`results.py`）與測試假資料（`test_results.py`）。
+   `run_eval.py` 只記錄引用了哪些 passage 與哪些頁，**從不判定引用對不對**。
+   protocol §3.4 已把定義註冊好（「引用可解析、指向存在的頁／表／row、
+   且該證據確實包含答案 span 或 operands」），缺的只是實作。
+   `verify_gold_answers.py` 已有 `_pages_of`／`_appears`／`_words_in_crop`／`_inside`
+   整套機制，但它們是 script 內的私有函式且套用在 **gold** 上；
+   要做的是搬進 `src/twfi/eval/` 並改為套用在**預測**的引用上。
+3. **G10 的資源欄位名稱對不上**：`results/runs/resource_budget.json` 量得很細，
+   但 key 是 `generation/warm_max_seconds` 這種形狀，而 `results.py:97` 的
+   `RESOURCE_KEYS` 要 `retrieval_p95_s`／`generation_p95_s`／`vram_peak_gb`。
+
+- **決策：這兩塊必須在 locked run 之前完成，不得在之後。**
+  理由不是進度而是紀律：**「怎樣算一次有效引用」是一條評分規則**，
+  看過 locked 輸出之後才定它，就是在 locked 上調參（§1.3 禁止）。
+  protocol §3.4 已註冊定義，所以實作它不算新增規則 —— 但實作必須趕在前面。
+
+- **順帶要修的兩個不一致**（同屬 code，尚未執行）：
+  - `run_eval.py:528` 硬寫死的 `note` 說「F4-F7 are not implemented, so this cannot
+    support a GO decision」，而同一次寫出的 `factors_run` 是完整八階、
+    `factors_not_implemented` 是 `{}`。**machine-readable artifact 對自己說謊**，
+    在一個 G9 是「結果可由 raw artifacts 重建」的專案裡必須修。
+  - `run_eval.py:274` 的 `numeric_db` 預設值，見 D-048。
+
+- **狀態**：ACCEPTED (2026-08-02)。實作尚未進行。
+
+---
+
 ## 全部待確認事項已解決
 
 2026-07-31 使用者拍板：D-002 自建 layout parser、D-003 `qwen3.6:27b` 文字＋圖表共用、
-D-004 照原表。無未決問題。
+D-004 照原表。
+
+2026-08-02 使用者**委任實作者判斷**（非獨立裁決，揭露見 D-050）：
+D-048 numeric store 用 broad、D-049 company scope 套用 F0–F7、
+D-050 `protocol_version` 定為 `1.0.0`。
+
+無未決問題。D-048／D-049／D-050／D-051 的 code 已完成；其後的資料完整性修正見 D-052。
+
+---
+
+## D-052 `source_ref` 必須是 numeric row 的 identity；歧義要留下來拒答，不能在寫入時消失
+
+- **發現方式**：在 freeze 前做 locked-run 下游稽核時，比對 `load_all_rows.py --dry-run`
+  與實際 DuckDB。ingestion 找到 **769** 筆，但舊 schema 最後只保留 **207** 筆，
+  可見的多候選 key 反而是 **0**。原因是 `fin_line_item` 主鍵有 `source_kind`，卻沒有
+  `source_ref`；同一 filing 不同頁面的同名科目會在 `INSERT OR REPLACE` 時讓最後一頁勝出，
+  `NumericStore.require()` 根本沒有機會看到多候選並拒答。這直接反駁 D-048 所依賴的
+  「歧義會安全拒答」實作假設。
+
+- **決策與實作**：把 `source_ref` 納入主鍵。同一 `source_ref` 的精確重載仍可覆寫，
+  不同頁面則全部保留；`find()` 依 `source_kind, source_ref` 穩定排序，`require()` 遇到
+  多候選就拒答並列出來源。舊 schema 會明確要求 rebuild，且 locked-run preflight 會在
+  建立不可逆 marker **之前**開啟並驗證 numeric store。
+
+- **重建後的可重算量測**：769 次載入形成 **703 個唯一 provenance row**（66 次是同一
+  `source_ref` 的精確重複）、207 個正式 logical key、56 個多候選 key、46 個不同值衝突。
+  locked 三家公司為 **46/115（40.0%）**；國泰金為 **32/34（94.1%）**；DEV 兩家公司仍為
+  **0/92（0%）**。舊文件的「locked 約 34%」因此由最終報告更正為 40.0%。
+
+- **為什麼 freeze 前必須修**：這不是根據 locked 問答表現調參；locked evaluation 尚未開始，
+  marker 也不存在。它是 provenance 在進入評分前被主鍵丟失的資料完整性錯誤。若不修，
+  F4/F7 會以頁面順序任意選值，locked 結果不可解讀。protocol §2.4 已補入不可覆寫規則，
+  report 也強制揭露 40.0% 歧義與「非獨立盲評」的批准方式。
+
+- **驗證**：新增同來源不同頁保留、legacy schema 拒絕、marker 前 preflight、protocol 與 report
+  回歸測試；全套 **1615 passed / 1 skipped**，coverage **94.35%**，ruff、format、mypy 全綠，
+  `freeze_protocol.py --dry-run` 通過，負向 locked-run 測試 exit 2 且沒有建立 marker。
+
+- **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。
+
+## D-053 Protocol 文件必須先明示 FINAL，freeze 才能把它鎖住
+
+- **發現方式**：最後一次 freeze dry-run 稽核時，`protocol_version` 已是
+  `1.0.0`，但 `docs/FEASIBILITY_PROTOCOL.md` 的狀態仍寫 `DRAFT`。原本腳本只擋
+  version 的 `-draft` 後綴，因此真正 freeze 會把「DRAFT」字樣一起寫入不可變的
+  hash，造成 lock 與被鎖文件自我矛盾。
+
+- **決策與實作**：在任何 locked 結果出現前，把文件狀態改為 `FINAL`；「是否已
+  freeze」不靠句子宣稱，而以 `results/feasibility/protocol_lock.json` 是否存在且 hash
+  通過為準。`freeze_protocol.py` 同時新增 preflight，缺少 status 或非 `FINAL` 均拒絕。
+
+- **為什麼可以在此時修正**：locked marker 與 protocol lock 都還不存在，也沒有看過
+  locked 問答結果；這是修正 freeze 狀態機的一致性，沒有更改題目、評分、門檻或模型。
+
+- **狀態**：ACCEPTED AND IMPLEMENTED (2026-08-02)，尚未 freeze、尚未執行 locked set。
+
+---
+
+## D-054 唯一 locked run 完成；機械判定為 NO_GO
+
+- **Freeze**：Protocol 1.0.0 於 `2026-08-02T15:20:15+00:00` 凍結 7 個 artifact。
+  protocol lock SHA-256 為
+  `18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d`。
+- **唯一執行**：locked marker 於 `2026-08-02T15:21:14+00:00` 建立，綁定 code commit
+  `595268f3a64ee9430efc397140c2f600c925436b`、F0–F7、33 題、strict prompt、
+  `numeric_broad.duckdb`、depth 100 與 CUDA reranker。本輪成功完成，沒有重跑。
+- **主要結果**：F0–F7 依序為 17/33、15/33、14/33、19/33、19/33、20/33、
+  18/33、6/33。F7 相對 F0 整體為 **-33.3pp**，pooled hard categories 為
+  **-27.8pp**。G1/G8/G9/G10 通過；G2–G7 失敗；機械 verdict 為 **NO_GO**。
+- **可重建性**：G9 從 F0–F7 各 33 筆與 probes 5 筆 raw records 重算
+  `summary.json` 全部數字，包括 rate 與 Wilson 95% CI，0 problems。
+- **最小下一研究問題**：僅將 rule-based layout parser 替換為 learned layout model，
+  其餘設定固定，能否讓 pooled hard categories 相對 F0 達到註冊的 +15pp？
+- **狀態**：FINAL (2026-08-02)。負面結果已寫入 `docs/FEASIBILITY_REPORT.md`，
+  不修題、不改門檻、不刪除。

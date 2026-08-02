@@ -51,9 +51,15 @@ hash 凍結，再跑 baseline 與 candidate，最後由程式依門檻自動產�
 
 ## 現況
 
-> **尚未 freeze，因此尚無任何結果。**
-> 目前完成到 P4。protocol 還沒 hash 凍結，locked evaluation 還沒跑，
-> `results/feasibility/` 是空的。**這個 repository 目前不宣稱任何可行性結論。**
+> **Protocol 1.0.0 已 freeze，唯一一次 locked evaluation 已完成：機械判定為
+> [`NO_GO`](docs/FEASIBILITY_REPORT.md)。**
+> 負面結果依事前協議原樣保留，沒有調整題目、答案、tolerance、門檻或模型。
+
+Candidate F7 整體正確率為 **6/33（18.2%）**，baseline F0 為 **17/33（51.5%）**；
+hard-category pooled gain 為 **-27.8pp**。G1（資料可重建）、G8（no-evidence probes）、
+G9（結果可重算）、G10（資源）通過；G2–G7 的 hard gates 失敗。
+完整數字、Wilson 95% 信賴區間、限制與最小下一研究問題見
+[`docs/FEASIBILITY_REPORT.md`](docs/FEASIBILITY_REPORT.md)。
 
 | | Phase | 狀態 |
 |---|---|---|
@@ -62,9 +68,9 @@ hash 凍結，再跑 baseline 與 candidate，最後由程式依門檻自動產�
 | 🟢 | P2 資料取得 ＋ SHA-256 provenance | 完成（宣告 10 份，可用 8 份） |
 | 🟢 | P3 Parsing（layout／table／figure） | 完成 |
 | 🟢 | P4 數值層（DuckDB ＋ deterministic SQL） | 完成 |
-| ⚪ | P5 Gold set 人工標註 | 未開始（關鍵路徑） |
-| ⚪ | P6–P9 retrieval／chart／router／eval | 未開始 |
-| ⚪ | P10 freeze → locked run → gate → report | 未開始 |
+| 🟢 | P5 Gold set 人工標註 | 完成（53/53，抽樣稽核通過） |
+| 🟢 | P6–P9 retrieval／chart／router／eval | 完成 |
+| 🟢 | P10 freeze → locked run → gate → report | 完成（**NO_GO**） |
 
 **「可用 8 份」不是失敗，是量測結果。** 兩份不可用的都是鴻海（2317）年報：
 FY2023 只有 148/707 頁（21%）能抽出可讀文字，FY2024 是 **0%** —— 字型沒有
@@ -74,23 +80,27 @@ ToUnicode mapping，PDF 看得到字但抽不出字。
 本身就是研究問題的一部分；出題時只從可用文件取材，但把不可用的刪掉會讓事前註冊
 失去意義，也會把一個真實的負面發現粉飾掉。
 
-進度、下一步、以及「隔一段時間回來怎麼接手」請看 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
+歷史進度與接手紀錄見 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
 
 | 文件 | 內容 |
 |---|---|
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | 實作計畫、phase 切分、每個 phase 的完成條件 |
 | [`docs/FEASIBILITY_PROTOCOL.md`](docs/FEASIBILITY_PROTOCOL.md) | **事前凍結**的評分協議與 GO／NO-GO gate |
+| [`docs/FEASIBILITY_REPORT.md`](docs/FEASIBILITY_REPORT.md) | 唯一 locked run 的完整結果、限制與 NO_GO 判定 |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | 固定下來的模型、parser、資料選擇與其 revision |
 | [`docs/DATA_PROVENANCE.md`](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權、什麼不進 git |
 | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | 進度日誌（每個 session 更新） |
 
-結果產物（跑完才會有）：
+結果產物：
 
 ```
-results/feasibility/summary.json          # 所有 config × split 的指標
+results/feasibility/protocol_lock.json    # 凍結協議與 7 個 artifact hash
+results/feasibility/summary.json          # F0–F7 與 candidate gates 指標
 results/feasibility/error_analysis.jsonl  # 逐題 failure analysis
+results/feasibility/results_verification.json # G9 raw-artifact 重算結果
 results/feasibility/GO_NO_GO.json         # 由程式依事前 gate 自動產生
+docs/FEASIBILITY_REPORT.md                # 最終報告
 ```
 
 ---

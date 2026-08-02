@@ -1,0 +1,17 @@
+{
+  "summary": "C:\\Users\\3Hml\\Desktop\\CC_github部隊\\RAG_Agent_VLM\\5_tw-filing-intelligence\\results\\feasibility\\summary.json",
+  "raw": "C:\\Users\\3Hml\\Desktop\\CC_github部隊\\RAG_Agent_VLM\\5_tw-filing-intelligence\\results\\runs",
+  "records_per_run": {
+    "F0": 33,
+    "F1": 33,
+    "F2": 33,
+    "F3": 33,
+    "F4": 33,
+    "F5": 33,
+    "F6": 33,
+    "F7": 33,
+    "probes": 5
+  },
+  "reproducible": true,
+  "problems": []
+}

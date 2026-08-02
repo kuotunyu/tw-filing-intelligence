@@ -76,6 +76,9 @@ class ChartAnswer:
     crop_ref: str
     model: str
     error: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    seconds: float = 0.0
 
     #: Fixed. This route has one legitimate source of a value and it is the pixels; the field
     #: exists so a downstream citation check can assert it rather than assume it.
@@ -103,6 +106,9 @@ class ChartAnswer:
             "crop_ref": self.crop_ref,
             "model": self.model,
             "provenance": self.provenance,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "seconds": round(self.seconds, 3),
             "error": self.error,
         }
 
@@ -148,7 +154,7 @@ def answer_from_crop(
     box = figure.bbox.as_tuple()
     destination = crop_dir / f"{doc_id}_p{figure.page}_{box[0]:.0f}_{box[1]:.0f}.png"
 
-    def failed(message: str) -> ChartAnswer:
+    def failed(message: str, generation: Generation | None = None) -> ChartAnswer:
         return ChartAnswer(
             value="",
             unit=None,
@@ -159,6 +165,9 @@ def answer_from_crop(
             crop_ref=figure.crop_ref,
             model=settings.model,
             error=message,
+            prompt_tokens=generation.prompt_tokens if generation is not None else 0,
+            completion_tokens=generation.completion_tokens if generation is not None else 0,
+            seconds=generation.seconds if generation is not None else 0.0,
         )
 
     try:
@@ -168,7 +177,7 @@ def answer_from_crop(
 
     result = generate_fn(CROP_ANSWER_PROMPT.format(question=question), settings, images=[crop])
     if result.error:
-        return failed(result.error)
+        return failed(result.error, result)
 
     value, unit, basis = parse_chart_answer(result.text)
     return ChartAnswer(
@@ -180,4 +189,7 @@ def answer_from_crop(
         bbox=box,
         crop_ref=figure.crop_ref,
         model=settings.model,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        seconds=result.seconds,
     )

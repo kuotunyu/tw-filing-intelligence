@@ -37,7 +37,10 @@ CREATE TABLE IF NOT EXISTS fin_line_item (
                                          --   | extracted_text_row  (line stream, not grid)
     source_url       TEXT,
     source_ref       TEXT NOT NULL,      -- dataset id, or p102:r3:c1 for a table cell
-    PRIMARY KEY (company_code, period, statement, basis, account, source_kind)
+    -- source_ref is part of identity: two pages in one filing may print the same account
+    -- under different subsidiaries. Dropping it would make INSERT OR REPLACE silently keep
+    -- the last page before the reader has a chance to reject the ambiguity.
+    PRIMARY KEY (company_code, period, statement, basis, account, source_kind, source_ref)
 );
 
 CREATE INDEX IF NOT EXISTS fin_line_item_lookup
