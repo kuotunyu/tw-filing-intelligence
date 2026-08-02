@@ -22,10 +22,101 @@
 
 ## 系統設計
 
-```text
-MOPS PDF ──> layout / table / figure parsing ──> BM25 + dense retrieval ─┐
-                                                                         ├─> typed router ─> grounded answer
-TWSE OpenAPI / XBRL ──> DuckDB ──> deterministic SQL ────────────────────┘
+### Offline data preparation
+
+```mermaid
+flowchart TD
+    subgraph Sources["公開資料來源"]
+        direction LR
+        PDF["MOPS filings<br/>PDF"]
+        Structured["TWSE OpenAPI / XBRL"]
+    end
+
+    subgraph Provenance["取得與 provenance"]
+        direction LR
+        Manifest["Manifest<br/>official URL + metadata"]
+        Hash["SHA-256 verification"]
+        Usable{"Machine-usable?"}
+        Recorded["保留 provenance<br/>不進 evaluation corpus"]
+        Schema["Schema validation<br/>row normalization"]
+    end
+
+    subgraph Preparation["Document preparation"]
+        direction LR
+        Layout["Layout-aware parsing"]
+        Chunks["Section-aware chunks"]
+        Tables["Table extraction"]
+        Figures["Figure detection"]
+    end
+
+    subgraph Evidence["Evidence stores"]
+        direction LR
+        Search[("BM25 + dense index<br/>caption 僅供 retrieval")]
+        DB[("DuckDB<br/>validated structured rows")]
+        Crops[("Original crop pixels")]
+    end
+
+    PDF --> Manifest --> Hash --> Usable
+    Usable -->|"否"| Recorded
+    Usable -->|"是"| Layout
+    Layout --> Chunks --> Search
+    Layout --> Tables -->|"validated rows"| DB
+    Layout --> Figures
+    Figures -->|"caption"| Search
+    Figures --> Crops
+    Structured --> Schema --> DB
+
+    classDef source fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
+    classDef process fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
+    classDef decision fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
+    classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
+    classDef excluded fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
+
+    class PDF,Structured source
+    class Manifest,Hash,Schema,Layout,Chunks,Tables,Figures process
+    class Usable decision
+    class Search,DB,Crops store
+    class Recorded excluded
+```
+
+### Query-time answer flow
+
+```mermaid
+flowchart TD
+    Query(["使用者問題"]) --> Scope["Company scope<br/>document scope"]
+    Scope --> Router["Typed bounded router<br/>最多一次 correction"]
+
+    subgraph Routes["Evidence routes"]
+        direction LR
+        Narrative["Narrative route"] --> Hybrid["BM25 + dense retrieval"] --> Rerank["Cross-encoder reranking"] --> Generate["Grounded generation"]
+        Numeric["Numeric route"] --> DuckDB[("DuckDB")] --> SQL["Templated SQL<br/>禁止 free-form SQL"] --> Calc["Deterministic calculation<br/>formula + operands"]
+        Chart["Chart route"] --> Caption["Caption-assisted retrieval<br/>caption 不可作為答案"] --> Crop["Original crop pixels"] --> VLM["VLM reading"]
+    end
+
+    Router -->|"narrative / cross-modal"| Narrative
+    Router -->|"numeric"| Numeric
+    Router -->|"chart / table"| Chart
+
+    Generate --> Contract["Answer + citation contract"]
+    Calc --> Contract
+    VLM --> Contract
+    Contract --> Valid{"Evidence 與 citation<br/>可驗證且無來源衝突?"}
+    Valid -->|"是"| Answer["Grounded answer<br/>citation / formula / operands"]
+    Valid -->|"否"| Refusal["Structured refusal"]
+
+    classDef input fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
+    classDef control fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
+    classDef route fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
+    classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
+    classDef success fill:#C6F6D5,stroke:#2F855A,stroke-width:2px,color:#173F2A
+    classDef refusal fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
+
+    class Query input
+    class Scope,Router,Contract,Valid control
+    class Narrative,Hybrid,Rerank,Generate,Numeric,SQL,Calc,Chart,Caption,Crop,VLM route
+    class DuckDB store
+    class Answer success
+    class Refusal refusal
 ```
 
 - Narrative route：hybrid retrieval、cross-encoder reranking、可定位 citation。
@@ -37,6 +128,42 @@ TWSE OpenAPI / XBRL ──> DuckDB ──> deterministic SQL ──────�
 ## 事前註冊實驗
 
 評分規則、tolerance、GO / NO-GO gates 與七個關鍵 artifact hash 在 locked run 前完成凍結。執行後不改題目、不調門檻、不挑結果。
+
+### Pre-registered evaluation
+
+```mermaid
+flowchart TD
+    Dev["DEV-only decisions<br/>gold / models / tolerance"] --> Register["固定 F0-F7 與 G1-G10 gates"]
+    Register --> Freeze["freeze_protocol.py"]
+    Freeze --> Lock["Protocol 1.0.0 lock<br/>7 artifact hashes"]
+    Lock -.-> Rule["凍結後不得修改<br/>locked set / thresholds / models"]
+    Lock --> Eval["唯一一次 locked evaluation<br/>執行 F0-F7"]
+    Eval --> Recompute["verify_results.py<br/>由 raw artifacts 重算"]
+    Recompute --> Verified{"重算一致?"}
+    Verified -->|"否"| Stop["停止發布<br/>結果不可採信"]
+    Verified -->|"是"| Gate["run_gate.py<br/>依 frozen gates 判定"]
+    Gate --> Decision{"Mechanical decision"}
+    Decision -->|"通過全部 hard gates"| Go["GO"]
+    Decision -->|"僅 soft gate 未通過"| Conditional["CONDITIONAL_GO"]
+    Decision -->|"任一 hard gate 未通過"| NoGo["NO_GO<br/>本次結果"]
+    NoGo --> Result["F0 17/33<br/>F7 6/33<br/>hard gain -27.8pp"]
+
+    classDef dev fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
+    classDef frozen fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
+    classDef process fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
+    classDef decision fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
+    classDef invalid fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
+    classDef outcome fill:#C6F6D5,stroke:#2F855A,stroke-width:2px,color:#173F2A
+    classDef actual fill:#D6E4FF,stroke:#364FC7,stroke-width:3px,color:#172B4D
+
+    class Dev,Register dev
+    class Freeze,Lock,Rule frozen
+    class Eval,Recompute,Gate process
+    class Verified,Decision decision
+    class Stop invalid
+    class Go,Conditional outcome
+    class NoGo,Result actual
+```
 
 | Factor | Locked accuracy | 主要變因 |
 |---|---:|---|
