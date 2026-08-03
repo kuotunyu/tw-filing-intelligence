@@ -31,7 +31,7 @@ def paths(repo_root: Path) -> RepoPaths:
 
 
 def test_package_exposes_version_and_disclaimer() -> None:
-    assert twfi.__version__ == "1.0.1"
+    assert twfi.__version__ == "1.0.2"
     assert "投資建議" in twfi.DISCLAIMER
     assert "production" in twfi.DISCLAIMER
 
@@ -45,8 +45,8 @@ def test_software_release_version_is_aligned_without_bumping_protocol(repo_root:
         package for package in lock["package"] if package["name"] == "tw-filing-intelligence"
     )
 
-    assert project["project"]["version"] == twfi.__version__ == "1.0.1"
-    assert root_package["version"] == "1.0.1"
+    assert project["project"]["version"] == twfi.__version__ == "1.0.2"
+    assert root_package["version"] == "1.0.2"
     assert PROTOCOL_VERSION == "1.0.0"
 
 
