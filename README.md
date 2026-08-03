@@ -246,7 +246,7 @@ F5／F6 在這份語料中處理的 503 個 visual-region candidates 絕大多�
 
 | 公開 claim | Raw／frozen evidence | 離線重算 | Human-readable report |
 |---|---|---|---|
-| Protocol 已凍結 | [`protocol_lock.json`](results/feasibility/protocol_lock.json) | `uv run pytest tests/test_protocol_lock.py::test_real_protocol_lock_still_holds -q` | [Protocol 1.0.0](docs/FEASIBILITY_PROTOCOL.md)、[erratum](docs/ERRATA.md) |
+| Protocol 已凍結 | [`protocol_lock.json`](results/feasibility/protocol_lock.json) | `uv run pytest tests/test_protocol_lock.py::test_real_protocol_lock_still_holds -q -p no:cacheprovider -o addopts=` | [Protocol 1.0.0](docs/FEASIBILITY_PROTOCOL.md)、[erratum](docs/ERRATA.md) |
 | F0 17/33 | [`F0/records.jsonl`](results/runs/F0/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Final report](docs/FEASIBILITY_REPORT.md#主要比較) |
 | F7 6/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Final report](docs/FEASIBILITY_REPORT.md#主要比較) |
 | Citation 9/17 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Candidate gate proportions](docs/FEASIBILITY_REPORT.md#candidate-gate-proportions) |
