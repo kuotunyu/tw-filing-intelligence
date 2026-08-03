@@ -4,6 +4,10 @@
 [![Release](https://img.shields.io/github/v/release/kuotunyu/tw-filing-intelligence)](https://github.com/kuotunyu/tw-filing-intelligence/releases/latest)
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
 
+> **Software / repository release candidate: 1.0.1. Frozen evaluation protocol: 1.0.0.**
+> v1.0.1 只整理研究主張、證據驗證與 release hygiene；未重跑 locked evaluation，
+> 也未改變 `NO_GO` 結論。
+
 針對臺灣上市公司公開財報打造的 multimodal RAG / VLM 可行性研究。專案以事前註冊的 Protocol 1.0.0，驗證 MOPS PDF、TWSE OpenAPI 與 XBRL 能否支撐可追溯、可拒答、可重現的 filing intelligence 系統。
 
 研究已完整結案，唯一一次 locked evaluation 由程式依預先凍結的 gate 判定為 [`NO_GO`](docs/FEASIBILITY_REPORT.md)。Protocol 1.0.0 的候選系統沒有通過；評估機制成功辨識了它。這個負結果不是未完成，也不能用事後挑選較高分的 ablation rung 取代。
@@ -283,6 +287,7 @@ Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官�
 | [最終報告](docs/FEASIBILITY_REPORT.md) | 唯一 locked run、完整指標、限制與 `NO_GO` 判定 |
 | [評估協議](docs/FEASIBILITY_PROTOCOL.md) | 事前凍結的 Protocol 1.0.0 與 gates |
 | [Frozen protocol erratum](docs/ERRATA.md) | 不修改 lock 的前提下，說明 7 → 10 份文件的 frozen prose inconsistency |
+| [Changelog](CHANGELOG.md) | Software 1.0.1 的 presentation / evidence-verification closeout 範圍 |
 | [資料 provenance](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權與 SHA-256 |
 | [威脅模型](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ import yaml
 
 import twfi
 from twfi.paths import RepoPaths
+from twfi.protocol import PROTOCOL_VERSION
 
 _SKIPPED_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 _GENERATED_DIRS = {"raw", "cache", "index", "duckdb", "interim", "processed", "runs"}
@@ -29,9 +31,23 @@ def paths(repo_root: Path) -> RepoPaths:
 
 
 def test_package_exposes_version_and_disclaimer() -> None:
-    assert twfi.__version__ == "0.1.0"
+    assert twfi.__version__ == "1.0.1"
     assert "投資建議" in twfi.DISCLAIMER
     assert "production" in twfi.DISCLAIMER
+
+
+def test_software_release_version_is_aligned_without_bumping_protocol(repo_root: Path) -> None:
+    with (repo_root / "pyproject.toml").open("rb") as stream:
+        project = tomllib.load(stream)
+    with (repo_root / "uv.lock").open("rb") as stream:
+        lock = tomllib.load(stream)
+    root_package = next(
+        package for package in lock["package"] if package["name"] == "tw-filing-intelligence"
+    )
+
+    assert project["project"]["version"] == twfi.__version__ == "1.0.1"
+    assert root_package["version"] == "1.0.1"
+    assert PROTOCOL_VERSION == "1.0.0"
 
 
 def test_readme_states_it_is_not_advice_and_not_production(repo_root: Path) -> None:
