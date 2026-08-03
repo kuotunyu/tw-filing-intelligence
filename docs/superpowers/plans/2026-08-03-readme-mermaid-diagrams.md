@@ -1,5 +1,10 @@
 # README Mermaid 清楚度修正 Implementation Plan
 
+`status: executed and archived — 2026-08-03`
+
+> 四張 Mermaid 已完成、render／目視檢查通過，並隨 v1.0.1 closeout 進入 `main`。
+> 本檔保留實作證據，不再是待執行工作。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 將容易混淆的 Mermaid 資料準備圖重構成四張不需猜測來源、箭頭或術語的圖，並修正 locked numeric store 的實際資料來源。
@@ -34,7 +39,7 @@
 - Consumes: `docs/FEASIBILITY_REPORT.md:126`、`docs/FEASIBILITY_REPORT.md:130`、`scripts/run_eval.py`、`src/twfi/`
 - Produces: 四段通過 Mermaid CLI render 且經視覺檢查的 source code
 
-- [ ] **Step 1: 建立 PDF evidence preparation 圖**
+- [x] **Step 1: 建立 PDF evidence preparation 圖**
 
 ```mermaid
 flowchart TD
@@ -66,7 +71,7 @@ flowchart TD
     class Keep,Exclude excluded
 ```
 
-- [ ] **Step 2: 建立 locked numeric source reality 圖**
+- [x] **Step 2: 建立 locked numeric source reality 圖**
 
 ```mermaid
 flowchart TD
@@ -95,7 +100,7 @@ flowchart TD
     class OpenAPI,Snapshot,NoOverlap,XBRL,Missing unused
 ```
 
-- [ ] **Step 3: 建立白話 query flow 圖**
+- [x] **Step 3: 建立白話 query flow 圖**
 
 ```mermaid
 flowchart TD
@@ -134,7 +139,7 @@ flowchart TD
     class Refusal refusal
 ```
 
-- [ ] **Step 4: 建立白話 evaluation flow 圖**
+- [x] **Step 4: 建立白話 evaluation flow 圖**
 
 ```mermaid
 flowchart TD
@@ -169,7 +174,7 @@ flowchart TD
     class NoGo,Result actual
 ```
 
-- [ ] **Step 5: 用 Mermaid CLI render 並目視檢查四張圖**
+- [x] **Step 5: 用 Mermaid CLI render 並目視檢查四張圖**
 
 Run:
 
@@ -194,7 +199,7 @@ Expected: 四個 render command 都 exit 0；四個 PNG 非空；目視確認來
 - Consumes: Task 1 四段已驗證 Mermaid source
 - Produces: 正體中文主體、無 emoji、資料來源準確的 GitHub README
 
-- [ ] **Step 1: 重寫系統設計的資料準備段落**
+- [x] **Step 1: 重寫系統設計的資料準備段落**
 
 將 `### Offline data preparation` 改為 `### PDF 如何變成可查詢證據`，在圖前加入：
 
@@ -204,7 +209,7 @@ Expected: 四個 render command 都 exit 0；四個 PNG 非空；目視確認來
 
 以 Task 1 Step 1 的圖取代原圖。
 
-- [ ] **Step 2: 加入 numeric source reality**
+- [x] **Step 2: 加入 numeric source reality**
 
 新增 `### 本次實驗的歷史數值來自哪裡`，在圖前加入：
 
@@ -218,7 +223,7 @@ Expected: 四個 render command 都 exit 0；四個 PNG 非空；目視確認來
 因此本輪只能稱為「已驗證結構化資料」，不能稱為「官方結構化歷史資料」。每筆 row 仍保留 `source_kind` 與 `source_ref`，可追回原始文件位置。
 ```
 
-- [ ] **Step 3: 重寫 query flow 與導讀**
+- [x] **Step 3: 重寫 query flow 與導讀**
 
 將標題改為 `### 問題如何選路徑並產生答案`，圖前加入：
 
@@ -228,7 +233,7 @@ Expected: 四個 render command 都 exit 0；四個 PNG 非空；目視確認來
 
 以 Task 1 Step 3 的圖取代現圖。
 
-- [ ] **Step 4: 重寫 evaluation flow 與導讀**
+- [x] **Step 4: 重寫 evaluation flow 與導讀**
 
 將標題改為 `### 事前註冊如何防止看到結果後再調整`，圖前加入：
 
@@ -238,7 +243,7 @@ Expected: 四個 render command 都 exit 0；四個 PNG 非空；目視確認來
 
 以 Task 1 Step 4 的圖取代現圖。
 
-- [ ] **Step 5: 檢查讀者不需猜測的文案 invariants**
+- [x] **Step 5: 檢查讀者不需猜測的文案 invariants**
 
 Run:
 
@@ -261,7 +266,7 @@ Expected: 第一個 command 找到所有明確說明；第二個 command exit 1 
 - Consumes: 完成版 README
 - Produces: 通過本機 checks 與 GitHub Actions 的 `main`
 
-- [ ] **Step 1: 從完成版 README 抽出四張 Mermaid 並重新 render**
+- [x] **Step 1: 從完成版 README 抽出四張 Mermaid 並重新 render**
 
 Run:
 
@@ -281,7 +286,7 @@ if ($outputs.Count -ne 4 -or ($outputs | Where-Object Length -le 0)) { exit 1 }
 
 Expected: extractor 找到四張圖；四張皆 exit 0 且輸出非空。
 
-- [ ] **Step 2: 執行 README 與 repository checks**
+- [x] **Step 2: 執行 README 與 repository checks**
 
 Run:
 
@@ -298,7 +303,7 @@ git check-ignore -v interview.md
 
 Expected: README 必要文字存在、emoji scan exit 1、pytest 0 failures、Ruff / format / mypy exit 0、`git diff --check` 無輸出、`interview.md` 仍被排除。
 
-- [ ] **Step 3: 提交並推送**
+- [x] **Step 3: 提交並推送**
 
 ```powershell
 git add -- README.md docs/superpowers/plans/2026-08-03-readme-mermaid-diagrams.md
@@ -306,7 +311,7 @@ git commit -m "釐清 Mermaid 架構圖"
 git push origin main
 ```
 
-- [ ] **Step 4: 等待 CI 並稽核 GitHub**
+- [x] **Step 4: 等待 CI 並稽核 GitHub**
 
 Run:
 

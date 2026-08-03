@@ -3,13 +3,16 @@
 ## 這是什麼
 
 一份**事前註冊的可行性驗證**，不是產品。研究問題、資料、指標與 GO／NO-GO 門檻
-都寫在 `docs/`，先凍結才允許跑 locked evaluation。
+已先凍結再執行唯一一次 locked evaluation；研究現已 Feature Freeze，結果為 `NO_GO`。
 
 ## 每次進來先做的三件事
 
-1. 讀 `docs/PROGRESS.md` → 現在在哪個 phase、下一步是什麼、有什麼已知風險。
-2. 讀 `docs/IMPLEMENTATION_PLAN.md` → 該 phase 的完成條件。
+1. 讀 `README.md` 與 `docs/FEASIBILITY_REPORT.md` → 公開範圍、locked 結果與限制。
+2. 讀 `results/feasibility/protocol_lock.json` 與 `CHANGELOG.md` → frozen evidence 與 release 狀態。
 3. `git log --oneline -10` + `git status` → 確認工作區狀態。
+
+`docs/HANDOFF.md`、`docs/PROGRESS.md`、`docs/IMPLEMENTATION_PLAN.md` 與 dated plans 是歷史紀錄，
+其中的 phase、blocker、背景程序與「下一步」不得當成現行指令。
 
 ## 不可違反的規則（violation 就是任務失敗）
 
@@ -19,7 +22,7 @@
    `data/evaluation/locked/` 一旦 freeze（`results/feasibility/protocol_lock.json`
    有 hash），**不得**因為結果不好而修改題目、答案、tolerance、threshold 或模型。
 3. **負面結果保留**：NO_GO / CONDITIONAL_GO 一律寫進報告，不刪不美化。
-4. **Gold answer 不得由 candidate 產生**。人工標註，來源必須指回原始文件。
+4. **Gold answer 不得由 candidate 產生**。作者與稽核狀態必須如實揭露，來源必須指回原始文件。
 5. **測試離線**：`pytest` 不得連 MOPS／TWSE／HF／ollama，不讀 `.env`，不需要 GPU，
    不寫入 `results/feasibility/`。
 6. **不繞過網站限制**：不解 CAPTCHA、不高頻爬 MOPS、不用逆向出的私人 endpoint。
@@ -30,9 +33,9 @@
 9. **Commit 署名只有 kuotunyu**：作者一律
    `kuotunyu <61350295+kuotunyu@users.noreply.github.com>`，
    **不得加 `Co-authored-by:` trailer**（那會讓別人出現在 GitHub Contributors）。
-   可 push 到 `origin`（`kuotunyu/tw-filing-intelligence`，public）；
-   **不 tag、不發 release、不 deploy**。push 前先跑 `git status` 確認沒有 PDF／
-   大檔／`.env` 被夾帶進去。
+   維護一律走 branch／PR；只允許 presentation、reproduction、license、citation 與 release
+   metadata closeout。**不得移動既有 tag，不得 deploy**。push 前先跑 `git status` 確認沒有
+   PDF／大檔／`.env` 被夾帶進去。
 10. **README／任何 UI 文案**都必須寫明「不是投資建議、不是 production 系統」。
 
 ## 常用指令
@@ -40,15 +43,16 @@
 ```bash
 uv sync --extra dev
 uv run pytest                       # 離線測試, coverage gate 85%
-uv run ruff check . ; uv run mypy src
-uv run python scripts/verify_manifests.py     # SHA-256 / provenance
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src scripts
+uv run pytest tests/test_protocol_lock.py::test_real_protocol_lock_still_holds -q -p no:cacheprovider -o addopts=
+uv run python scripts/verify_results.py --dry-run
+uv run python scripts/verify_evidence.py
 uv run python scripts/check_leakage.py        # dev vs locked 洩漏檢查
-uv run python scripts/freeze_protocol.py --dry-run   # 看會凍結什麼，不寫檔
-uv run python scripts/freeze_protocol.py      # 凍結 protocol + locked set（不可逆，需確認旗標）
-uv run python scripts/verify_results.py       # summary 與 raw artifacts 一致性
 ```
 
-索引（兩個半邊要一起重建，順序固定）：
+以下只屬於未來 Protocol 2.x 研究，不是 1.x closeout 的現行工作：
 
 ```bash
 uv run python scripts/build_index.py --device cpu   # 向量 + chunks.jsonl（cuda 需先看 nvidia-smi）

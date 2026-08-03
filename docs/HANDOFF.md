@@ -1,5 +1,10 @@
 # HANDOFF — ⑤A TW Filing Intelligence
 
+> **ARCHIVED / HISTORICAL — 2026-08-03。** 這是完工前的交接快照，不是現行 runbook。
+> 請以 [`README.md`](../README.md)、[`FEASIBILITY_REPORT.md`](FEASIBILITY_REPORT.md)、
+> frozen artifacts 與最新 release 為準。下方的背景程序、硬體狀態、commit、phase、
+> 「下一步」與發布禁令只描述當時情境，**不得執行**。
+>
 > ✅ **FINAL — 2026-08-02 23:45：專案已完成，不再有未完成 phase。** Protocol
 > 1.0.0 已 freeze，唯一 locked run 已完成，機械判定 **NO_GO**。F0 17/33，
 > F7 6/33；G1/G8/G9/G10 通過，G2–G7 失敗。請直接讀

@@ -288,7 +288,7 @@ Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官�
 |---|---|
 | [最終報告](docs/FEASIBILITY_REPORT.md) | 唯一 locked run、完整指標、限制與 `NO_GO` 判定 |
 | [評估協議](docs/FEASIBILITY_PROTOCOL.md) | 事前凍結的 Protocol 1.0.0 與 gates |
-| [Frozen protocol erratum](docs/ERRATA.md) | 不修改 lock 的前提下，說明 7 → 10 份文件的 frozen prose inconsistency |
+| [Frozen protocol errata](docs/ERRATA.md) | 不修改 lock，說明 7 → 10 份文件與 gold authorship shorthand 的 frozen prose inconsistencies |
 | [Changelog](CHANGELOG.md) | Software 1.0.1 的 presentation / evidence-verification closeout 範圍 |
 | [資料 provenance](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權與 SHA-256 |
 | [威脅模型](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |

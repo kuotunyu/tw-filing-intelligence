@@ -12,6 +12,8 @@ records, headline metrics, and the `NO_GO` verdict are unchanged.
 - Distinguish the clean-clone result (1,647 passed, 1 expected skip) from the local full-data
   result (1,648 passed); coverage remains 94.11%.
 - Mark pre-release handoff, progress, implementation, and Mermaid-plan instructions as historical.
+- Document the frozen protocol's fully-human execution shorthand versus disclosed model-assisted
+  gold composition as an external erratum; no frozen record changes.
 - Restore a canonical MIT `LICENSE`, move third-party data terms to `NOTICE.md`, and add
   machine-readable `CITATION.cff` metadata.
 - Add focused repository topics and enable immutable releases for the v1.0.2 publication flow.

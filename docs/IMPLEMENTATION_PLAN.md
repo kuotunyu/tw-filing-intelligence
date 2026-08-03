@@ -1,5 +1,10 @@
 # IMPLEMENTATION PLAN — ⑤A TW Filing Intelligence Feasibility
 
+> **ARCHIVED / HISTORICAL — 2026-08-03。** P0–P10 已完成，唯一 locked run 已依 frozen
+> Protocol 1.0.0 判定 `NO_GO`。本檔保留原始規劃與當時更正，供研究過程審查；其中的
+> deliverable、DoD、風險、命令與發布禁令均非現行工作。現況請讀
+> [`README.md`](../README.md) 與 [`FEASIBILITY_REPORT.md`](FEASIBILITY_REPORT.md)。
+
 `authored: 2026-07-31`　`plan_version: 1.0`
 
 實作原則：**先寫 md，再照 md 實作**。每個 phase 有明確 deliverable 與
