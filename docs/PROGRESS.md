@@ -1,12 +1,17 @@
 # PROGRESS LOG
 
+> **ARCHIVED / HISTORICAL — 2026-08-03。** 這份 session log 為研究過程證據，不是現行
+> 工作佇列。請以 [`README.md`](../README.md)、[`FEASIBILITY_REPORT.md`](FEASIBILITY_REPORT.md)、
+> frozen artifacts 與最新 release 為準。下方所有 phase、blocker、背景程序與「下一步」
+> 只描述當時狀態，**不得執行**。
+>
 > ✅ **FINAL — 2026-08-02（Session 14）：P0–P10 全部完成。** Protocol 1.0.0 已於
 > `2026-08-02T15:20:15+00:00` freeze；唯一 locked run 綁定 code commit `595268f`
 > 後完成。機械判定為 **NO_GO**：F0 17/33（51.5%），F7 6/33（18.2%），
 > G1/G8/G9/G10 通過，G2–G7 失敗。完整報告見
 > [`docs/FEASIBILITY_REPORT.md`](FEASIBILITY_REPORT.md)。
 >
-> **本段是最終權威狀態。** 下方保留的 session 紀錄是歷史日誌，其中「尚未
+> **本段是研究結案快照。** 下方保留的 session 紀錄是歷史日誌，其中「尚未
 > freeze」、「下一步」與舊 DEV 數字只描述當時狀態，不得覆蓋本段。
 
 > ✅ **2026-08-02 已交接完成（Session 13）。三件裁決已定案（D-048／D-049／D-050），
