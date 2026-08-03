@@ -22,11 +22,11 @@
 | 文件範圍 | FY2023–FY2024，宣告 10 份、機器可用 8 份（見 [erratum](docs/ERRATA.md)） |
 | Evaluation records | 53 筆：DEV 15、LOCKED 33、獨立 no-evidence probes 5 |
 | Factor ladder | F0–F7，共 8 組受控實驗 |
-| 品質驗證 | clean clone 1,647 passed／1 expected skip、coverage 94.11%、strict mypy、Ruff |
+| 品質驗證 | clean clone 1,648 passed／1 expected skip、coverage 94.11%、strict mypy、Ruff |
 
 兩份不可用文件均為真實資料品質問題：PDF 缺少可用的 ToUnicode mapping。它們被保留在 manifest 與 provenance 中，沒有為了提高結果而替換樣本。
 
-Clean clone 的唯一 skip 是原始 acquisition artifacts 未隨 repository 重新散布；在本機已取得這些 artifacts 的完整資料環境中，同一 suite 為 1,648 passed。兩種環境都不呼叫模型 API，也不需要 GPU。
+Clean clone 的唯一 skip 是原始 acquisition artifacts 未隨 repository 重新散布；取得這些 artifacts 後，該項 integrity check 才會執行。Offline suite 不呼叫模型 API，也不需要 GPU。
 
 正式 answer accuracy 的 denominator 是 **LOCKED 33**。5 筆 no-evidence probes 只評估 retrieval 被清空時是否拒答，不計入 33 題 accuracy。Gold annotation 不是全部 fully human：部分題目或答案曾由模型協助選擇／起草，實際 authorship、audit rate 與 `trustworthy` 數量完整列在[最終報告](docs/FEASIBILITY_REPORT.md#gold-set-%E7%B5%84%E6%88%90d-019-%E8%A6%81%E6%B1%82%E9%80%90%E9%A0%85%E5%8D%B0%E5%87%BA)。
 

@@ -9,8 +9,8 @@ records, headline metrics, and the `NO_GO` verdict are unchanged.
 
 - Correct the landing-page state from release candidate to release and align the mypy command
   with CI.
-- Distinguish the clean-clone result (1,647 passed, 1 expected skip) from the local full-data
-  result (1,648 passed); coverage remains 94.11%.
+- Report the release-tree clean-clone result precisely: 1,648 passed, 1 expected raw-acquisition
+  skip, and 94.11% coverage.
 - Mark pre-release handoff, progress, implementation, and Mermaid-plan instructions as historical.
 - Document the frozen protocol's fully-human execution shorthand versus disclosed model-assisted
   gold composition as an external erratum; no frozen record changes.
