@@ -267,7 +267,7 @@ Run:
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
-.venv/Scripts/python.exe C:/Users/3Hml/.agents/skills/design-doc-mermaid/scripts/extract_mermaid.py README.md --output-dir .tmp-mermaid/extracted --prefix readme
+.venv/Scripts/python.exe <DESIGN_DOC_MERMAID_SKILL_ROOT>/scripts/extract_mermaid.py README.md --output-dir .tmp-mermaid/extracted --prefix readme
 $outputs = @()
 Get-ChildItem .tmp-mermaid/extracted -Filter *.mmd | Sort-Object Name | ForEach-Object {
     $output = Join-Path $env:TEMP ("twfi-" + $_.BaseName + ".svg")

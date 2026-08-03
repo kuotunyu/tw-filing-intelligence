@@ -14,6 +14,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  evidence:
+    name: Recompute committed research evidence
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.18"
+          enable-cache: true
+
+      - name: Install locked CPU-only development environment
+        run: uv sync --extra dev --frozen
+
+      - name: Verify frozen protocol
+        run: >-
+          uv run pytest tests/test_protocol_lock.py::test_real_protocol_lock_still_holds
+          -q -p no:cacheprovider -o addopts=
+
+      - name: Recompute headline metrics from committed raw records
+        run: uv run python scripts/verify_results.py --dry-run
+
+      - name: Verify development and locked split isolation
+        run: uv run python scripts/check_leakage.py
+
+      - name: Compare recomputed gates with committed NO-GO
+        run: uv run python scripts/verify_evidence.py
+
   quality:
     name: Python quality checks
     runs-on: windows-latest
