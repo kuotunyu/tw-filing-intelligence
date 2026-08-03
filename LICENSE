@@ -19,17 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOTE ON THIRD-PARTY DATA
-
-This license applies to the source code in this repository only.
-
-It does NOT apply to filings, reports, or datasets published by the Taiwan
-Stock Exchange (TWSE), the Market Observation Post System (MOPS), or any
-issuer. Those materials remain subject to their own terms of use. This
-repository does not redistribute them; it only records their public source
-URLs, SHA-256 digests, and the scripts needed to retrieve them.
-
-This software is not investment advice and is not a production system.

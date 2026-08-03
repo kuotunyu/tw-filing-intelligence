@@ -4,8 +4,8 @@
 [![Release](https://img.shields.io/github/v/release/kuotunyu/tw-filing-intelligence)](https://github.com/kuotunyu/tw-filing-intelligence/releases/latest)
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
 
-> **Software / repository release candidate: 1.0.1. Frozen evaluation protocol: 1.0.0.**
-> v1.0.1 只整理研究主張、證據驗證與 release hygiene；未重跑 locked evaluation，
+> **Software / repository release: 1.0.2. Frozen evaluation protocol: 1.0.0.**
+> v1.0.2 只修正 release、citation、license 與歷史文件狀態；未重跑 locked evaluation，
 > 也未改變 `NO_GO` 結論。
 
 針對臺灣上市公司公開財報打造的 multimodal RAG / VLM 可行性研究。專案以事前註冊的 Protocol 1.0.0，驗證 MOPS PDF、TWSE OpenAPI 與 XBRL 能否支撐可追溯、可拒答、可重現的 filing intelligence 系統。
@@ -22,9 +22,11 @@
 | 文件範圍 | FY2023–FY2024，宣告 10 份、機器可用 8 份（見 [erratum](docs/ERRATA.md)） |
 | Evaluation records | 53 筆：DEV 15、LOCKED 33、獨立 no-evidence probes 5 |
 | Factor ladder | F0–F7，共 8 組受控實驗 |
-| 品質驗證 | offline test suite、CI coverage gate ≥85%、strict mypy、Ruff |
+| 品質驗證 | clean clone 1,647 passed／1 expected skip、coverage 94.11%、strict mypy、Ruff |
 
 兩份不可用文件均為真實資料品質問題：PDF 缺少可用的 ToUnicode mapping。它們被保留在 manifest 與 provenance 中，沒有為了提高結果而替換樣本。
+
+Clean clone 的唯一 skip 是原始 acquisition artifacts 未隨 repository 重新散布；在本機已取得這些 artifacts 的完整資料環境中，同一 suite 為 1,648 passed。兩種環境都不呼叫模型 API，也不需要 GPU。
 
 正式 answer accuracy 的 denominator 是 **LOCKED 33**。5 筆 no-evidence probes 只評估 retrieval 被清空時是否拒答，不計入 33 題 accuracy。Gold annotation 不是全部 fully human：部分題目或答案曾由模型協助選擇／起草，實際 authorship、audit rate 與 `trustworthy` 數量完整列在[最終報告](docs/FEASIBILITY_REPORT.md#gold-set-%E7%B5%84%E6%88%90d-019-%E8%A6%81%E6%B1%82%E9%80%90%E9%A0%85%E5%8D%B0%E5%87%BA)。
 
@@ -264,7 +266,7 @@ uv sync --extra dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy src
+uv run mypy src scripts
 uv run python scripts/verify_results.py --dry-run
 uv run python scripts/verify_evidence.py
 uv run python scripts/check_leakage.py
@@ -290,6 +292,8 @@ Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官�
 | [Changelog](CHANGELOG.md) | Software 1.0.1 的 presentation / evidence-verification closeout 範圍 |
 | [資料 provenance](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權與 SHA-256 |
 | [威脅模型](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
+| [Citation metadata](CITATION.cff) | v1.0.2 的 machine-readable software citation |
+| [Third-party notice](NOTICE.md) | 程式碼授權與 TWSE／MOPS／發行人資料權利的邊界 |
 
 主要結果位於 `results/feasibility/`，包含 protocol lock、F0–F7 summary、逐題 error analysis、重算驗證與最終 gate decision。
 
@@ -299,4 +303,4 @@ Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官�
 
 本專案**不是 production 系統**，不提供 SLA、認證授權、多租戶隔離或安全稽核，不應直接用於實際決策流程。
 
-程式碼採 [MIT License](LICENSE)。授權不涵蓋 TWSE / MOPS 原始文件與資料；相關內容仍依原始來源條款使用。
+程式碼採 [MIT License](LICENSE)。授權不涵蓋 TWSE / MOPS 原始文件與資料；完整邊界見 [Third-Party Data and Use Notice](NOTICE.md)。

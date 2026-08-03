@@ -56,10 +56,34 @@ def test_readme_states_it_is_not_advice_and_not_production(repo_root: Path) -> N
     assert "不是 production 系統" in readme
 
 
-def test_license_excludes_third_party_filings(repo_root: Path) -> None:
+def test_license_and_notice_separate_code_from_third_party_filings(repo_root: Path) -> None:
     license_text = (repo_root / "LICENSE").read_text(encoding="utf-8")
-    assert "source code in this repository only" in license_text
-    assert "does not redistribute" in license_text
+    notice_path = repo_root / "NOTICE.md"
+
+    assert notice_path.exists(), "third-party data terms belong in NOTICE.md"
+    notice_text = notice_path.read_text(encoding="utf-8")
+
+    assert license_text.startswith("MIT License\n")
+    assert "NOTE ON THIRD-PARTY DATA" not in license_text
+    assert license_text.rstrip().endswith("SOFTWARE.")
+    assert "source code in this repository only" in notice_text
+    assert "does not redistribute" in notice_text
+
+
+def test_citation_metadata_matches_public_release(repo_root: Path) -> None:
+    citation_path = repo_root / "CITATION.cff"
+    assert citation_path.exists(), "a research release needs machine-readable citation metadata"
+
+    citation = yaml.safe_load(citation_path.read_text(encoding="utf-8"))
+
+    assert citation["cff-version"] == "1.2.0"
+    assert citation["type"] == "software"
+    assert citation["version"] == twfi.__version__ == "1.0.2"
+    assert str(citation["date-released"]) == "2026-08-03"
+    assert citation["license"] == "MIT"
+    assert citation["repository-code"] == ("https://github.com/kuotunyu/tw-filing-intelligence")
+    assert citation["authors"] == [{"family-names": "kuotunyu"}]
+    assert "NO_GO" in citation["abstract"]
 
 
 def test_ci_has_an_independent_offline_evidence_job(repo_root: Path) -> None:
