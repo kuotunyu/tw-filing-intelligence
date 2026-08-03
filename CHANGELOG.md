@@ -17,6 +17,7 @@ records, headline metrics, and the `NO_GO` verdict are unchanged.
 - Restore a canonical MIT `LICENSE`, move third-party data terms to `NOTICE.md`, and add
   machine-readable `CITATION.cff` metadata.
 - Add focused repository topics and enable immutable releases for the v1.0.2 publication flow.
+- Pin CI actions to Node 24-compatible release commits to remove deprecated-runtime warnings.
 
 ### Not changed
 
