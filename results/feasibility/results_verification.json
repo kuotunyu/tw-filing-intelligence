@@ -1,6 +1,6 @@
 {
-  "summary": "C:\\Users\\3Hml\\Desktop\\CC_github部隊\\RAG_Agent_VLM\\5_tw-filing-intelligence\\results\\feasibility\\summary.json",
-  "raw": "C:\\Users\\3Hml\\Desktop\\CC_github部隊\\RAG_Agent_VLM\\5_tw-filing-intelligence\\results\\runs",
+  "summary": "results/feasibility/summary.json",
+  "raw": "results/runs",
   "records_per_run": {
     "F0": 33,
     "F1": 33,

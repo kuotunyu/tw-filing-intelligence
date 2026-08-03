@@ -32,6 +32,7 @@ import typer
 
 from twfi.console import use_utf8_output
 from twfi.errors import ResultIntegrityError
+from twfi.eval.evidence import build_results_artifact
 from twfi.eval.results import load_artifacts, verify
 from twfi.io.hashing import sha256_text_file
 from twfi.paths import repo_paths
@@ -119,13 +120,17 @@ def main(
     for problem in problems:
         typer.echo(f"  [{problem.kind}] {problem}")
 
-    payload = {
-        "summary": str(summary_file),
-        "raw": str(runs_dir),
-        "records_per_run": {run: len(records) for run, records in sorted(artifacts.runs.items())},
-        "reproducible": not problems,
-        "problems": [problem.to_json() for problem in problems],
-    }
+    try:
+        payload = build_results_artifact(
+            summary_path=summary_file.resolve(),
+            raw_dir=runs_dir.resolve(),
+            repo_root=paths.root.resolve(),
+            records_per_run={run: len(records) for run, records in sorted(artifacts.runs.items())},
+            problems=[problem.to_json() for problem in problems],
+        )
+    except ValueError as exc:
+        typer.echo(f"refusing to record a machine-specific artifact path: {exc}")
+        raise typer.Exit(code=1) from exc
     if dry_run:
         typer.echo("--dry-run: results_verification.json not written")
     else:

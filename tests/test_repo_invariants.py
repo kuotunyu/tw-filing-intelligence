@@ -46,6 +46,20 @@ def test_license_excludes_third_party_filings(repo_root: Path) -> None:
     assert "does not redistribute" in license_text
 
 
+def test_ci_has_an_independent_offline_evidence_job(repo_root: Path) -> None:
+    workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    required = (
+        "evidence:",
+        "runs-on: ubuntu-latest",
+        "test_real_protocol_lock_still_holds",
+        "scripts/verify_results.py --dry-run",
+        "scripts/check_leakage.py",
+        "scripts/verify_evidence.py",
+    )
+    for contract in required:
+        assert contract in workflow
+
+
 # -------------------------------------------------------------------- protocol
 
 

@@ -25,6 +25,7 @@ from typing import Annotated
 import typer
 
 from twfi.console import use_utf8_output
+from twfi.eval.evidence import build_gate_payload
 from twfi.eval.gates import decide, evaluate
 from twfi.paths import repo_paths
 
@@ -77,11 +78,7 @@ def main(
         typer.echo("tolerances or thresholds to reach GO, and do not remove the negative")
         typer.echo("result. State the smallest next research question instead.")
 
-    payload = {
-        "verdict": verdict,
-        "protocol_lock_sha256": summary.get("protocol_lock_sha256"),
-        "gates": [outcome.to_json() for outcome in outcomes],
-    }
+    payload = build_gate_payload(summary, outcomes)
     if dry_run:
         typer.echo("")
         typer.echo("--dry-run: GO_NO_GO.json not written")
