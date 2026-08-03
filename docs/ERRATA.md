@@ -42,3 +42,13 @@ Authoritative evidence:
 - [`data/evaluation/locked/gold.jsonl`](../data/evaluation/locked/gold.jsonl)
 - [`docs/DECISIONS.md` — D-019](DECISIONS.md#d-019-gold-改為模型起草--人工抽樣稽核並把這件事寫在臉上)
 - [`docs/FEASIBILITY_REPORT.md` — Gold set composition](FEASIBILITY_REPORT.md#gold-set-組成d-019-要求逐項印出)
+
+## 3. Archived execution-instruction reference
+
+Protocol 1.0.0 refers to `CLAUDE.md` rule 4 when discussing candidate-independent gold
+construction. `CLAUDE.md` was an internal execution file, archived in immutable release v1.0.2
+and removed from the v1.0.3 public tree. The operative rule is unchanged: candidate outputs must
+not create or revise locked gold answers.
+
+No protocol, gold, threshold, run record, metric, or verdict was modified by this
+publication-only cleanup.

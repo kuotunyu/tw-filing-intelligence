@@ -4,265 +4,160 @@
 [![Release](https://img.shields.io/github/v/release/kuotunyu/tw-filing-intelligence)](https://github.com/kuotunyu/tw-filing-intelligence/releases/latest)
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
 
-> **Software / repository release: 1.0.2. Frozen evaluation protocol: 1.0.0.**
-> v1.0.2 只修正 release、citation、license 與歷史文件狀態；未重跑 locked evaluation，
-> 也未改變 `NO_GO` 結論。
+> **Software / repository release: 1.0.3. Frozen evaluation protocol: 1.0.0.**
 
-針對臺灣上市公司公開財報打造的 multimodal RAG / VLM 可行性研究。專案以事前註冊的 Protocol 1.0.0，驗證 MOPS PDF、TWSE OpenAPI 與 XBRL 能否支撐可追溯、可拒答、可重現的 filing intelligence 系統。
+這是一個臺灣公開財報 multimodal RAG / VLM 的事前註冊可行性研究。研究問題是：在固定資料、模型、threshold 與評分規則後，加入版面解析、混合檢索、reranking、數值路徑與視覺證據，能否可靠地勝過簡單的文字 RAG baseline？
 
-研究已完整結案，唯一一次 locked evaluation 由程式依預先凍結的 gate 判定為 [`NO_GO`](docs/FEASIBILITY_REPORT.md)。Protocol 1.0.0 的候選系統沒有通過；評估機制成功辨識了它。這個負結果不是未完成，也不能用事後挑選較高分的 ablation rung 取代。
+唯一 locked evaluation 的答案是 **不能**：baseline 答對 17/33，事前指定的完整候選系統答對 6/33，因此依 Protocol 1.0.0 判定 [`NO_GO`](docs/FEASIBILITY_REPORT.md)。這個 repository **不是 production 系統**、不是投資建議，也不提供 filing assistant 服務；它展示的是如何讓負結果仍可追溯、重算與審查。
 
-本 repository **不是投資建議，也不是 production system**。它是一份可重算、可接受失敗的 research feasibility study。
+## 結果先講
 
-## 研究規模
+本研究把系統版本編為 F0–F7。F0（text-only baseline）是最小比較系統；F7（事前指定的完整候選系統）整合 layout-aware parsing、hybrid retrieval、reranking、structured numeric route、visual evidence 與 deterministic typed routing。F1–F6 是診斷性 ablation，用來觀察逐步加入元件的影響，不是可在看到 locked 結果後取代 F7 的候選產品。
 
-| 項目 | 規模 |
+| 項目 | 結果 |
 |---|---:|
-| 公司與產業 | 5 家公司、4 個產業 |
-| 文件範圍 | FY2023–FY2024，宣告 10 份、機器可用 8 份（見 [errata](docs/ERRATA.md)） |
-| Evaluation records | 53 筆：DEV 15、LOCKED 33、獨立 no-evidence probes 5 |
-| Factor ladder | F0–F7，共 8 組受控實驗 |
-| 品質驗證 | clean clone 1,648 passed／1 expected skip、coverage 94.11%、strict mypy、Ruff |
+| F0：text-only baseline | 51.5%（17/33） |
+| F7：preregistered full candidate | 18.2%（6/33） |
+| 合併 hard set 差異 | -27.8pp |
+| F7 citation validity | 52.9%（9/17） |
+| F7 numeric route accuracy | 0%（0/12） |
+| F7 route accuracy | 33.3%（11/33） |
+| Frozen verdict | **NO_GO** |
 
-兩份不可用文件均為真實資料品質問題：PDF 缺少可用的 ToUnicode mapping。它們被保留在 manifest 與 provenance 中，沒有為了提高結果而替換樣本。
+研究涵蓋 10 份 FY2023–FY2024 filings，其中 8 份可機器使用；evaluation records 共 53 題：DEV 15、LOCKED 33、no-evidence probes 5。v1.0.3 clean clone 為 1,644 passed、1 個預期的 raw-acquisition skip、94.11% coverage。
 
-Clean clone 的唯一 skip 是原始 acquisition artifacts 未隨 repository 重新散布；取得這些 artifacts 後，該項 integrity check 才會執行。Offline suite 不呼叫模型 API，也不需要 GPU。
+LOCKED 只有 33 題，且 chart 題只有 2 題；所有比例都必須連同 denominator 與信賴區間閱讀，不能把這個小樣本當成 production capability estimate。
 
-正式 answer accuracy 的 denominator 是 **LOCKED 33**。5 筆 no-evidence probes 只評估 retrieval 被清空時是否拒答，不計入 33 題 accuracy。Gold annotation 不是全部 fully human：部分題目或答案曾由模型協助選擇／起草，實際 authorship、audit rate 與 `trustworthy` 數量完整列在[最終報告](docs/FEASIBILITY_REPORT.md#gold-set-%E7%B5%84%E6%88%90d-019-%E8%A6%81%E6%B1%82%E9%80%90%E9%A0%85%E5%8D%B0%E5%87%BA)。
+## 系統如何工作
 
-## 系統設計
+### 1. Filing 變成可追溯證據
 
-### PDF 如何變成可查詢證據
-
-這張圖只回答一件事：一份 PDF 進入專案後，哪些內容會進 search index、DuckDB 或 VLM。
+每份來源先記錄 URL、大小與 SHA-256，再進行 PDF 可讀性檢查。無法可靠解析的文件保留 acquisition provenance，但不進入檢索；可用文件拆成文字 chunks、數值 rows 與 figure crops。
 
 ```mermaid
-flowchart TD
-    PDF["MOPS PDF"] --> Record["記錄來源與檔案指紋<br/>官方 URL / file size / SHA-256"]
-    Record --> Readable{"PDF 文字層可解析？"}
-    Readable -->|"否"| Keep["保留失敗紀錄與 SHA-256"]
-    Keep --> Exclude["不作為評估題目的<br/>答案證據來源"]
-    Readable -->|"是"| Parse["解析版面、表格與圖像位置"]
-    Parse --> Chunks["段落與章節 chunks"]
-    Chunks --> Index[("BM25 + dense index")]
-    Parse --> Rows["可分類的表格／文字 rows"]
-    Rows --> Validate["驗證年度、單位、合併或個別、來源"]
-    Validate --> DB[("DuckDB")]
-    Parse --> Figures["Figure crops"]
-    Figures --> Caption["模型產生的圖片描述<br/>caption 只協助找頁"]
-    Caption --> Index
-    Figures --> Pixels["Original crop pixels<br/>交給 VLM 讀值"]
+flowchart LR
+    Filing["MOPS filings"] --> Manifest["URL / size / SHA-256"]
+    Manifest --> Readable{"Machine-readable?"}
+    Readable -->|"No"| Excluded["Keep provenance; exclude from corpus"]
+    Readable -->|"Yes"| Parse["Layout-aware parsing"]
+    Parse --> Text["Text chunks"]
+    Text --> Search[("BM25 + dense index")]
+    Parse --> Rows["Numeric rows + source_ref"]
+    Rows --> Numeric[("DuckDB")]
+    Parse --> Crops["Figure crops"]
+    Crops --> Caption["Value-free captions"]
+    Caption --> Search
+    Crops --> Pixels["Original pixels for VLM evidence"]
 
-    classDef source fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
-    classDef process fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef decision fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
-    classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
-    classDef excluded fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
-
-    class PDF source
-    class Record,Parse,Chunks,Rows,Validate,Figures,Caption,Pixels process
-    class Readable decision
-    class Index,DB store
-    class Keep,Exclude excluded
+    classDef source fill:#DDEBFF,stroke:#245A9A,color:#102A43
+    classDef process fill:#E3F9E5,stroke:#2F855A,color:#173F2A
+    classDef store fill:#E9D8FD,stroke:#6B46C1,color:#2D1B4E
+    classDef excluded fill:#FDE2E2,stroke:#C53030,color:#4A1717
+    class Filing source
+    class Manifest,Parse,Text,Rows,Crops,Caption,Pixels process
+    class Search,Numeric store
+    class Excluded excluded
 ```
 
-### 本次實驗的歷史數值來自哪裡
+本次 locked numeric store 使用 filing line stream 重建 FY2023–FY2024 rows；當時 TWSE OpenAPI snapshot 沒有期間重疊，XBRL 也沒有可用內容，因此兩者沒有被包裝成實際資料來源。每一列都保留 `source_kind` 與 `source_ref`。Caption 只用於找出 visual region，數值答案仍必須讀取 original crop pixels。
 
-本次 locked run 沒有用 OpenAPI 或 XBRL 補齊 FY2023–FY2024 歷史數值；numeric route 查的是專案從 filing line stream 重建的 rows。
+### 2. F7 如何回答問題
 
-```mermaid
-flowchart TD
-    Question["本次 locked numeric route<br/>實際查哪一份歷史資料？"]
-
-    Question -->|"實際使用"| Filing["MOPS filing line stream"]
-    Filing --> Rebuild["重建可分類的 FY2023–FY2024 rows"]
-    Rebuild --> Broad[("numeric_broad.duckdb")]
-    Broad --> Used["本次 locked numeric route 使用"]
-
-    Question -->|"未使用"| OpenAPI["TWSE OpenAPI"]
-    OpenAPI --> Snapshot["只有 FY2026Q1 snapshot"]
-    Snapshot --> NoOverlap["與 FY2023–FY2024 無交集<br/>未進 locked store"]
-
-    Question -->|"未取得"| XBRL["XBRL"]
-    XBRL --> Missing["本輪未取得<br/>未進 locked store"]
-
-    classDef question fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
-    classDef used fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef store fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
-    classDef unused fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
-
-    class Question question
-    class Filing,Rebuild,Used used
-    class Broad store
-    class OpenAPI,Snapshot,NoOverlap,XBRL,Missing unused
-```
-
-因此本輪只能稱為「已驗證結構化資料」，不能稱為「官方結構化歷史資料」。每筆 row 仍保留 `source_kind` 與 `source_ref`，可追回原始文件位置。
-
-### F7 如何選路徑並產生答案
-
-F7 先限制到指定公司與文件，再由 deterministic rules 做一次 single-pass typed dispatch。這不是 Agent workflow，也沒有循環規劃。Numeric 與 visual route 在缺少可用資料時可以局部拒答；narrative route 也允許模型依 prompt 拒答，但本次 runtime **沒有**在輸出後強制執行 citation-validity gate。
+F7 先限制公司與文件，再以 deterministic rules 做一次 typed dispatch。它不是循環規劃的 Agent：narrative、numeric 與 visual route 各自產生答案，缺少可用證據時可以局部拒答。
 
 ```mermaid
 flowchart TD
-    Query(["問題"]) --> Scope["限定公司與可用文件"]
-    Scope --> Router["single-pass rule router<br/>輸出 route / reason / confidence"]
-
-    Router -->|"narrative / cross-modal"| Narrative["找出相關文字"]
-    Narrative --> Rerank["依相關性重新排序"]
-    Rerank --> Generate["共用 answer prompt"]
-
-    Router -->|"numeric"| Numeric["查 DuckDB"]
-    Numeric --> SQL["使用固定 SQL template<br/>不讓 LLM 自由寫 SQL"]
-    SQL --> NumericResult{"row / template 可用？"}
-    NumericResult -->|"是"| Calc["程式計算<br/>formula + operands"]
-    NumericResult -->|"否"| RouteRefusal["route-level refusal"]
-
-    Router -->|"chart / table"| Visual["caption 協助找到 visual region"]
-    Visual --> Crop{"original crop 可讀？"}
-    Crop -->|"是"| VLM["VLM 從 crop pixels 讀值"]
-    Crop -->|"否"| RouteRefusal
-
-    Generate --> Output["保存 answer / cited indices / telemetry"]
-    Calc --> Output
+    Query(["Question"]) --> Scope["Company / filing scope"]
+    Scope --> Router["Single-pass typed router"]
+    Router -->|"Narrative"| Retrieve["Hybrid retrieval + reranking"]
+    Retrieve --> Generate["Cited answer prompt"]
+    Router -->|"Numeric"| SQL["Fixed SQL templates"]
+    SQL --> NumericResult{"Usable row?"}
+    NumericResult -->|"Yes"| Calculate["Formula + operands"]
+    NumericResult -->|"No"| Refuse["Route-level refusal"]
+    Router -->|"Visual"| Crop{"Original crop available?"}
+    Crop -->|"Yes"| VLM["VLM reads crop pixels"]
+    Crop -->|"No"| Refuse
+    Generate --> Output["Answer + citations + telemetry"]
+    Calculate --> Output
     VLM --> Output
-    RouteRefusal --> Output
+    Refuse --> Output
 
-    classDef input fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
-    classDef control fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
-    classDef route fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef output fill:#D6E4FF,stroke:#364FC7,stroke-width:2px,color:#172B4D
-    classDef refusal fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
-
-    class Query input
+    classDef control fill:#FFF3BF,stroke:#B7791F,color:#4A2C0A
+    classDef route fill:#E3F9E5,stroke:#2F855A,color:#173F2A
+    classDef output fill:#D6E4FF,stroke:#364FC7,color:#172B4D
     class Scope,Router,NumericResult,Crop control
-    class Narrative,Rerank,Generate,Numeric,SQL,Calc,Visual,VLM route
+    class Retrieve,Generate,SQL,Calculate,VLM route
     class Output output
-    class RouteRefusal refusal
 ```
 
-### Offline evaluation 如何判定結果
+### 3. Frozen evaluation 如何得到 NO-GO
 
-Citation、answer、route、refusal 與 GO / NO-GO 都在 locked output 產生後離線評分，不是 runtime 保證。
+DEV 只能用於事前選擇設計。Protocol freeze 後，threshold、model pins、tolerance、gold hashes 與 gates 都鎖定，再執行唯一一次 LOCKED evaluation；CI 從 committed raw records 重算 summary、G1–G10 與 verdict。
 
 ```mermaid
-flowchart TD
-    Records[("F0–F7 raw records")] --> AnswerGrade["answer grader"]
-    Gold[("frozen gold / probes")] --> AnswerGrade
-    Records --> CitationGrade["citation grader"]
-    Evidence[("acquired evidence metadata")] --> CitationGrade
-    Records --> RouteGrade["route + refusal metrics"]
-    Gold --> RouteGrade
-
-    AnswerGrade --> Summary["summary.json"]
-    CitationGrade --> Summary
-    RouteGrade --> Summary
-    Summary --> Verify["verify_results.py<br/>從 records 重算"]
-    Verify --> Gates["G1–G10<br/>frozen thresholds"]
+flowchart LR
+    Dev["DEV calibration"] --> Register["Register F0–F7 and G1–G10"]
+    Register --> Freeze["Freeze protocol + artifact hashes"]
+    Freeze --> Locked["Single LOCKED run"]
+    Locked --> Raw[("F0–F7 raw records")]
+    Raw --> Recompute["Recompute answer / citation / route metrics"]
+    Recompute --> Verify{"Matches committed summary?"}
+    Verify -->|"No"| Stop["Stop: invalid evidence chain"]
+    Verify -->|"Yes"| Gates["Apply frozen G1–G10"]
     Gates --> Verdict["NO_GO"]
 
-    classDef artifact fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
-    classDef process fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef result fill:#D6E4FF,stroke:#364FC7,stroke-width:3px,color:#172B4D
-
-    class Records,Gold,Evidence,Summary artifact
-    class AnswerGrade,CitationGrade,RouteGrade,Verify,Gates process
+    classDef frozen fill:#FFF3BF,stroke:#B7791F,color:#4A2C0A
+    classDef process fill:#E3F9E5,stroke:#2F855A,color:#173F2A
+    classDef artifact fill:#E9D8FD,stroke:#6B46C1,color:#2D1B4E
+    classDef invalid fill:#FDE2E2,stroke:#C53030,color:#4A1717
+    classDef result fill:#D6E4FF,stroke:#364FC7,color:#172B4D
+    class Register,Freeze frozen
+    class Dev,Locked,Recompute,Gates process
+    class Raw artifact
+    class Stop invalid
     class Verdict result
 ```
 
-關鍵邊界：
+## 事前註冊結果
 
-- Numeric route 不允許 LLM 自由生成 SQL。
-- Caption 只協助 retrieval；visual-region 數值來源是 original crop pixels。
-- F7 實作是 bounded single-pass dispatch，沒有 Agent loop。
-- Citation invalid 會讓 offline citation gate 失敗，但不保證 runtime 自動把答案改成拒答。
-
-## 事前註冊實驗
-
-評分規則、tolerance、GO / NO-GO gates 與七個關鍵 artifact hash 在 locked run 前完成凍結。執行後不改題目、不調門檻、不挑結果。
-
-### 事前註冊如何防止看到結果後再調整
-
-只有 DEV 階段可以調整設定；protocol freeze 之後，只能執行 locked evaluation、從 raw records 重算，並依事先固定的 gates 判定。
-
-```mermaid
-flowchart TD
-    Dev["只在 DEV 階段調整<br/>題目、models、tolerance"] --> Register["先固定 F0–F7<br/>與 G1–G10 gates"]
-    Register --> Freeze["freeze_protocol.py<br/>寫入 7 個 artifact hashes"]
-    Freeze --> Rule["從此不得修改<br/>locked set / thresholds / models"]
-    Rule --> Eval["唯一一次 LOCKED evaluation<br/>執行 F0–F7"]
-    Eval --> Recompute["verify_results.py<br/>從 raw records 重算結果"]
-    Recompute --> Verified{"重算結果一致？"}
-    Verified -->|"否"| Stop["停止發布<br/>結果不可採信"]
-    Verified -->|"是"| Gate["run_gate.py<br/>依凍結的 G1–G10 判定"]
-    Gate --> Decision{"依規則自動判定"}
-    Decision -->|"全部 hard gates 通過"| Go["GO"]
-    Decision -->|"只有 soft gate 未通過"| Conditional["CONDITIONAL_GO"]
-    Decision -->|"任一 hard gate 未通過"| NoGo["NO_GO<br/>本次結果"]
-    NoGo --> Result["F0 17/33<br/>F7 6/33<br/>hard gain -27.8pp"]
-
-    classDef dev fill:#DDEBFF,stroke:#245A9A,stroke-width:2px,color:#102A43
-    classDef frozen fill:#FFF3BF,stroke:#B7791F,stroke-width:2px,color:#4A2C0A
-    classDef process fill:#E3F9E5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef decision fill:#E9D8FD,stroke:#6B46C1,stroke-width:2px,color:#2D1B4E
-    classDef invalid fill:#FDE2E2,stroke:#C53030,stroke-width:2px,color:#4A1717
-    classDef outcome fill:#C6F6D5,stroke:#2F855A,stroke-width:2px,color:#173F2A
-    classDef actual fill:#D6E4FF,stroke:#364FC7,stroke-width:3px,color:#172B4D
-
-    class Dev,Register dev
-    class Freeze,Rule frozen
-    class Eval,Recompute,Gate process
-    class Verified,Decision decision
-    class Stop invalid
-    class Go,Conditional outcome
-    class NoGo,Result actual
-```
-
-| Factor | Locked accuracy | 主要變因 |
+| Factor | Locked accuracy | 加入的主要因素 |
 |---|---:|---|
-| F0 | 51.5%（17/33） | baseline |
+| F0 | 51.5%（17/33） | text-only baseline |
 | F1 | 45.5%（15/33） | layout-aware parsing |
 | F2 | 42.4%（14/33） | hybrid retrieval |
 | F3 | 57.6%（19/33） | cross-encoder reranking |
 | F4 | 57.6%（19/33） | structured numeric route |
 | F5 | 60.6%（20/33） | visual-region caption indexing |
 | F6 | 54.5%（18/33） | original crop evidence / crop VLM |
-| F7 | 18.2%（6/33） | **事前指定的 full candidate：typed dispatch** |
+| F7 | 18.2%（6/33） | **preregistered full candidate：typed dispatch** |
 
-最終 candidate 相對 baseline 的 hard-category pooled gain 為 **-27.8pp**。G1、G8、G9、G10 通過；G2–G7 未通過，因此結論為 `NO_GO`。
+F7 通過 G1、G8、G9、G10，但 G2–G7 均失敗，所以 frozen verdict 是 `NO_GO`。F5 的 20/33 是重要的 failure-decomposition evidence，但它只是 ablation rung；看到 locked 結果後把 F5 改稱 candidate，會違反事前註冊。
 
-F5／F6 在這份語料中處理的 503 個 visual-region candidates 絕大多數是有框表格；真正的 chart questions 只有兩題，且都來自台積電。因此不得把這兩階描述為一般化 chart-reading 能力。F5 的 20/33 是 locked ablation observation，不是正式 candidate，也不能在看到結果後改稱勝出的系統。
-
-關鍵失敗訊號：
+主要 failure signals：
 
 - citation validity：52.9%（9/17）
 - numeric route accuracy：0%（0/12）
 - route accuracy：33.3%（11/33）
-- retrieval p95：0.149 秒
-- generation p95：2.957 秒
-- peak VRAM：20.09 GB
+- no-evidence probes refused：100%（5/5），但 locked unanswerable over-answer rate 為 75%（3/4）
 
-負面結果不是未完成。這份研究完成了 protocol freeze、資料 provenance、locked evaluation、raw-artifact 重算與機械式 gate decision，並留下下一輪 Protocol 2.x 可直接驗證的 failure decomposition。
+Gold construction 部分使用模型起草，最後 audit 也不是完全獨立或 blind；composition、authorship 與 audit 狀態已公開於 [final report](docs/FEASIBILITY_REPORT.md#gold-set-組成d-019-要求逐項印出)。這些限制不會因 repository 整理而被隱藏。
 
-## 證據導航
+## 證據與重現
 
-| 公開 claim | Raw／frozen evidence | 離線重算 | Human-readable report |
-|---|---|---|---|
-| Protocol 已凍結 | [`protocol_lock.json`](results/feasibility/protocol_lock.json) | `uv run pytest tests/test_protocol_lock.py::test_real_protocol_lock_still_holds -q -p no:cacheprovider -o addopts=` | [Protocol 1.0.0](docs/FEASIBILITY_PROTOCOL.md)、[erratum](docs/ERRATA.md) |
-| F0 17/33 | [`F0/records.jsonl`](results/runs/F0/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Final report](docs/FEASIBILITY_REPORT.md#主要比較) |
-| F7 6/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Final report](docs/FEASIBILITY_REPORT.md#主要比較) |
-| Citation 9/17 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Candidate gate proportions](docs/FEASIBILITY_REPORT.md#candidate-gate-proportions) |
-| Numeric 0/12 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [Candidate gate proportions](docs/FEASIBILITY_REPORT.md#candidate-gate-proportions) |
-| Route 11/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `uv run python scripts/verify_results.py --dry-run` | [`error_analysis.jsonl`](results/feasibility/error_analysis.jsonl) |
-| `NO_GO` | [`GO_NO_GO.json`](results/feasibility/GO_NO_GO.json) | `uv run python scripts/verify_evidence.py` | [Final report](docs/FEASIBILITY_REPORT.md#判定no_go) |
-| No leakage detected | [`dev`](data/evaluation/dev/gold.jsonl)、[`locked`](data/evaluation/locked/gold.jsonl)、[`probes`](data/evaluation/locked/probes.jsonl) | `uv run python scripts/check_leakage.py` | [Protocol split](docs/FEASIBILITY_PROTOCOL.md#13-兩個評估集) |
+| Claim | Committed evidence | Offline recomputation |
+|---|---|---|
+| Protocol 未漂移 | [`protocol_lock.json`](results/feasibility/protocol_lock.json) | `test_real_protocol_lock_still_holds` |
+| F0 17/33 | [`F0/records.jsonl`](results/runs/F0/records.jsonl) | `scripts/verify_results.py --dry-run` |
+| F7 6/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `scripts/verify_results.py --dry-run` |
+| Citation 9/17、numeric 0/12、route 11/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `scripts/verify_results.py --dry-run` |
+| `NO_GO` | [`GO_NO_GO.json`](results/feasibility/GO_NO_GO.json) | `scripts/verify_evidence.py` |
+| DEV / LOCKED 無 leakage | [`dev`](data/evaluation/dev/gold.jsonl)、[`locked`](data/evaluation/locked/gold.jsonl)、[`probes`](data/evaluation/locked/probes.jsonl) | `scripts/check_leakage.py` |
 
-## 重現方式
-
-需求：Python 3.13、[uv](https://docs.astral.sh/uv/)。離線測試與資料驗證只使用 CPU；index build 與 generation 才需要 GPU，目標環境為 RTX 4090 24GB。
+Python 3.13 與 [uv](https://docs.astral.sh/uv/) 的 clean-clone 驗證：
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --frozen
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
@@ -272,35 +167,18 @@ uv run python scripts/verify_evidence.py
 uv run python scripts/check_leakage.py
 ```
 
-重新取得公開資料：
+上述 evidence recomputation 全部離線、CPU-only，不呼叫模型、外部 API 或 GPU。唯一預期 skip 是 raw acquisition artifacts 刻意不 commit；committed manifest、locked records 與結果仍會完整驗證。原始 filings 不在 repository 重新散布，來源與 SHA-256 請見 [data provenance](docs/DATA_PROVENANCE.md)。
 
-```bash
-uv run python scripts/fetch_twse_openapi.py --manifest data/manifests/structured.yaml
-uv run python scripts/fetch_documents.py --manifest data/manifests/documents.yaml
-uv run python scripts/verify_manifests.py
-```
+## 文件與使用範圍
 
-Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官方來源 URL、SHA-256 與重建腳本。
-
-## 研究文件
-
-| 文件 | 內容 |
+| 文件 | 用途 |
 |---|---|
-| [最終報告](docs/FEASIBILITY_REPORT.md) | 唯一 locked run、完整指標、限制與 `NO_GO` 判定 |
-| [評估協議](docs/FEASIBILITY_PROTOCOL.md) | 事前凍結的 Protocol 1.0.0 與 gates |
-| [Frozen protocol errata](docs/ERRATA.md) | 不修改 lock，說明 7 → 10 份文件與 gold authorship shorthand 的 frozen prose inconsistencies |
-| [Changelog](CHANGELOG.md) | Software 1.0.2 的 final repository closeout 範圍 |
-| [資料 provenance](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權與 SHA-256 |
-| [威脅模型](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
-| [Citation metadata](CITATION.cff) | v1.0.2 的 machine-readable software citation |
-| [Third-party notice](NOTICE.md) | 程式碼授權與 TWSE／MOPS／發行人資料權利的邊界 |
+| [Final report](docs/FEASIBILITY_REPORT.md) | Locked result、gates、limitations 與 `NO_GO` |
+| [Protocol 1.0.0](docs/FEASIBILITY_PROTOCOL.md) | Frozen design、factor ladder 與 thresholds |
+| [Frozen errata](docs/ERRATA.md) | 不改 lock 的 frozen-prose corrections |
+| [Decision log](docs/DECISIONS.md) | 研究決策與 failure history |
+| [Data provenance](docs/DATA_PROVENANCE.md) | 來源、acquisition、排除與 hashes |
+| [Threat model](docs/THREAT_MODEL.md) | Injection、SSRF、rate limit、leakage、secrets |
+| [GitHub Releases](https://github.com/kuotunyu/tw-filing-intelligence/releases) | Software publication history |
 
-主要結果位於 `results/feasibility/`，包含 protocol lock、F0–F7 summary、逐題 error analysis、重算驗證與最終 gate decision。
-
-## 使用範圍
-
-本專案**不是投資建議**，所有輸出僅為文件檢索與資訊擷取的技術驗證，不構成證券或金融商品的推薦、要約或決策依據。任何財務數字均應回到[公開資訊觀測站](https://mops.twse.com.tw/)原始文件核對。
-
-本專案**不是 production 系統**，不提供 SLA、認證授權、多租戶隔離或安全稽核，不應直接用於實際決策流程。
-
-程式碼採 [MIT License](LICENSE)。授權不涵蓋 TWSE / MOPS 原始文件與資料；完整邊界見 [Third-Party Data and Use Notice](NOTICE.md)。
+程式碼採 [MIT License](LICENSE)；TWSE、MOPS 與其他第三方資料不因此改變授權，詳見 [Third-Party Data and Use Notice](NOTICE.md)。研究結果不是投資建議，也不能作為 production filing assistant 的能力宣稱。

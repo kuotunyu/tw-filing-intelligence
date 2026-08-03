@@ -1,6 +1,6 @@
 """F5: caption every chart region with the VLM, and write the captioned chunk set.
 
-    nvidia-smi                                            # CLAUDE.md rule 8, first
+    nvidia-smi                                            # confirm GPU availability first
     uv run python scripts/build_captions.py --dry-run     # counts, no model, no writes
     uv run python scripts/build_captions.py
     uv run python scripts/build_index.py --parser candidate_captioned --device cpu

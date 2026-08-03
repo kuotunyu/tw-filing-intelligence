@@ -14,10 +14,10 @@ easy and specifically fatal:
   company's two pages, and that the broad numeric store is filtered rather than complete.
   A report is not allowed to be silent about any of them, so each is a required section and
   its absence is an error rather than an omission someone might notice.
-* **A hidden negative result.** CLAUDE.md rule 3: NO_GO and CONDITIONAL_GO go in the report
-  unaltered. So the verdict is written from ``GO_NO_GO.json`` and the gate table lists every
-  gate that failed with its observed values. There is no code path that prints a verdict the
-  gate evaluator did not produce.
+* **A hidden negative result.** Protocol 4 requires NO_GO and CONDITIONAL_GO to appear in the
+  report unaltered. So the verdict is written from ``GO_NO_GO.json`` and the gate table lists
+  every gate that failed with its observed values. There is no code path that prints a verdict
+  the gate evaluator did not produce.
 * **A promised but absent next question.** Protocol 4 allows a non-GO study to proceed only by
   naming one independently testable question that addresses its main failure. Saying that such
   a question appears "below" is not enough; :func:`build` requires and prints the actual text.

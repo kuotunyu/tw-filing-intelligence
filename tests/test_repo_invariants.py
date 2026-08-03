@@ -31,7 +31,7 @@ def paths(repo_root: Path) -> RepoPaths:
 
 
 def test_package_exposes_version_and_disclaimer() -> None:
-    assert twfi.__version__ == "1.0.2"
+    assert twfi.__version__ == "1.0.3"
     assert "投資建議" in twfi.DISCLAIMER
     assert "production" in twfi.DISCLAIMER
 
@@ -45,8 +45,8 @@ def test_software_release_version_is_aligned_without_bumping_protocol(repo_root:
         package for package in lock["package"] if package["name"] == "tw-filing-intelligence"
     )
 
-    assert project["project"]["version"] == twfi.__version__ == "1.0.2"
-    assert root_package["version"] == "1.0.2"
+    assert project["project"]["version"] == twfi.__version__ == "1.0.3"
+    assert root_package["version"] == "1.0.3"
     assert PROTOCOL_VERSION == "1.0.0"
 
 
@@ -78,10 +78,13 @@ def test_citation_metadata_matches_public_release(repo_root: Path) -> None:
 
     assert citation["cff-version"] == "1.2.0"
     assert citation["type"] == "software"
-    assert citation["version"] == twfi.__version__ == "1.0.2"
+    assert citation["version"] == twfi.__version__ == "1.0.3"
     assert str(citation["date-released"]) == "2026-08-03"
     assert citation["license"] == "MIT"
     assert citation["repository-code"] == ("https://github.com/kuotunyu/tw-filing-intelligence")
+    assert citation["url"] == (
+        "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.3"
+    )
     assert citation["authors"] == [{"family-names": "kuotunyu"}]
     assert "NO_GO" in citation["abstract"]
 
@@ -229,28 +232,15 @@ def test_source_never_reads_dotenv(repo_root: Path) -> None:
     [
         "README.md",
         "LICENSE",
-        "CLAUDE.md",
         "pyproject.toml",
         "docs/FEASIBILITY_PROTOCOL.md",
-        "docs/IMPLEMENTATION_PLAN.md",
         "docs/DECISIONS.md",
         "docs/DATA_PROVENANCE.md",
         "docs/THREAT_MODEL.md",
-        "docs/PROGRESS.md",
     ],
 )
 def test_required_documents_exist(repo_root: Path, relative_path: str) -> None:
     assert (repo_root / relative_path).is_file(), f"{relative_path} is required"
-
-
-def test_project_skills_have_frontmatter(repo_root: Path) -> None:
-    skill_files = sorted((repo_root / ".claude" / "skills").glob("*/SKILL.md"))
-    assert skill_files, "expected project-level skills under .claude/skills/"
-    for skill in skill_files:
-        text = skill.read_text(encoding="utf-8")
-        assert text.startswith("---\n"), f"{skill.name} needs YAML frontmatter"
-        header = text.split("---", 2)[1]
-        assert "name:" in header and "description:" in header, skill.parent.name
 
 
 # ---------------------------------------------------------------------- models

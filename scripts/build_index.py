@@ -9,8 +9,8 @@ different corpora (5,815 chunks against 13,116), and a shared index would let th
 retrieve from the candidate's chunking -- turning a parsing comparison into nothing.
 
 **``--device`` is required and has no default**, because neither choice is safe to assume.
-``cuda`` must be deliberate (CLAUDE.md rule 8: another project may hold the card, and this loads
-a model onto it). ``cpu`` must be deliberate too: it is roughly an order of magnitude slower, so
+``cuda`` must be deliberate because another process may hold the card and this loads a model onto
+it. ``cpu`` must be deliberate too: it is roughly an order of magnitude slower, so
 choosing it by accident looks like a hang. On CPU the dtype defaults to float32 -- half precision
 there is emulated and slower, not cheaper -- which also matches the query path, since
 `eval_retrieval.py` embeds its queries on CPU in float32.
@@ -24,7 +24,7 @@ so a vector without its provenance is not usable evidence. The manifest filename
 `manifest.json`: the lexical build writes its own manifest into the same directory, and while
 both used that name, building BM25 afterwards silently overwrote the embedding provenance.
 
-Nothing here is committed: vectors and chunk dumps are build artifacts (CLAUDE.md rule 7).
+Nothing here is committed: vectors and chunk dumps are ignored build artifacts.
 """
 
 from __future__ import annotations

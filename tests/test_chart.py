@@ -2,7 +2,7 @@
 
 Protocol 2.4 splits this route in two and the split is the thing worth testing: a caption makes a
 figure findable, and only the pixels make it answerable. Every test here runs against a fake
-backend -- nothing reaches ollama, no GPU, no network (CLAUDE.md rule 5).
+backend -- nothing reaches ollama, a GPU, or the network.
 """
 
 from __future__ import annotations

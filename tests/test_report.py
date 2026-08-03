@@ -98,7 +98,7 @@ def report(**overrides: Any) -> str:
 def test_a_complete_report_builds() -> None:
     text = report()
     assert "# 可行性報告" in text
-    assert "不是投資建議" in text, "CLAUDE.md rule 10 requires this on any output"
+    assert "不是投資建議" in text, "every research report must preserve the advice boundary"
 
 
 def test_report_generator_supplies_every_required_limitation() -> None:

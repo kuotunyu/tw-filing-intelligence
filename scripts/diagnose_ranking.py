@@ -67,7 +67,7 @@ def answer_key(answer: str) -> str:
 
 
 def _embedder() -> Callable[[str], Any]:
-    """bge-m3 on CPU. The card is for generation and reranking (CLAUDE.md rule 8)."""
+    """Run bge-m3 on CPU, leaving GPU capacity for generation and reranking."""
     import torch
     from transformers import AutoModel, AutoTokenizer
 

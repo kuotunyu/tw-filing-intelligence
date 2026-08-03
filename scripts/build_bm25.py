@@ -15,7 +15,8 @@ must index *the same* chunks in *the same order*, because RRF fuses them by rank
 document numbering. Re-chunking here would let the two halves drift apart silently -- the fusion
 would still return results, for a corpus that exists in neither index.
 
-Runs on CPU in seconds and needs no model. Nothing here is committed (CLAUDE.md rule 7).
+Runs on CPU in seconds and needs no model. Its outputs are ignored build artifacts, not committed
+research evidence.
 """
 
 from __future__ import annotations
