@@ -19,7 +19,7 @@
 | 項目 | 規模 |
 |---|---:|
 | 公司與產業 | 5 家公司、4 個產業 |
-| 文件範圍 | FY2023–FY2024，宣告 10 份、機器可用 8 份（見 [erratum](docs/ERRATA.md)） |
+| 文件範圍 | FY2023–FY2024，宣告 10 份、機器可用 8 份（見 [errata](docs/ERRATA.md)） |
 | Evaluation records | 53 筆：DEV 15、LOCKED 33、獨立 no-evidence probes 5 |
 | Factor ladder | F0–F7，共 8 組受控實驗 |
 | 品質驗證 | clean clone 1,648 passed／1 expected skip、coverage 94.11%、strict mypy、Ruff |
@@ -289,7 +289,7 @@ Repository 不重新散布原始年報或財報 PDF，只提交 manifest、官�
 | [最終報告](docs/FEASIBILITY_REPORT.md) | 唯一 locked run、完整指標、限制與 `NO_GO` 判定 |
 | [評估協議](docs/FEASIBILITY_PROTOCOL.md) | 事前凍結的 Protocol 1.0.0 與 gates |
 | [Frozen protocol errata](docs/ERRATA.md) | 不修改 lock，說明 7 → 10 份文件與 gold authorship shorthand 的 frozen prose inconsistencies |
-| [Changelog](CHANGELOG.md) | Software 1.0.1 的 presentation / evidence-verification closeout 範圍 |
+| [Changelog](CHANGELOG.md) | Software 1.0.2 的 final repository closeout 範圍 |
 | [資料 provenance](docs/DATA_PROVENANCE.md) | 官方來源、取得方式、授權與 SHA-256 |
 | [威脅模型](docs/THREAT_MODEL.md) | prompt injection、SSRF、rate limit、leakage、secrets |
 | [Citation metadata](CITATION.cff) | v1.0.2 的 machine-readable software citation |

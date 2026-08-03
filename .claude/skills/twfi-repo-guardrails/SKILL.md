@@ -1,6 +1,6 @@
 ---
 name: twfi-repo-guardrails
-description: 在 tw-filing-intelligence repo 內工作時的 Feature Freeze 規則與 onboarding 流程。涵蓋 frozen evidence 不可變、負結果保留、測試離線、大檔不進 git與 presentation-only release hygiene。
+description: 在 tw-filing-intelligence repo 內工作時的 Feature Freeze 規則與 onboarding 流程。涵蓋 frozen evidence 不可變、負結果保留、測試離線、大檔不進 git 與 presentation-only release hygiene。
 ---
 
 # TWFI Repo Guardrails
