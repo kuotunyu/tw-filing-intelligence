@@ -31,7 +31,7 @@ def paths(repo_root: Path) -> RepoPaths:
 
 
 def test_package_exposes_version_and_disclaimer() -> None:
-    assert twfi.__version__ == "1.0.3"
+    assert twfi.__version__ == "1.0.4"
     assert "投資建議" in twfi.DISCLAIMER
     assert "production" in twfi.DISCLAIMER
 
@@ -45,8 +45,8 @@ def test_software_release_version_is_aligned_without_bumping_protocol(repo_root:
         package for package in lock["package"] if package["name"] == "tw-filing-intelligence"
     )
 
-    assert project["project"]["version"] == twfi.__version__ == "1.0.3"
-    assert root_package["version"] == "1.0.3"
+    assert project["project"]["version"] == twfi.__version__ == "1.0.4"
+    assert root_package["version"] == "1.0.4"
     assert PROTOCOL_VERSION == "1.0.0"
 
 
@@ -78,12 +78,12 @@ def test_citation_metadata_matches_public_release(repo_root: Path) -> None:
 
     assert citation["cff-version"] == "1.2.0"
     assert citation["type"] == "software"
-    assert citation["version"] == twfi.__version__ == "1.0.3"
-    assert str(citation["date-released"]) == "2026-08-03"
+    assert citation["version"] == twfi.__version__ == "1.0.4"
+    assert str(citation["date-released"]) == "2026-08-09"
     assert citation["license"] == "MIT"
     assert citation["repository-code"] == ("https://github.com/kuotunyu/tw-filing-intelligence")
     assert citation["url"] == (
-        "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.3"
+        "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.4"
     )
     assert citation["authors"] == [{"family-names": "kuotunyu"}]
     assert "NO_GO" in citation["abstract"]

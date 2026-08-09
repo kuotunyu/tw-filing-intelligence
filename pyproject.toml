@@ -1,6 +1,6 @@
 [project]
 name = "tw-filing-intelligence"
-version = "1.0.3"
+version = "1.0.4"
 description = "Feasibility study: multimodal filing intelligence over Taiwan public company disclosures (MOPS / TWSE OpenAPI / XBRL). Not investment advice. Not a production system."
 readme = "README.md"
 license = { file = "LICENSE" }
