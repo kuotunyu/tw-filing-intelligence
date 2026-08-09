@@ -6,7 +6,7 @@
 ![Tests](https://img.shields.io/badge/Tests-passing-success)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **最新軟體版本：v1.0.3 · Frozen Protocol：v1.0.0**
+> **最新軟體版本：v1.0.4 · Frozen Protocol：v1.0.0**
 
 這是一個臺灣公開財報 multimodal RAG / VLM 的事前註冊可行性研究：固定資料、模型、門檻與評分規則後，加入更多檢索、數值與視覺能力，是否真的能勝過簡單的文字 RAG？
 

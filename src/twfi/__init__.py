@@ -8,7 +8,7 @@ from __future__ import annotations
 
 __all__ = ["__version__", "DISCLAIMER"]
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 DISCLAIMER = (
     "本專案為可行性驗證（feasibility study），不是 production 系統，"
