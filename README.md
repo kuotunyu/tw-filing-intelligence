@@ -6,58 +6,62 @@
 ![Tests](https://img.shields.io/badge/Tests-passing-success)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **最新 Software Release：v1.0.3 · 凍結評測協定 (Frozen Protocol)：v1.0.0**
+> **最新軟體版本：v1.0.3 · Frozen Protocol：v1.0.0**
 
-這是一個臺灣公開財報 multimodal RAG / VLM 的事前註冊可行性研究 (Preregistered Feasibility Study)：固定資料、模型、threshold 與評分規則後，加入更多檢索、數值與視覺能力，是否真的能勝過簡單的文字 RAG？
+這是一個臺灣公開財報 multimodal RAG / VLM 的事前註冊可行性研究：固定資料、模型、門檻與評分規則後，加入更多檢索、數值與視覺能力，是否真的能勝過簡單的文字 RAG？
 
-本專案是 **research prototype**，**不是 production 系統**、filing assistant，也**不是投資建議**。它的重點不是展示成功產品，而是保存一個可追溯、可重算的客觀負結果 (Negative Result)。
+本專案是 **research prototype**，**不是 production 系統**、filing assistant，也**不是投資建議**。它的重點不是展示成功產品，而是保存一個可追溯、可重算的客觀負結果。
 
 ---
 
 ## 核心結論與研究摘要
 
-| 比較對象 | 系統實作架構 | LOCKED 評測答對題數 |
-|---|---|---:|
-| 簡單文字檢索系統 (F0) | PDF 文字提取、BM25 檢索、共用答案生成 | **17 / 33** (51.5%) |
-| 完整候選系統 (F7) | Layout 解析、混合檢索、Reranker、數值路由、視覺證據、Typed Routing | **6 / 33** (18.2%) |
+LOCKED 是事前封存、只執行一次的正式評估，共 33 題。F0 與 F7 是實驗系統編號：F0 是 baseline，F7 是 preregistered full candidate。
 
-完整候選系統並未超越基準線，答對題數反而由 17 題降至 6 題。依據預先凍結之 Protocol 1.0.0 規範，正式判定為 [`NO_GO`](docs/FEASIBILITY_REPORT.md)。（註：F0 與 F7 為協定中之實驗代號，非產品版本號）。
+| 比較對象 | 系統實作架構 | LOCKED 答對題數（共 33 題） |
+|---|---|---:|
+| 簡單文字檢索系統（F0） | PDF 文字擷取、BM25、共用答案生成 | **17/33**（51.5%） |
+| 完整候選系統（F7） | 版面解析、hybrid retrieval、reranking、數值回答路徑、圖像證據、typed routing | **6/33**（18.2%） |
+
+完整候選系統並未超越 baseline，答對題數反而由 17 題降至 6 題，因此依 frozen Protocol 1.0.0 判定為 [`NO_GO`](docs/FEASIBILITY_REPORT.md)。
 
 ### 為什麼判定為 NO-GO？
 
-1. **數值推理失效**：由 Numeric Route 處理之 12 題數值問題中，最終答對 **0 題**。
-2. **問題分流不可靠**：33 題測試中僅 **11 題**正確選中最佳處理分支 (Route)。
-3. **證據引用不足**：完整系統產出之 17 個條文引用 (Citations) 中，僅 **9 個**具備有效佐證力。
+1. **數值回答失敗**：數值回答路徑處理的 12 題中，答對 **0 題**。
+2. **問題分流不可靠**：33 題中只有 **11 題**選對回答路徑。
+3. **引用證據不足**：完整候選系統產生的 17 個引用中，只有 **9 個**有效。
+
+LOCKED 只有 33 題，圖表題更只有 2 題。所有比例都必須連同分子、分母與信賴區間閱讀，不能視為正式產品的可靠度。
 
 ---
 
-## 系統架構與 Pipeline
+## 系統架構與流程
 
 ### 1. 財報解析與多模態證據鏈建置
 
-每份財報來源先記錄官方 URL、檔案大小與 SHA-256 簽章，經可靠性檢核後拆解為文字、結構化數值與原始圖表像素：
+每份財報先記錄官方 URL、檔案大小與 SHA-256，再確認文字與版面能否可靠擷取。可用文件拆解為文字、結構化數值與原始圖表影像：
 
 ```mermaid
 %%{init: {'themeVariables': {'fontSize': '18px'}}}%%
 flowchart TD
-    subgraph Stage1 ["階段一：來源記錄與可靠性檢核"]
+    subgraph Stage1 ["階段一：來源記錄與擷取檢核"]
         direction LR
-        Filing[("公開財報 (MOPS)<br/>(PDF 原生檔案)")] --> Manifest["來源註冊與 SHA-256 驗證<br/>(URL 與檔案大小)"] --> Readable{"可可靠解析？"}
-        Readable -->|"否"| Excluded(["保留來源紀錄<br/>(不納入 Corpus)"])
+        Filing[("公開財報（MOPS）<br/>PDF 原始檔案")] --> Manifest["記錄來源 URL、檔案大小<br/>與 SHA-256"] --> Readable{"文字與版面能否<br/>可靠擷取？"}
+        Readable -->|"否"| Excluded(["保留來源與失敗原因<br/>不納入檢索資料"])
     end
 
-    subgraph Stage2 ["階段二：版面結構解析與多模態分流"]
+    subgraph Stage2 ["階段二：版面解析與多模態分流"]
         direction LR
-        Readable -->|"是"| Parse["Layout-Aware Parsing<br/>(版面結構與區塊解析)"]
-        Parse --> Text["文字證據提取<br/>(內文與附註)"] & Rows["數值 Row 提取<br/>(保留 source_ref)"] & Crops["圖表區域提取<br/>(Original Crops)"]
+        Readable -->|"是"| Parse["依版面擷取<br/>文字、數值與圖像"]
+        Parse --> Text["可檢索文字<br/>內文與附註"] & Rows["數值資料與來源定位"] & Crops["圖表區域與原始裁切影像"]
     end
 
-    subgraph Stage3 ["階段三：檢索索引與儲存庫 (Index & Stores)"]
+    subgraph Stage3 ["階段三：檢索索引與資料庫"]
         direction LR
-        Text --> Search[("BM25 + Dense 向量索引<br/>(文字檢索庫)")]
-        Rows --> Numeric[("DuckDB 結構化數值庫<br/>(SQL 查詢)")]
-        Crops --> Caption["Caption 語意索引<br/>(僅輔助定位)"] --> Search
-        Crops --> Pixels[("Original Pixels 圖像庫<br/>(供 VLM 直接讀取)")]
+        Text --> Search[("文字與語意檢索")]
+        Rows --> Numeric[("數值資料庫")]
+        Crops --> Caption["Caption 只協助定位"] --> Search
+        Crops --> Pixels[("VLM 讀取原始影像")]
     end
 
     Stage1 --> Stage2 --> Stage3
@@ -79,32 +83,32 @@ flowchart TD
     style Stage3 fill:#f4fbf7,stroke:#0ca678,stroke-width:2px,color:#0ca678,stroke-dasharray: 4 4
 ```
 
-### 2. 完整候選系統推論與分流架構 (F7 Typed Routing)
+### 2. 完整候選系統的回答流程（F7）
 
-系統先限制公司與 Filing 範疇，再以確定性規則 (Deterministic Rules) 執行單次 Typed Routing 分流：
+系統先限定公司與財報範圍，再依固定規則選擇一次回答路徑；它不是會循環規劃的 Agent。任何路徑缺少可信證據時，系統都可以拒絕回答：
 
 ```mermaid
 %%{init: {'themeVariables': {'fontSize': '18px'}}}%%
 flowchart TD
-    subgraph RouteStage ["階段一：公司範疇限制與確定性分流 (Typed Router)"]
+    subgraph RouteStage ["階段一：限定範圍與選擇回答路徑"]
         direction LR
-        Query[("使用者財報問題<br/>(Query 輸入)")] --> Scope["限定公司與 Filing 範疇<br/>(Scope Filter)"] --> Router{"Single-Pass<br/>Typed Router"}
+        Query[("使用者問題")] --> Scope["限定公司與財報範圍"] --> Router{"依問題類型<br/>選擇回答路徑"}
     end
 
-    subgraph ExecStage ["階段二：三軌專用推理分支 (Three Execution Routes)"]
+    subgraph ExecStage ["階段二：三種回答路徑"]
         direction LR
-        Router -->|"敘述問題"| Retrieve["Hybrid Retrieval + Reranking<br/>(混合檢索與重排序)"] --> Gen["生成含 Citation 答案<br/>(LLM 生成)"]
-        Router -->|"數值問題"| SQL["Fixed SQL Templates<br/>(DuckDB 查詢)"] --> NumCheck{"有可信 Row？"}
-        NumCheck -->|"是"| Calc["Formula + Operands 運算<br/>(數值精確計算)"]
-        NumCheck -->|"否"| Refuse1(["局部拒答 (No Row)"])
-        Router -->|"圖像問題"| CropCheck{"有 Original Crop？"}
-        CropCheck -->|"是"| VLM["VLM 讀取 Original Pixels<br/>(視覺推理)"]
-        CropCheck -->|"否"| Refuse2(["局部拒答 (No Crop)"])
+        Router -->|"敘述問題"| Retrieve["文字檢索與重新排序"] --> Gen["產生答案並附來源"]
+        Router -->|"數值問題"| SQL["固定 SQL 規則"] --> NumCheck{"找到唯一且可信的數值？"}
+        NumCheck -->|"是"| Calc["計算公式與原始數值"]
+        NumCheck -->|"否"| Refuse1(["證據不足，拒絕回答"])
+        Router -->|"圖像問題"| CropCheck{"有原始裁切影像？"}
+        CropCheck -->|"是"| VLM["VLM 讀取原始影像"]
+        CropCheck -->|"否"| Refuse2(["證據不足，拒絕回答"])
     end
 
-    subgraph OutStage ["階段三：統一結構化輸出 (Output Assembly)"]
+    subgraph OutStage ["階段三：統一輸出"]
         direction LR
-        Gen & Calc & VLM & Refuse1 & Refuse2 --> Output[("結構化輸出<br/>答案 + Citations + Telemetry")]
+        Gen & Calc & VLM & Refuse1 & Refuse2 --> Output[("答案或拒答 + 來源<br/>+ 評估紀錄")]
     end
 
     RouteStage --> ExecStage --> OutStage
@@ -128,34 +132,34 @@ flowchart TD
 
 ---
 
-## 嚴謹評測設計與消融實驗明細
+## 嚴謹評估設計與實驗明細
 
 ```text
-DEV 設計 ➔ 預先註冊 F0–F7 與 G1–G10 門檻 ➔ 凍結 Protocol 與 Artifact 哈希 ➔ 唯一 LOCKED Run ➔ 離線重算 ➔ 判定 NO_GO
+DEV 設計 → 註冊實驗與通過門檻 → 凍結 Protocol 與證據檔案雜湊 → 唯一 LOCKED run → 保存原始結果 → 離線重算 → NO_GO
 ```
 
-F0–F7 為事前註冊之能力階梯 (Factor Ladder)，F1–F6 為診斷消融組別，F0 為基準線，F7 為事前註冊之完整候選系統：
+F0–F7 是事前註冊的 factor ladder，不是產品版本。F1–F6 是 diagnostic ablation；只有 F0 是 baseline、F7 是 preregistered full candidate。
 
-| 實驗 Factor | Locked 評測準確率 | 逐步加入之技術能力 |
+| 實驗編號 | LOCKED 準確率 | 逐步加入的能力 |
 |---|---:|---|
-| F0 (Baseline) | 51.5% (17 / 33) | 簡單文字基準線 (PDF Text + BM25) |
-| F1 | 45.5% (15 / 33) | 版面結構解析與區塊切分 (Layout Chunking) |
-| F2 | 42.4% (14 / 33) | 雙軌混合檢索 (Hybrid Retrieval) |
-| F3 | 57.6% (19 / 33) | Cross-Encoder 重排序 (Reranker) |
-| F4 | 57.6% (19 / 33) | 結構化數值管線 (DuckDB SQL Route) |
-| F5 | 60.6% (20 / 33) | 圖表區域 Caption 語意索引 |
-| F6 | 54.5% (18 / 33) | 原始區域裁切與 VLM 讀取 (Crop VLM) |
-| F7 (Full Candidate) | 18.2% (6 / 33) | 確定性分流 (Typed Dispatch) 完整系統 |
+| F0 | 51.5%（17/33） | baseline：PDF text + BM25 |
+| F1 | 45.5%（15/33） | 版面解析與 chunking |
+| F2 | 42.4%（14/33） | hybrid retrieval |
+| F3 | 57.6%（19/33） | cross-encoder reranking |
+| F4 | 57.6%（19/33） | structured numeric route |
+| F5 | 60.6%（20/33） | 圖表區域 Caption 語意索引 |
+| F6 | 54.5%（18/33） | original crop evidence / crop VLM |
+| F7 | 18.2%（6/33） | typed dispatch；preregistered full candidate |
 
 ---
 
-## 證據可追溯性與完全離線重現
+## 證據與離線重現
 
-| 核心主張 | 凍結之審查證據 (Committed Evidence) | 離線驗證方式 |
+| 核心主張 | 已提交證據 | 離線重算 |
 |---|---|---|
 | Protocol 未漂移 | [`protocol_lock.json`](results/feasibility/protocol_lock.json) | `test_real_protocol_lock_still_holds` |
-| 簡單系統 (F0) 17/33 | [`F0/records.jsonl`](results/runs/F0/records.jsonl) | `scripts/verify_results.py --dry-run` |
-| 完整系統 (F7) 6/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `scripts/verify_results.py --dry-run` |
+| 簡單系統（F0）17/33 | [`F0/records.jsonl`](results/runs/F0/records.jsonl) | `scripts/verify_results.py --dry-run` |
+| 完整系統（F7）6/33 | [`F7/records.jsonl`](results/runs/F7/records.jsonl) | `scripts/verify_results.py --dry-run` |
 | 判定 NO_GO | [`GO_NO_GO.json`](results/feasibility/GO_NO_GO.json) | `scripts/verify_evidence.py` |
 | DEV / LOCKED 無洩漏 | [`dev`](data/evaluation/dev/gold.jsonl) 與 [`locked`](data/evaluation/locked/gold.jsonl) | `scripts/check_leakage.py` |
 
@@ -192,4 +196,4 @@ uv run python scripts/check_leakage.py
 
 ## 授權與聲明
 
-本專案之原始程式碼採 [MIT License](LICENSE)。公開財報內容與資料來源請遵循臺灣證券交易所 (TWSE) 與公開資訊觀測站 (MOPS) 之規範。
+本專案之原始程式碼採 [MIT License](LICENSE)。公開財報內容與資料來源請遵循臺灣證券交易所（TWSE）與公開資訊觀測站（MOPS）之規範。
