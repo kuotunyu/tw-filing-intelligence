@@ -8,9 +8,9 @@
 
 > **最新 Software Release：v1.0.3 · 凍結評測協定 (Frozen Protocol)：v1.0.0**
 
-本專案為針對臺灣公開財報 (MOPS) 之多模態 Multimodal RAG / VLM 事前註冊可行性研究 (Preregistered Feasibility Study)：在固定資料來源、基礎模型、決策門檻與評分規則之前提下，驗證引入版面結構解析、數值結構化管線與視覺證據是否能真正超越純文字 RAG 基準線。
+這是一個臺灣公開財報 multimodal RAG / VLM 的事前註冊可行性研究 (Preregistered Feasibility Study)：固定資料、模型、threshold 與評分規則後，加入更多檢索、數值與視覺能力，是否真的能勝過簡單的文字 RAG？
 
-本專案定位為**學術研究原型 (Research Prototype)**，非商業生產系統或投資建議工具，核心目標在於保存一份完整可追溯、可離線重算的客觀負結果 (Negative Result)。
+本專案是 **research prototype**，**不是 production 系統**、filing assistant，也**不是投資建議**。它的重點不是展示成功產品，而是保存一個可追溯、可重算的客觀負結果 (Negative Result)。
 
 ---
 
