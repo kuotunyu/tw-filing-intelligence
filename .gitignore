@@ -74,6 +74,16 @@ logs/
 !results/feasibility/protocol_lock.json
 !results/feasibility/results_verification.json
 
+# ---- Local working documents & private notes ----
+.claude/
+.agents/
+CLAUDE.md
+PLAN.md
+PROGRESS.md
+interview*.md
+INTERVIEW_PREP.md
+*.private.md
+
 # ---- OS / editor ----
 .DS_Store
 Thumbs.db
