@@ -155,6 +155,10 @@ class RepoPaths:
         return self.feasibility / "GO_NO_GO.json"
 
     @property
+    def analysis_audit_json(self) -> Path:
+        return self.feasibility / "analysis_audit.json"
+
+    @property
     def protocol_lock_json(self) -> Path:
         return self.feasibility / "protocol_lock.json"
 

@@ -5,6 +5,13 @@
 
 `protocol_lock_sha256: 18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d`
 
+> **Post-hoc audit（v1.0.5）**：本報告保留原始 runtime 結果。後續發現文字題的
+> runtime scorer 只採 exact match，未實作 Protocol 已註冊的
+> `exact match OR token-F1 >= 0.8`。Protocol-literal 重算使 F0 由 17/33 變為 18/33，
+> F7 仍為 6/33，`NO_GO` 不變。另需注意：G1 表示 run 當時的本機 raw files 通過 hash
+> 驗證；third-party raw bytes 未散布，所以 clean clone 只能重算 committed evaluation，
+> 不能完整重建 ingestion。完整證據與 metric 缺口見 [`ANALYSIS_AUDIT.md`](ANALYSIS_AUDIT.md)。
+
 ## 判定：NO_GO
 
 至少一個 hard gate 未通過。依協議 4，**不得**為了通過而修改題目、答案、tolerance 或門檻，也不得刪除這個結果。下方「最小的下一個研究問題」是唯一允許的前進方式。

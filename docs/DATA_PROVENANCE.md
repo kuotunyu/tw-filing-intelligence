@@ -1,7 +1,7 @@
 # DATA PROVENANCE
 
-`status: P1 完成（來源已實測）／P2 取得表格待填`
-`last_updated: 2026-07-31`
+`status: locked acquisition 已記錄；public package 僅含 manifest 與 digest`
+`last_updated: 2026-08-10`
 
 > **先讀 §8。** P1 的實測結果改變了資料取得策略：
 > TWSE OpenAPI 是單期快照、新版 MOPS 是 JS SPA，
@@ -10,6 +10,14 @@
 本 repository **不重新散布**任何原始年報／財報 PDF 或 XBRL 檔案。
 只提交：manifest、來源 URL、SHA-256、來源頁面、公司、年度、文件類型、
 取得日期，以及能重建這些檔案的腳本。
+
+### Public reproduction boundary
+
+Clean clone 可以驗證 frozen Protocol、gold、committed F0–F7 records、summary、gates 與
+post-hoc analysis；它**不能**在沒有另外取得 third-party raw files 的情況下重建 parsing、
+index 或 model run。`verify_manifests.py --require-all` 會在 raw files 缺席時失敗，這是
+正確行為，不是 public archive 的 corruption。只有使用者重新取得 manifest 指定的
+bit-identical files 後，才能用 acquisition lock 的 SHA-256 驗證 source layer。
 
 ---
 
@@ -145,7 +153,8 @@ uv run python scripts/fetch_documents.py --manual-dir data/raw/manual --record-h
 ## 7. 進 git 的東西
 
 `data/manifests/**`、`data/evaluation/**`（gold set 只含題目、答案、頁碼、bbox、
-row key 與極短引文，不含長篇原文重製）、`results/feasibility/` 的四個檔案。
+row key 與極短引文，不含長篇原文重製）、`results/runs/F0`–`F7` 與 probes 的 locked
+records，以及 `results/feasibility/` 的 summary、gate、verification 與 audit artifacts。
 
 > Gold record 中的引文長度上限 **40 字**，僅用於標註可追溯性，
 > 不構成原文重製。
@@ -154,8 +163,9 @@ row key 與極短引文，不含長篇原文重製）、`results/feasibility/` �
 
 ## 8. P1 實測結果（2026-07-31）
 
-三個發現改變了資料取得策略。原始證據：
-`results/runs/mops_probe.json`、`docs/reference/twse_openapi_endpoints.md`。
+三個發現改變了資料取得策略。`results/runs/mops_probe.json` 與 probe HTML body 是本機
+exploratory artifacts，未納入 public package；公開保留的是
+`docs/reference/twse_openapi_endpoints.md`、manifest 與 acquisition digest。
 重現方式：`scripts/explore_sources.py`、`scripts/sample_endpoint.py`、`scripts/probe_mops.py`。
 
 ### 8.1 TWSE OpenAPI 可用，但**只有單一期間**
