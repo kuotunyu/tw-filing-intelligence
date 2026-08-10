@@ -1,6 +1,6 @@
 # THREAT MODEL
 
-`last_updated: 2026-07-31`
+`last_updated: 2026-08-10`
 
 範圍：一個離線／本機執行的 feasibility harness，會（a）從三個 TWSE／MOPS host
 下載公開文件、（b）在本機以 local model 解析並回答問題、（c）產生評估結果。
@@ -37,7 +37,8 @@
 
 - DEV 與 LOCKED **公司層級完全分離**（2412/1301 vs 2330/2317/2882）。
 - `scripts/check_leakage.py` 強制驗證：公司不重疊、`doc_id` 不重疊、題目文字不重複、
-  gold `annotator == "human"`、題型分布符合 protocol。
+  gold authorship 可追責且 candidate 不得產生 gold、題型分布符合 protocol。模型協助與
+  audit 狀態逐題保留；final audit 不是 independent blind，見 analysis supplement。
 - Protocol ＋ locked gold ＋ manifest ＋ models.lock 的 SHA-256 寫入
   `results/feasibility/protocol_lock.json`，並由 `pytest` 每次驗證。
 - Locked run 只跑一次；任何重跑須記錄原因與次數。
@@ -94,7 +95,9 @@ gold record 引文上限 40 字；`LICENSE` 明確聲明第三方資料不在授
 - `scripts/verify_results.py` 檢查 summary 每個數字都能由 raw artifacts 重算。
 - LLM-as-judge 不參與 gate。
 - 負面結果必須保留在 report。
-- 修改 `src/` 後必須重跑全部 F0…F7。
+- 修改會影響 acquisition、parsing、retrieval、routing、generation 或 runtime scoring 的
+  execution code 後，必須以新 protocol／新 run 處理，不能覆寫 F0…F7。Post-hoc verifier
+  可以新增，但只能讀既有 artifacts、另存 supplement，且不得改寫 frozen result。
 
 ## T9 誤用（把研究輸出當投資建議）
 

@@ -50,6 +50,9 @@ jobs:
       - name: Compare recomputed gates with committed NO-GO
         run: uv run python scripts/verify_evidence.py
 
+      - name: Regrade locked predictions and verify the post-hoc analysis audit
+        run: uv run python scripts/verify_analysis_audit.py
+
   quality:
     name: Python quality checks
     runs-on: windows-latest

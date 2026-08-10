@@ -61,6 +61,7 @@ def test_real_repo_root_has_expected_layout(repo_root: Path) -> None:
         ("summary_json", "results/feasibility/summary.json"),
         ("error_analysis_jsonl", "results/feasibility/error_analysis.jsonl"),
         ("go_no_go_json", "results/feasibility/GO_NO_GO.json"),
+        ("analysis_audit_json", "results/feasibility/analysis_audit.json"),
         ("protocol_lock_json", "results/feasibility/protocol_lock.json"),
         ("protocol_doc", "docs/FEASIBILITY_PROTOCOL.md"),
         ("models_lock_json", "configs/models.lock.json"),

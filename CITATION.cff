@@ -4,15 +4,14 @@ type: software
 title: "TW Filing Intelligence: A Pre-Registered Multimodal RAG/VLM Feasibility Study"
 authors:
   - family-names: "kuotunyu"
-version: "1.0.4"
-date-released: "2026-08-09"
+version: "1.0.5"
 license: MIT
 repository-code: "https://github.com/kuotunyu/tw-filing-intelligence"
-url: "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.4"
 abstract: >-
   Research software and committed evaluation artifacts for a preregistered feasibility study of
-  multimodal RAG/VLM methods over Taiwan public-company filings. The registered candidate scored
-  6/33 against a 17/33 baseline and received the frozen verdict NO_GO. This repository is not a
+  multimodal RAG/VLM methods over Taiwan public-company filings. The recorded locked run scored
+  6/33 against a 17/33 baseline; a post-hoc protocol-literal audit changes the baseline to 18/33
+  and leaves the candidate at 6/33. The frozen verdict remains NO_GO. This repository is not a
   production filing assistant and is not investment advice.
 keywords:
   - RAG evaluation

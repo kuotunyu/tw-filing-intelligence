@@ -52,3 +52,24 @@ not create or revise locked gold answers.
 
 No protocol, gold, threshold, run record, metric, or verdict was modified by this
 publication-only cleanup.
+
+## 4. Frozen document-manifest header still says seven
+
+`data/manifests/documents.yaml` 的註解仍寫「Seven documents do not justify either」，但同一
+份 frozen manifest 的實際 declaration 是 10 份，8 份 machine-usable。該檔受 protocol
+lock 保護，因此不修改註解；正確讀法與本文件 §1 相同。這不影響 manifest records、hash
+或唯一 locked run。
+
+## 5. Runtime text scorer omitted the registered token-F1 disjunction
+
+Protocol §4 以 `exact match OR token-F1 >= 0.8` 判定文字題；locked runtime 的
+`AnswerScore.correct` 對非 numeric 題只使用 exact match。為保留原始 artifact lineage，
+`summary.json` 與 run records 不回寫。`v1.0.5` 以獨立 post-hoc audit 重算既有 prediction：
+F0 17→18、F1 15→16、F2 14→16，F3–F7 不變；F7 仍為 6/33，`NO_GO` 不變。
+
+Authoritative evidence:
+
+- [`docs/FEASIBILITY_PROTOCOL.md` §4](FEASIBILITY_PROTOCOL.md#4-go--no-go-gates事前固定)
+- [`results/feasibility/analysis_audit.json`](../results/feasibility/analysis_audit.json)
+- [`docs/ANALYSIS_AUDIT.md`](ANALYSIS_AUDIT.md)
+- [`scripts/verify_analysis_audit.py`](../scripts/verify_analysis_audit.py)

@@ -31,7 +31,7 @@ def paths(repo_root: Path) -> RepoPaths:
 
 
 def test_package_exposes_version_and_disclaimer() -> None:
-    assert twfi.__version__ == "1.0.4"
+    assert twfi.__version__ == "1.0.5"
     assert "投資建議" in twfi.DISCLAIMER
     assert "production" in twfi.DISCLAIMER
 
@@ -45,8 +45,8 @@ def test_software_release_version_is_aligned_without_bumping_protocol(repo_root:
         package for package in lock["package"] if package["name"] == "tw-filing-intelligence"
     )
 
-    assert project["project"]["version"] == twfi.__version__ == "1.0.4"
-    assert root_package["version"] == "1.0.4"
+    assert project["project"]["version"] == twfi.__version__ == "1.0.5"
+    assert root_package["version"] == "1.0.5"
     assert PROTOCOL_VERSION == "1.0.0"
 
 
@@ -56,18 +56,28 @@ def test_readme_states_it_is_not_advice_and_not_production(repo_root: Path) -> N
     assert "不是 production 系統" in readme
 
 
-def test_license_and_notice_separate_code_from_third_party_filings(repo_root: Path) -> None:
+def test_mixed_license_boundary_separates_code_research_content_and_third_party_data(
+    repo_root: Path,
+) -> None:
     license_text = (repo_root / "LICENSE").read_text(encoding="utf-8")
     notice_path = repo_root / "NOTICE.md"
+    content_license_path = repo_root / "CONTENT_LICENSE.md"
 
     assert notice_path.exists(), "third-party data terms belong in NOTICE.md"
+    assert content_license_path.exists(), "author-created research content needs its own license"
     notice_text = notice_path.read_text(encoding="utf-8")
+    content_license = content_license_path.read_text(encoding="utf-8")
 
     assert license_text.startswith("MIT License\n")
     assert "NOTE ON THIRD-PARTY DATA" not in license_text
     assert license_text.rstrip().endswith("SOFTWARE.")
     assert "source code in this repository only" in notice_text
+    assert "CC BY 4.0" in notice_text
+    assert "documentation, gold metadata, run records, and analysis artifacts" in notice_text
     assert "does not redistribute" in notice_text
+    assert "Creative Commons Attribution 4.0 International" in content_license
+    assert "https://creativecommons.org/licenses/by/4.0/" in content_license
+    assert "does not apply to third-party" in content_license
 
 
 def test_citation_metadata_matches_public_release(repo_root: Path) -> None:
@@ -78,15 +88,14 @@ def test_citation_metadata_matches_public_release(repo_root: Path) -> None:
 
     assert citation["cff-version"] == "1.2.0"
     assert citation["type"] == "software"
-    assert citation["version"] == twfi.__version__ == "1.0.4"
-    assert str(citation["date-released"]) == "2026-08-09"
+    assert citation["version"] == twfi.__version__ == "1.0.5"
+    assert "date-released" not in citation, "add the actual date only when v1.0.5 is published"
     assert citation["license"] == "MIT"
     assert citation["repository-code"] == ("https://github.com/kuotunyu/tw-filing-intelligence")
-    assert citation["url"] == (
-        "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.4"
-    )
+    assert "url" not in citation, "add the immutable release URL only after the tag exists"
     assert citation["authors"] == [{"family-names": "kuotunyu"}]
     assert "NO_GO" in citation["abstract"]
+    assert "protocol-literal" in citation["abstract"]
 
 
 def test_ci_has_an_independent_offline_evidence_job(repo_root: Path) -> None:
@@ -98,9 +107,29 @@ def test_ci_has_an_independent_offline_evidence_job(repo_root: Path) -> None:
         "scripts/verify_results.py --dry-run",
         "scripts/check_leakage.py",
         "scripts/verify_evidence.py",
+        "scripts/verify_analysis_audit.py",
     )
     for contract in required:
         assert contract in workflow
+
+
+def test_public_docs_disclose_posthoc_audit_and_zenodo_boundary(repo_root: Path) -> None:
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    audit_path = repo_root / "docs" / "ANALYSIS_AUDIT.md"
+    zenodo_path = repo_root / "docs" / "ZENODO_PACKAGE.md"
+
+    assert audit_path.is_file()
+    assert zenodo_path.is_file()
+    audit = audit_path.read_text(encoding="utf-8")
+    zenodo = zenodo_path.read_text(encoding="utf-8")
+
+    assert "recorded 17/33" in readme
+    assert "protocol-literal 18/33" in readme
+    assert "runtime scorer" in audit
+    assert "不改寫" in audit
+    assert "third-party raw" in zenodo
+    assert "授權" in zenodo
+    assert "不可發布" in zenodo
 
 
 # -------------------------------------------------------------------- protocol

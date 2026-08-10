@@ -1,0 +1,378 @@
+{
+  "schema_version": "1.0",
+  "scope": {
+    "kind": "posthoc_protocol_reconciliation",
+    "model_rerun": false,
+    "changes_frozen_artifacts": false,
+    "official_summary_preserved": true
+  },
+  "inputs": {
+    "protocol_lock_sha256": "18da972fb7c5242114e82c339724f28eb3b68d67aeff4cf6f907adbebf23679d",
+    "locked_gold_sha256": "1f5e2f4ecc7c8f9ceccdd4f331aeea514033754c7bd01686aa003f58c5a55551",
+    "summary_sha256": "d062f4fe58407f9e1586672580ef606c68f2a680874a34a654b1a0b9e0ca18c0",
+    "go_no_go_sha256": "c405d2f07bc52c9b94e305da56b7856a6807a3b1c26152e2b37c92bef7ef6d00",
+    "run_records_sha256": {
+      "F0": "d38ca818f49343ab72a9d2930dfb6029cfe6541e5d7196a723aa7c6b13e4efda",
+      "F1": "bbb8dc5723e508a2bbb4e3e0517ff2ec216b84f03415b69a52cc80ba37fe9770",
+      "F2": "7a49b015b3d343a66c1fbf4e21624e2b57797d2346713aa22e952273c8b328ff",
+      "F3": "f33f906bd9c7f8245e51d8ce01c26d20eaa146903e8f737d79cbf0bc0a8b4544",
+      "F4": "4cbc4fc53e5febe61bbfdd330b6db130f459d697f63fe3c1dd4d034a957c3a6d",
+      "F5": "565e3c97bd314be2ceb5fa55061021336006dd02dabf459476c5c86ba94953b3",
+      "F6": "9de4e67b1e841bc0842dac93cc16670ea616e6aa9ca13733f8d664e2195e8889",
+      "F7": "8764203a581fdcb72b278191457c5eef317c6833f279ff8440ede2e6c6d2b524"
+    },
+    "locked_run_code_commit": "595268f3a64ee9430efc397140c2f600c925436b"
+  },
+  "score_reconciliation": {
+    "runtime_rule": "numeric_ok for numeric; exact_match for text; correct refusal",
+    "protocol_literal_rule": "numeric_ok for numeric; exact_match OR token_f1 >= 0.8 for text; correct refusal",
+    "factors": {
+      "F0": {
+        "n": 33,
+        "recorded_correct": 17,
+        "runtime_regraded_correct": 17,
+        "protocol_literal_correct": 18
+      },
+      "F1": {
+        "n": 33,
+        "recorded_correct": 15,
+        "runtime_regraded_correct": 15,
+        "protocol_literal_correct": 16
+      },
+      "F2": {
+        "n": 33,
+        "recorded_correct": 14,
+        "runtime_regraded_correct": 14,
+        "protocol_literal_correct": 16
+      },
+      "F3": {
+        "n": 33,
+        "recorded_correct": 19,
+        "runtime_regraded_correct": 19,
+        "protocol_literal_correct": 19
+      },
+      "F4": {
+        "n": 33,
+        "recorded_correct": 19,
+        "runtime_regraded_correct": 19,
+        "protocol_literal_correct": 19
+      },
+      "F5": {
+        "n": 33,
+        "recorded_correct": 20,
+        "runtime_regraded_correct": 20,
+        "protocol_literal_correct": 20
+      },
+      "F6": {
+        "n": 33,
+        "recorded_correct": 18,
+        "runtime_regraded_correct": 18,
+        "protocol_literal_correct": 18
+      },
+      "F7": {
+        "n": 33,
+        "recorded_correct": 6,
+        "runtime_regraded_correct": 6,
+        "protocol_literal_correct": 6
+      }
+    },
+    "runtime_regrade_mismatches": [],
+    "protocol_literal_differences": [
+      {
+        "factor": "F0",
+        "question_id": "LOCK-0019",
+        "recorded_correct": false,
+        "protocol_literal_correct": true
+      },
+      {
+        "factor": "F1",
+        "question_id": "LOCK-0019",
+        "recorded_correct": false,
+        "protocol_literal_correct": true
+      },
+      {
+        "factor": "F2",
+        "question_id": "LOCK-0019",
+        "recorded_correct": false,
+        "protocol_literal_correct": true
+      },
+      {
+        "factor": "F2",
+        "question_id": "LOCK-0022",
+        "recorded_correct": false,
+        "protocol_literal_correct": true
+      }
+    ]
+  },
+  "paired_comparisons": {
+    "recorded": {
+      "overall": {
+        "n": 33,
+        "baseline_correct": 17,
+        "candidate_correct": 6,
+        "baseline_only": 12,
+        "candidate_only": 1,
+        "mcnemar_exact_two_sided_p": 0.0034179688
+      },
+      "pooled_hard": {
+        "n": 18,
+        "baseline_correct": 6,
+        "candidate_correct": 1,
+        "baseline_only": 6,
+        "candidate_only": 1,
+        "mcnemar_exact_two_sided_p": 0.125
+      }
+    },
+    "protocol_literal": {
+      "overall": {
+        "n": 33,
+        "baseline_correct": 18,
+        "candidate_correct": 6,
+        "baseline_only": 13,
+        "candidate_only": 1,
+        "mcnemar_exact_two_sided_p": 0.0018310547
+      },
+      "pooled_hard": {
+        "n": 18,
+        "baseline_correct": 6,
+        "candidate_correct": 1,
+        "baseline_only": 6,
+        "candidate_only": 1,
+        "mcnemar_exact_two_sided_p": 0.125
+      }
+    }
+  },
+  "candidate_secondary_metrics": {
+    "retrieval": {
+      "recall_at_5": {
+        "n": 33,
+        "passed": 25,
+        "rate": 0.757576
+      },
+      "mrr_at_10": {
+        "n": 33,
+        "mean": 0.458415
+      },
+      "complete_evidence_at_5": {
+        "n": 33,
+        "passed": 19,
+        "rate": 0.575758
+      },
+      "multi_target_complete_at_5": {
+        "n": 8,
+        "passed": 1,
+        "rate": 0.125
+      }
+    },
+    "answer": {
+      "exact_match": {
+        "n": 29,
+        "passed": 4,
+        "rate": 0.137931
+      },
+      "token_f1_mean": {
+        "n": 29,
+        "mean": 0.197202
+      },
+      "numeric_ok": {
+        "n": 26,
+        "passed": 4,
+        "rate": 0.153846
+      },
+      "unit_ok": {
+        "n": 16,
+        "passed": 2,
+        "rate": 0.125
+      },
+      "period_ok": {
+        "n": 29,
+        "passed": 1,
+        "rate": 0.034483
+      },
+      "refusal_precision": {
+        "n": 16,
+        "passed": 1,
+        "rate": 0.0625
+      },
+      "refusal_recall": {
+        "n": 4,
+        "passed": 1,
+        "rate": 0.25
+      }
+    },
+    "citation": {
+      "validity": {
+        "n": 17,
+        "passed": 9,
+        "rate": 0.529412
+      },
+      "interpretation": "reaggregation of committed runtime cited_ok verdicts"
+    },
+    "routing": {
+      "labels": [
+        "chart",
+        "cross_modal",
+        "narrative",
+        "numeric",
+        "unanswerable"
+      ],
+      "confusion_matrix": {
+        "chart": {
+          "chart": 4,
+          "cross_modal": 0,
+          "narrative": 0,
+          "numeric": 0,
+          "unanswerable": 3
+        },
+        "cross_modal": {
+          "chart": 1,
+          "cross_modal": 0,
+          "narrative": 0,
+          "numeric": 0,
+          "unanswerable": 2
+        },
+        "narrative": {
+          "chart": 3,
+          "cross_modal": 0,
+          "narrative": 5,
+          "numeric": 0,
+          "unanswerable": 2
+        },
+        "numeric": {
+          "chart": 0,
+          "cross_modal": 0,
+          "narrative": 0,
+          "numeric": 1,
+          "unanswerable": 8
+        },
+        "unanswerable": {
+          "chart": 3,
+          "cross_modal": 0,
+          "narrative": 0,
+          "numeric": 0,
+          "unanswerable": 1
+        }
+      }
+    }
+  },
+  "metric_coverage": [
+    {
+      "metric": "recall_at_5",
+      "status": "recomputed",
+      "evidence": "candidate retrieval fields"
+    },
+    {
+      "metric": "mrr_at_10",
+      "status": "recomputed",
+      "evidence": "candidate retrieval fields"
+    },
+    {
+      "metric": "complete_evidence_coverage",
+      "status": "recomputed",
+      "evidence": "candidate retrieval fields"
+    },
+    {
+      "metric": "multi_target_evidence_coverage",
+      "status": "recomputed",
+      "evidence": "frozen gold plus retrieval fields"
+    },
+    {
+      "metric": "exact_match",
+      "status": "recomputed",
+      "evidence": "prediction plus frozen gold"
+    },
+    {
+      "metric": "token_f1",
+      "status": "recomputed",
+      "evidence": "prediction plus frozen gold"
+    },
+    {
+      "metric": "numeric_accuracy",
+      "status": "recomputed",
+      "evidence": "prediction plus frozen gold"
+    },
+    {
+      "metric": "unit_accuracy",
+      "status": "recomputed",
+      "evidence": "prediction plus frozen gold"
+    },
+    {
+      "metric": "period_accuracy",
+      "status": "recomputed",
+      "evidence": "prediction plus frozen gold"
+    },
+    {
+      "metric": "refusal_precision_recall",
+      "status": "recomputed",
+      "evidence": "prediction plus frozen gold"
+    },
+    {
+      "metric": "citation_validity",
+      "status": "reaggregated_runtime_verdict",
+      "evidence": "cited_ok is committed, but supporting passage text is not"
+    },
+    {
+      "metric": "citation_precision",
+      "status": "not_collected",
+      "evidence": "no citation-level relevance labels in committed artifacts"
+    },
+    {
+      "metric": "citation_recall",
+      "status": "not_collected",
+      "evidence": "no citation-level required-evidence match records"
+    },
+    {
+      "metric": "citation_page_correctness",
+      "status": "not_collected",
+      "evidence": "no independently graded citation-page records"
+    },
+    {
+      "metric": "citation_bbox_or_row_validity",
+      "status": "not_collected",
+      "evidence": "no candidate bbox/row verdicts in committed artifacts"
+    },
+    {
+      "metric": "route_confusion_matrix",
+      "status": "recomputed",
+      "evidence": "candidate route plus frozen gold route"
+    },
+    {
+      "metric": "mcnemar_exact",
+      "status": "recomputed",
+      "evidence": "paired per-question answer outcomes"
+    }
+  ],
+  "gold_audit": {
+    "composition": {
+      "records": 33,
+      "fully_human": 19,
+      "answer_model_drafted": 7,
+      "question_model_chosen": 9,
+      "needs_audit": 14,
+      "audited": 10,
+      "trustworthy": 29
+    },
+    "pending_question_ids": [
+      "LOCK-0025",
+      "LOCK-0026",
+      "LOCK-0030",
+      "LOCK-0031"
+    ],
+    "independent_blind_final_audit": false
+  },
+  "reproducibility": {
+    "clean_clone": "committed evaluation and post-hoc analysis reproducible",
+    "source_data": "manifests and SHA-256 only; third-party raw bytes not redistributed",
+    "ingestion": "requires reacquisition of exact third-party source bytes",
+    "model_run": "requires local model weights and uncommitted derived indexes",
+    "end_to_end": "not demonstrated from a clean clone"
+  },
+  "conclusion": {
+    "recorded_verdict": "NO_GO",
+    "protocol_literal_verdict": "NO_GO",
+    "baseline_recorded_correct": 17,
+    "baseline_protocol_literal_correct": 18,
+    "candidate_correct": 6,
+    "negative_result_preserved": true
+  }
+}
