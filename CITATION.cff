@@ -6,6 +6,7 @@ authors:
   - family-names: "kuotunyu"
 version: "1.0.5"
 date-released: "2026-08-10"
+doi: "10.5281/zenodo.21874274"
 license: MIT
 repository-code: "https://github.com/kuotunyu/tw-filing-intelligence"
 url: "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.5"

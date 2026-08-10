@@ -2,11 +2,13 @@
 
 [![CI](https://github.com/kuotunyu/tw-filing-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/kuotunyu/tw-filing-intelligence/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/kuotunyu/tw-filing-intelligence)](https://github.com/kuotunyu/tw-filing-intelligence/releases/latest)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21874273.svg)](https://doi.org/10.5281/zenodo.21874273)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-passing-success)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **最新版本：v1.0.5 · Frozen Protocol：v1.0.0**
+> **最新版本：v1.0.5 · Frozen Protocol：v1.0.0** ·
+> [Zenodo research package（v1.0.5）](https://doi.org/10.5281/zenodo.21874274)
 
 這是一個臺灣公開財報 multimodal RAG / VLM 的事前註冊可行性研究：固定資料、模型、門檻與評分規則後，加入更多檢索、數值與視覺能力，是否真的能勝過簡單的文字 RAG？
 
@@ -198,7 +200,8 @@ uv run python scripts/check_leakage.py
 - [Locked Analysis Audit](docs/ANALYSIS_AUDIT.md)：scorer deviation、secondary metrics、統計與重現層級。
 - [Protocol 1.0.0](docs/FEASIBILITY_PROTOCOL.md)：事前註冊之實驗協定與凍結規範。
 - [Data Provenance](docs/DATA_PROVENANCE.md)：公開財報來源、SHA-256 雜湊與排除清單。
-- [Zenodo Package Plan](docs/ZENODO_PACKAGE.md)：archive 收錄範圍、授權矩陣與驗收指令。
+- [Zenodo Research Package](https://doi.org/10.5281/zenodo.21874274)：v1.0.5 永久封存與下載。
+- [Zenodo Package Record](docs/ZENODO_PACKAGE.md)：archive 清單、授權矩陣與發布驗收紀錄。
 - [Decision Log](docs/DECISIONS.md)：研究決策脈絡與歷史紀錄。
 
 ---
