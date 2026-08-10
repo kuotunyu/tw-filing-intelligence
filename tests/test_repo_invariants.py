@@ -211,14 +211,18 @@ def test_gitignore_excludes_filings_and_weights(repo_root: Path) -> None:
         assert pattern in gitignore, f"{pattern} must be git-ignored"
 
 
-def test_gitignore_keeps_only_the_official_locked_run_evidence(repo_root: Path) -> None:
+def test_gitignore_keeps_only_the_official_locked_run_evidence(
+    repo_root: Path, tmp_path: Path
+) -> None:
     git = shutil.which("git")
     assert git is not None
+    shutil.copy2(repo_root / ".gitignore", tmp_path / ".gitignore")
+    subprocess.run([git, "init", "--quiet"], cwd=tmp_path, check=True)  # noqa: S603
 
     def ignored(relative: str) -> bool:
         result = subprocess.run(  # noqa: S603 - paths below are fixed test fixtures
             [git, "check-ignore", "--no-index", "--quiet", relative],
-            cwd=repo_root,
+            cwd=tmp_path,
             check=False,
         )
         return result.returncode == 0
