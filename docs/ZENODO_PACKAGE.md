@@ -1,12 +1,25 @@
-# Zenodo Research Package Plan
+# Zenodo Research Package v1.0.5
 
-`status: RELEASE CANDIDATE — v1.0.5 metadata 已凍結；Zenodo 尚未發布`
+`status: PUBLISHED — 2026-08-10`
+
+- Version DOI：[`10.5281/zenodo.21874274`](https://doi.org/10.5281/zenodo.21874274)
+- All-versions DOI：[`10.5281/zenodo.21874273`](https://doi.org/10.5281/zenodo.21874273)
+- GitHub Release：[`v1.0.5`](https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.5)
+- Release source commit：`e37739f3b76bac0301b7ed72c7e8cc4fe3f77fa2`
 
 本 repository 適合發布為 **research software + evaluation evidence**，不適合描述為完整
 benchmark dataset、production filing assistant，或從官方 source 到 model output 的
 end-to-end reproducibility package。
 
-## 建議收錄
+## 已發布檔案
+
+| 檔案 | 大小 | SHA-256 |
+|---|---:|---|
+| `tw-filing-intelligence-v1.0.5.zip` | 817,775 bytes | `bba7655082a49680d8bc6b33484aa783036b57c7a0166824a97f41f731de8317` |
+| `tw-filing-intelligence-v1.0.5_FILE_INVENTORY.tsv` | 21,597 bytes | `1c83f15a7a76a49b0a0c5321a642cecfac702d50253a093ca4c5ffd7ac97e6bc` |
+| `tw-filing-intelligence-v1.0.5_SHA256SUMS.txt` | 101 bytes | `594f077749725f99de959eb4be0cfc7f744d960cd93115df5e12f8ee2460447d` |
+
+### Archive 內容
 
 1. release source archive 與 `uv.lock`，並註明 locked run code commit
    `595268f3a64ee9430efc397140c2f600c925436b`。
@@ -45,17 +58,19 @@ CC BY 4.0 只涵蓋 owner 有權授權的原創內容；內嵌的第三方 sourc
 dataset 不因此被重新授權。`CITATION.cff` 的 MIT 欄位描述 software；mixed-license archive
 必須在 Zenodo description 同時列出 MIT、CC BY 4.0 與 third-party exclusions。
 
-## 發布前驗收條件
+## 發布驗收紀錄
 
-在下列項目完成前，Zenodo package **不可發布**：
+依凍結規則，在下列驗收全部通過前，Zenodo package **不可發布**；本次 v1.0.5 已逐項完成。
 
-1. review release diff，建立正式 release commit；後續 tag 必須精確指向該 clean commit。
+發布前已完成下列驗收：
+
+1. review release diff，`v1.0.5` annotated tag 精確指向 release source commit。
 2. Zenodo metadata 與 `CITATION.cff` 的 version、date、creator、URL、license 一致。
-3. 產生最終 archive inventory／checksums，確認沒有上述排除項、secret、PII 或絕對路徑。
-4. 在 archive 解壓後的 clean directory 執行下方 acceptance commands。
+3. 最終 archive、inventory 與 checksums 均已產生；未包含上述排除項、secret、PII 或絕對路徑。
+4. archive 解壓後的 clean directory 已通過下方 acceptance commands。
 
-`CITATION.cff` 已標示 `1.0.5`、正式 release date 與預定 immutable release URL；只有在
-本清單全部通過後，才可建立對應 tag／GitHub Release 與 Zenodo draft。
+Clean archive 驗證結果為 **1,658 passed、1 skipped、coverage 93.69%**；ruff、format、mypy
+與四項 offline evidence verifier 皆通過。GitHub Release 已設為 immutable。
 
 四筆 pending gold review 不是禁止發布負結果的必要條件，但 metadata 與摘要必須揭露
 29/33 trustworthy、final audit 非 independent blind；若要宣稱完成獨立 audit，則必須由
@@ -78,11 +93,10 @@ uv run mypy src scripts
 `verify_manifests.py --require-all` 只有在使用者另外取得 manifest 所列的 bit-identical
 third-party raw files 後才應通過；它不是 public archive 的 clean-clone acceptance command。
 
-## Zenodo 最終 owner 確認
+## Zenodo owner 確認（已完成）
 
-1. 確認 Zenodo creator 顯示名稱／ORCID（如有）。
-2. 檢查 draft 預覽中的檔案、授權與 third-party exclusions。
-3. 親自確認 Zenodo 條款並執行不可逆的 Publish。
+1. Zenodo creator 僅列 `kuotunyu`；未虛構或補填 ORCID。
+2. Draft 預覽中的三個檔案、MIT、CC BY 4.0 與 third-party exclusions 已核對。
+3. Owner 於 2026-08-10 確認不可逆限制後，明確授權執行 Publish。
 
-GitHub PR 不等於 Zenodo 發布授權；可以先建立與上傳 draft，但在 owner 實際確認 deposit
-預覽前，不 reserve DOI 或 publish，也不替 owner 接受 Zenodo 法律條款。
+公開紀錄已以匿名 HTTP 請求驗證可存取，version DOI 與 all-versions DOI 均已註冊。
