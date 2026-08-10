@@ -89,10 +89,12 @@ def test_citation_metadata_matches_public_release(repo_root: Path) -> None:
     assert citation["cff-version"] == "1.2.0"
     assert citation["type"] == "software"
     assert citation["version"] == twfi.__version__ == "1.0.5"
-    assert "date-released" not in citation, "add the actual date only when v1.0.5 is published"
+    assert citation["date-released"] == "2026-08-10"
     assert citation["license"] == "MIT"
     assert citation["repository-code"] == ("https://github.com/kuotunyu/tw-filing-intelligence")
-    assert "url" not in citation, "add the immutable release URL only after the tag exists"
+    assert citation["url"] == (
+        "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.5"
+    )
     assert citation["authors"] == [{"family-names": "kuotunyu"}]
     assert "NO_GO" in citation["abstract"]
     assert "protocol-literal" in citation["abstract"]
