@@ -5,8 +5,10 @@ title: "TW Filing Intelligence: A Pre-Registered Multimodal RAG/VLM Feasibility 
 authors:
   - family-names: "kuotunyu"
 version: "1.0.5"
+date-released: "2026-08-10"
 license: MIT
 repository-code: "https://github.com/kuotunyu/tw-filing-intelligence"
+url: "https://github.com/kuotunyu/tw-filing-intelligence/releases/tag/v1.0.5"
 abstract: >-
   Research software and committed evaluation artifacts for a preregistered feasibility study of
   multimodal RAG/VLM methods over Taiwan public-company filings. The recorded locked run scored
